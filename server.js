@@ -47,34 +47,65 @@ app.options('*', (_req, res) => res.sendStatus(200));
 app.use(express.json());
 
 // ── TELEGRAM AUTH ────────────────────────────────────
+// Validates Telegram WebApp initData using HMAC-SHA256
+// Returns the parsed user object or null
 function parseTgUser(raw) {
   if (!raw) return null;
   try {
+    // URLSearchParams handles the URL encoding correctly
     const params = new URLSearchParams(raw);
     const hash   = params.get('hash');
+    if (!hash) return null;
     params.delete('hash');
 
-    // Skip signature check in dev mode (hash=devtest or no BOT_TOKEN)
-    if (BOT_TOKEN && hash && hash !== 'devtest') {
-      const sorted = [...params.entries()]
-        .sort(([a],[b]) => a.localeCompare(b))
-        .map(([k,v]) => `${k}=${v}`)
+    // Validate HMAC only when BOT_TOKEN is set and this isn't a dev request
+    if (BOT_TOKEN && hash !== 'devtest') {
+      // data-check-string = params sorted by key, joined with \n
+      // NOTE: params.entries() gives decoded values — that's correct for HMAC
+      const dataCheckStr = [...params.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}=${v}`)
         .join('\n');
-      const secret = crypto.createHmac('sha256','WebAppData').update(BOT_TOKEN).digest();
-      const expect = crypto.createHmac('sha256', secret).update(sorted).digest('hex');
-      if (expect !== hash) return null;
+
+      const secretKey  = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
+      const calculated = crypto.createHmac('sha256', secretKey).update(dataCheckStr).digest('hex');
+
+      if (calculated !== hash) {
+        console.warn('HMAC mismatch. data_check_string was:\n' + dataCheckStr.slice(0, 200));
+        return null;
+      }
+
+      // Reject sessions older than 24 hours
+      const authDate = parseInt(params.get('auth_date') || '0', 10);
+      if (authDate && Date.now() / 1000 - authDate > 86400) {
+        console.warn('initData expired (auth_date too old)');
+        return null;
+      }
     }
 
-    const u = params.get('user');
-    if (!u) return null;
-    return JSON.parse(u);
-  } catch(e) { return null; }
+    const userStr = params.get('user');
+    if (!userStr) return null;
+    return JSON.parse(userStr);
+  } catch(e) {
+    console.error('parseTgUser error:', e.message);
+    return null;
+  }
 }
 
 function auth(req, res, next) {
-  const raw  = req.headers['x-telegram-init-data'] || '';
+  const raw = req.headers['x-telegram-init-data'] || '';
+
+  if (!raw) {
+    return res.status(401).json({ error: 'Missing x-telegram-init-data header' });
+  }
+
   const user = parseTgUser(raw);
-  if (!user || !user.id) return res.status(401).json({ error: 'Unauthorized' });
+
+  if (!user || !user.id) {
+    console.warn('Auth failed. initData (first 150 chars):', raw.slice(0, 150));
+    return res.status(401).json({ error: 'Invalid Telegram session. Please close and reopen the app.' });
+  }
+
   req.uid    = Number(user.id);
   req.tgUser = user;
   next();

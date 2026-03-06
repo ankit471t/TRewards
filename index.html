@@ -365,7 +365,7 @@ body::before{content:'';position:fixed;top:-40%;left:50%;transform:translateX(-5
 </head>
 <body>
 
-<div id="ls"><div class="ll">TREWARDS</div><div class="sp"></div></div>
+<div id="ls"><div class="ll">TR EWARDS</div><div class="sp"></div></div>
 
 <div id="app">
   <header id="hdr">
@@ -434,13 +434,6 @@ body::before{content:'';position:fixed;top:-40%;left:50%;transform:translateX(-5
     <!-- TASKS -->
     <div class="page" id="page-tasks">
       <div class="pt">Available Tasks</div>
-      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:14px;scrollbar-width:none">
-        <button class="tabb active" id="filter-all"     onclick="filterTasks('all')"     style="white-space:nowrap;padding:0 14px;height:36px;border-radius:20px;flex-shrink:0">All</button>
-        <button class="tabb"        id="filter-channel" onclick="filterTasks('channel')" style="white-space:nowrap;padding:0 14px;height:36px;border-radius:20px;flex-shrink:0">📢 Channels</button>
-        <button class="tabb"        id="filter-group"   onclick="filterTasks('group')"   style="white-space:nowrap;padding:0 14px;height:36px;border-radius:20px;flex-shrink:0">👥 Groups</button>
-        <button class="tabb"        id="filter-game"    onclick="filterTasks('game')"    style="white-space:nowrap;padding:0 14px;height:36px;border-radius:20px;flex-shrink:0">🎮 Games</button>
-        <button class="tabb"        id="filter-visit"   onclick="filterTasks('visit')"   style="white-space:nowrap;padding:0 14px;height:36px;border-radius:20px;flex-shrink:0">🌐 Visits</button>
-      </div>
       <div id="tasksContainer"></div>
     </div>
 
@@ -681,20 +674,22 @@ async function api(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'x-telegram-init-data': INIT_DATA || 'user=' + encodeURIComponent(JSON.stringify(ME)) + '&hash=devtest',
+      'x-telegram-init-data': INIT_DATA || ('user=' + encodeURIComponent(JSON.stringify(ME)) + '&hash=devtest'),
     },
   };
   if (body) opts.body = JSON.stringify(body);
   try {
     const res = await fetch(API_BASE + path, opts);
+    const json = await res.json().catch(() => ({ error: 'Bad response from server' }));
     if (!res.ok) {
-      let msg = 'Server error: ' + res.status;
-      try { const j = await res.json(); msg = j.error || j.message || msg; } catch(e) {}
+      const msg = json.error || json.message || ('Server error ' + res.status);
+      console.error('[API]', method, path, '→', res.status, msg);
       return { error: msg };
     }
-    return await res.json();
+    return json;
   } catch(e) {
-    return { error: 'Network error. Check connection.' };
+    console.error('[API network]', method, path, e.message);
+    return { error: 'Network error — check your connection' };
   }
 }
 
@@ -878,7 +873,7 @@ async function doDailyTask(id) {
 // ══════════════════════════════════════════
 // TASKS — sectioned by type
 // ══════════════════════════════════════════
-let allTasks = [], activeFilter = 'all';
+let allTasks = [];
 const TASK_SECS = [
   {type:'channel', cls:'ch', icon:'📢', label:'📢 Join Channels',   desc:'Subscribe and earn TR coins'},
   {type:'group',   cls:'gr', icon:'👥', label:'👥 Join Groups',     desc:'Join groups and earn TR coins'},
@@ -899,22 +894,14 @@ async function loadTasks() {
   renderTasks();
 }
 
-function filterTasks(type) {
-  activeFilter = type;
-  document.querySelectorAll('[id^="filter-"]').forEach(b => b.classList.remove('active'));
-  document.getElementById('filter-' + type)?.classList.add('active');
-  renderTasks();
-}
-
 function renderTasks() {
   const c = document.getElementById('tasksContainer'); if (!c) return;
   let html = '', any = false;
   TASK_SECS.forEach(sec => {
-    if (activeFilter !== 'all' && activeFilter !== sec.type) return;
-    const tasks = allTasks.filter(t => t.type === sec.type);
+    const tasks = allTasks.filter(t => t.type===sec.type);
     if (!tasks.length) return;
     any = true;
-    const done  = tasks.filter(t => (S.taskUI[t.id]?.status || t.user_status) === 'done').length;
+    const done  = tasks.filter(t => (S.taskUI[t.id]?.status||t.user_status)==='done').length;
     const total = tasks.length;
     html += `<div class="tsec ${sec.cls}">
       <div class="tsec-hd">
@@ -925,7 +912,7 @@ function renderTasks() {
       ${tasks.map(t => buildTaskCard(t, sec.cls)).join('')}
     </div>`;
   });
-  c.innerHTML = any ? html : `<div class="empty"><div class="empty-ico">📋</div><div class="empty-txt">No ${activeFilter === 'all' ? '' : activeFilter + ' '}tasks available yet.<br>Post via <b style="color:var(--gold)">+TASK</b> button.</div></div>`;
+  c.innerHTML = any ? html : `<div class="empty"><div class="empty-ico">📋</div><div class="empty-txt">No tasks available yet.<br>Post via <b style="color:var(--gold)">+TASK</b> button.</div></div>`;
 }
 
 function buildTaskCard(task, cls) {
