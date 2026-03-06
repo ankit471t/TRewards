@@ -1,647 +1,514 @@
 'use strict';
 
-const express    = require('express');
-const cors       = require('cors');
-const crypto     = require('crypto');
+const express = require('express');
+const cors    = require('cors');
+const crypto  = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ═══════════════════════════════════════════════
-// ENV  (set these in Render dashboard)
-// ═══════════════════════════════════════════════
-const BOT_TOKEN      = process.env.BOT_TOKEN      || '';
-const SUPABASE_URL   = process.env.SUPABASE_URL   || '';
-const SUPABASE_KEY   = process.env.SUPABASE_KEY   || '';   // service_role key
-const ADMIN_IDS      = (process.env.ADMIN_IDS||'').split(',').map(s=>s.trim()).filter(Boolean);
+// ── ENV ─────────────────────────────────────────────
+const BOT_TOKEN    = process.env.BOT_TOKEN    || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';  // service_role key
+const ADMIN_IDS    = (process.env.ADMIN_IDS||'').split(',').map(Number).filter(Boolean);
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ═══════════════════════════════════════════════
-// MIDDLEWARE
-// ═══════════════════════════════════════════════
-app.use(cors({
-  origin: '*',               // allow Telegram WebApp & any origin
-  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','x-telegram-init-data','Authorization'],
-}));
-app.options('*', cors());    // pre-flight
+// ── MIDDLEWARE ───────────────────────────────────────
+app.use(cors({ origin: '*', methods: ['GET','POST','OPTIONS'], allowedHeaders: ['Content-Type','x-telegram-init-data'] }));
+app.options('*', (req,res) => res.sendStatus(200));
 app.use(express.json());
 
-// ═══════════════════════════════════════════════
-// TELEGRAM initData VALIDATION
-// Returns parsed user or null
-// ═══════════════════════════════════════════════
-function parseTgInitData(raw) {
+// ── TELEGRAM AUTH ────────────────────────────────────
+// Returns tg user object or null
+function parseTgUser(raw) {
   if (!raw) return null;
   try {
     const params = new URLSearchParams(raw);
-    const hash   = params.get('hash'); params.delete('hash');
-    const data_check = [...params.entries()]
-      .sort(([a],[b]) => a.localeCompare(b))
-      .map(([k,v]) => `${k}=${v}`)
-      .join('\n');
-    if (BOT_TOKEN && hash) {
+    const hash   = params.get('hash');
+    params.delete('hash');
+
+    if (BOT_TOKEN && hash && hash !== 'devtest') {
+      const sorted = [...params.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${k}=${v}`).join('\n');
       const secret = crypto.createHmac('sha256','WebAppData').update(BOT_TOKEN).digest();
-      const check  = crypto.createHmac('sha256',secret).update(data_check).digest('hex');
-      if (check !== hash) return null;          // invalid signature
+      const expect = crypto.createHmac('sha256',secret).update(sorted).digest('hex');
+      if (expect !== hash) return null;
     }
-    const userStr = params.get('user');
-    if (!userStr) return null;
-    return JSON.parse(userStr);
-  } catch(e) {
-    return null;
-  }
+
+    const u = params.get('user');
+    if (!u) return null;
+    return JSON.parse(u);
+  } catch(e) { return null; }
 }
 
-// Dev fallback: parse raw JSON or user= query param without signature check
-function devParseUser(raw) {
-  if (!raw) return null;
-  // format: user=<urlencoded JSON>&hash=devtest
-  try {
-    const params = new URLSearchParams(raw);
-    const userStr = params.get('user');
-    if (userStr) return JSON.parse(userStr);
-  } catch(e) {}
-  return null;
-}
-
-// ═══════════════════════════════════════════════
-// AUTH MIDDLEWARE
-// Attaches req.tgUser (object with id, first_name, …)
-// ═══════════════════════════════════════════════
 function auth(req, res, next) {
-  const raw = req.headers['x-telegram-init-data'] || '';
-
-  // Try real validation first
-  let user = parseTgInitData(raw);
-
-  // Fall back to dev mode (hash=devtest)
-  if (!user) user = devParseUser(raw);
-
-  if (!user || !user.id) {
-    return res.status(401).json({ error: 'Unauthorized: invalid initData' });
-  }
+  const raw  = req.headers['x-telegram-init-data'] || '';
+  const user = parseTgUser(raw);
+  if (!user || !user.id) return res.status(401).json({ error: 'Unauthorized' });
+  req.uid  = Number(user.id);   // always a real integer
   req.tgUser = user;
   next();
 }
 
-// ═══════════════════════════════════════════════
-// UPSERT HELPER — ensures user row always exists
-// ═══════════════════════════════════════════════
-async function upsertUser(tgUser) {
-  const uid = String(tgUser.id);
-  const { data, error } = await supabase
-    .from('users')
-    .upsert({
-      telegram_id:  uid,
-      first_name:   tgUser.first_name || '',
-      last_name:    tgUser.last_name  || '',
-      username:     tgUser.username   || '',
-      updated_at:   new Date().toISOString(),
-    }, {
-      onConflict:    'telegram_id',
-      ignoreDuplicates: false,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
+// ── UPSERT USER ──────────────────────────────────────
+// Creates user row on first visit, updates on return
+async function upsertUser(uid, tgUser) {
+  const now = new Date().toISOString();
+  // Try insert first
+  const { error: insertErr } = await sb.from('users').insert({
+    user_id:    uid,
+    first_name: tgUser.first_name || '',
+    last_name:  tgUser.last_name  || '',
+    username:   tgUser.username   || '',
+    created_at: now,
+    updated_at: now,
+  });
 
-async function getUser(tgUser) {
-  const uid = String(tgUser.id);
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('telegram_id', uid)
-    .single();
-  if (error && error.code === 'PGRST116') {
-    // Row not found — create it
-    return await upsertUser(tgUser);
+  if (insertErr && insertErr.code !== '23505') {
+    // 23505 = unique violation = user already exists, that's fine
+    throw insertErr;
   }
+
+  // Always update name + updated_at so returning users are refreshed
+  await sb.from('users').update({
+    first_name: tgUser.first_name || '',
+    last_name:  tgUser.last_name  || '',
+    username:   tgUser.username   || '',
+    updated_at: now,
+  }).eq('user_id', uid);
+
+  const { data, error } = await sb.from('users').select('*').eq('user_id', uid).single();
   if (error) throw error;
   return data;
 }
 
-// ═══════════════════════════════════════════════
-// ROUTES
-// ═══════════════════════════════════════════════
+// ── ROUTES ───────────────────────────────────────────
 
-// Health check — no auth
-app.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
+app.get('/health', (req,res) => res.json({ ok: true, ts: Date.now() }));
 
-// ── /me ──────────────────────────────────────
-app.get('/me', auth, async (req, res) => {
+// GET /me — upsert user + return profile
+app.get('/me', auth, async (req,res) => {
   try {
-    const user = await getUser(req.tgUser);
-    // Build referral link
-    const refLink = `https://t.me/trewards_ton_bot?start=${user.telegram_id}`;
+    const user = await upsertUser(req.uid, req.tgUser);
     res.json({
-      id:            user.telegram_id,
+      user_id:       user.user_id,
       first_name:    user.first_name,
       coins:         user.coins         || 0,
-      spins:         user.spins         || 0,
+      spins:         user.spins         || 3,
       streak:        user.streak        || 1,
-      ad_balance:    user.ad_balance    || 0,
+      ad_balance:    parseFloat(user.ad_balance || 0),
       claimable_ref: user.claimable_ref || 0,
-      referral_link: refLink,
+      referral_link: `https://t.me/trewards_ton_bot?start=${user.user_id}`,
     });
   } catch(e) {
-    console.error('/me error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/me', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Daily tasks status ────────────────────────
-app.get('/daily-tasks-status', auth, async (req, res) => {
+// GET /daily-tasks-status
+app.get('/daily-tasks-status', auth, async (req,res) => {
   try {
-    const uid  = String(req.tgUser.id);
+    await upsertUser(req.uid, req.tgUser);
     const today = new Date().toISOString().slice(0,10);
-    const { data } = await supabase
-      .from('daily_completions')
-      .select('task_name')
-      .eq('telegram_id', uid)
-      .eq('date', today);
-    const done = (data||[]).map(r => r.task_name);
-    res.json({ done });
+    const { data } = await sb.from('daily_completions').select('task_name').eq('user_id', req.uid).eq('date', today);
+    res.json({ done: (data||[]).map(r=>r.task_name) });
   } catch(e) {
-    console.error('/daily-tasks-status error:', e);
+    console.error('/daily-tasks-status', e.message);
     res.json({ done: [] });
   }
 });
 
-// ── Claim streak ──────────────────────────────
-app.post('/claim-streak', auth, async (req, res) => {
+// POST /claim-streak
+app.post('/claim-streak', auth, async (req,res) => {
   try {
-    const uid   = String(req.tgUser.id);
+    const uid   = req.uid;
     const today = new Date().toISOString().slice(0,10);
-    // Check already claimed today
-    const { data: existing } = await supabase
-      .from('daily_completions')
-      .select('id')
-      .eq('telegram_id', uid)
-      .eq('task_name', 'streak')
-      .eq('date', today)
-      .maybeSingle();
+
+    const { data: existing } = await sb.from('daily_completions').select('id').eq('user_id',uid).eq('task_name','streak').eq('date',today).maybeSingle();
     if (existing) return res.status(400).json({ error: 'Already claimed today' });
 
-    const user = await getUser(req.tgUser);
-    const streak = Math.min((user.streak||1)+1, 7);
-    // Reset streak to 1 if last claim was > 1 day ago (optional — basic impl)
+    const user     = await upsertUser(uid, req.tgUser);
     const newCoins = (user.coins||0) + 10;
     const newSpins = (user.spins||0) + 1;
+    const newStreak = Math.min((user.streak||1) + 1, 7);
 
-    await supabase.from('users').update({ coins: newCoins, spins: newSpins, streak }).eq('telegram_id', uid);
-    await supabase.from('daily_completions').insert({ telegram_id: uid, task_name: 'streak', date: today });
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: 10, type: 'streak', description: 'Daily streak reward' });
+    await sb.from('users').update({ coins: newCoins, spins: newSpins, streak: newStreak }).eq('user_id', uid);
+    await sb.from('daily_completions').insert({ user_id: uid, task_name: 'streak', date: today });
+    await sb.from('transactions').insert({ user_id: uid, amount: 10, type: 'streak', description: 'Daily streak reward' });
 
-    res.json({ coins: newCoins, spins: newSpins, streak });
+    res.json({ coins: newCoins, spins: newSpins, streak: newStreak });
   } catch(e) {
-    console.error('/claim-streak error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/claim-streak', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Daily task ────────────────────────────────
-app.post('/daily-task', auth, async (req, res) => {
+// POST /daily-task
+app.post('/daily-task', auth, async (req,res) => {
   try {
-    const uid      = String(req.tgUser.id);
+    const uid      = req.uid;
     const taskName = req.body.task_name;
     const today    = new Date().toISOString().slice(0,10);
     if (!taskName) return res.status(400).json({ error: 'task_name required' });
 
-    const { data: existing } = await supabase
-      .from('daily_completions').select('id')
-      .eq('telegram_id', uid).eq('task_name', taskName).eq('date', today).maybeSingle();
+    const { data: existing } = await sb.from('daily_completions').select('id').eq('user_id',uid).eq('task_name',taskName).eq('date',today).maybeSingle();
     if (existing) return res.status(400).json({ error: 'Already completed today' });
 
-    const user     = await getUser(req.tgUser);
+    const user     = await upsertUser(uid, req.tgUser);
     const newCoins = (user.coins||0) + 10;
     const newSpins = (user.spins||0) + 1;
 
-    await supabase.from('users').update({ coins: newCoins, spins: newSpins }).eq('telegram_id', uid);
-    await supabase.from('daily_completions').insert({ telegram_id: uid, task_name: taskName, date: today });
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: 10, type: 'daily_task', description: `Daily task: ${taskName}` });
+    await sb.from('users').update({ coins: newCoins, spins: newSpins }).eq('user_id', uid);
+    await sb.from('daily_completions').insert({ user_id: uid, task_name: taskName, date: today });
+    await sb.from('transactions').insert({ user_id: uid, amount: 10, type: 'daily_task', description: `Daily task: ${taskName}` });
 
     res.json({ coins: newCoins, spins: newSpins });
   } catch(e) {
-    console.error('/daily-task error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/daily-task', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Tasks list ────────────────────────────────
-app.get('/tasks', auth, async (req, res) => {
+// GET /tasks
+app.get('/tasks', auth, async (req,res) => {
   try {
-    const uid = String(req.tgUser.id);
-    const { data: tasks } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('status','active')
-      .gt('remaining_limit', 0)
-      .order('created_at', { ascending: false });
-
+    await upsertUser(req.uid, req.tgUser);
+    const { data: tasks } = await sb.from('tasks').select('*').eq('status','active').gt('remaining_limit',0).order('created_at',{ascending:false});
     if (!tasks || !tasks.length) return res.json([]);
 
-    // Get this user's completions
-    const { data: comps } = await supabase
-      .from('task_completions')
-      .select('task_id')
-      .eq('telegram_id', uid);
-    const doneIds = new Set((comps||[]).map(c => c.task_id));
+    const { data: comps } = await sb.from('task_completions').select('task_id').eq('user_id', req.uid);
+    const doneIds = new Set((comps||[]).map(c=>c.task_id));
 
-    const result = tasks.map(t => ({
+    res.json(tasks.map(t => ({
       id:              t.id,
       title:           t.title,
       description:     t.description || t.url,
       url:             t.url,
       type:            t.type,
-      reward:          t.reward || (t.type==='visit' ? 500 : 1000),
-      advertiser_name: t.advertiser_name || 'Advertiser',
+      reward:          t.reward,
+      advertiser_name: t.advertiser_name,
       user_status:     doneIds.has(t.id) ? 'done' : 'pending',
-    }));
-    res.json(result);
+    })));
   } catch(e) {
-    console.error('/tasks error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/tasks', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Claim task (visit / game) ─────────────────
-app.post('/claim-task', auth, async (req, res) => {
+// POST /claim-task  (visit / game — timer-based)
+app.post('/claim-task', auth, async (req,res) => {
   try {
-    const uid    = String(req.tgUser.id);
-    const taskId = req.body.task_id;
+    const uid    = req.uid;
+    const taskId = Number(req.body.task_id);
     if (!taskId) return res.status(400).json({ error: 'task_id required' });
 
-    // Check already claimed
-    const { data: existing } = await supabase
-      .from('task_completions').select('id')
-      .eq('telegram_id', uid).eq('task_id', taskId).maybeSingle();
+    const { data: existing } = await sb.from('task_completions').select('id').eq('user_id',uid).eq('task_id',taskId).maybeSingle();
     if (existing) return res.status(400).json({ error: 'Already completed' });
 
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', taskId).single();
+    const { data: task } = await sb.from('tasks').select('*').eq('id',taskId).single();
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.remaining_limit <= 0) return res.status(400).json({ error: 'Task is full' });
 
-    const reward   = task.reward || (task.type==='visit' ? 500 : 1000);
-    const user     = await getUser(req.tgUser);
+    const reward   = task.reward;
+    const user     = await upsertUser(uid, req.tgUser);
     const newCoins = (user.coins||0) + reward;
     const newSpins = (user.spins||0) + 1;
 
-    await supabase.from('users').update({ coins: newCoins, spins: newSpins }).eq('telegram_id', uid);
-    await supabase.from('task_completions').insert({ telegram_id: uid, task_id: taskId });
-    await supabase.from('tasks').update({ remaining_limit: task.remaining_limit - 1, completed_count: (task.completed_count||0)+1 }).eq('id', taskId);
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: reward, type: 'task', description: `Task: ${task.title}` });
-
-    // 30% referral commission
+    await sb.from('users').update({ coins: newCoins, spins: newSpins }).eq('user_id',uid);
+    await sb.from('task_completions').insert({ user_id: uid, task_id: taskId });
+    await sb.from('tasks').update({ remaining_limit: task.remaining_limit-1, completed_count: task.completed_count+1 }).eq('id',taskId);
+    await sb.from('transactions').insert({ user_id: uid, amount: reward, type: 'task', description: `Task: ${task.title}` });
     await creditReferrer(uid, reward);
 
     res.json({ coins: newCoins, spins: newSpins, reward });
   } catch(e) {
-    console.error('/claim-task error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/claim-task', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Verify join (backend does getChatMember) ──
-app.post('/verify-join', auth, async (req, res) => {
+// POST /verify-join  — backend calls getChatMember, frontend sends user_id
+app.post('/verify-join', auth, async (req,res) => {
   try {
-    const uid    = String(req.tgUser.id);
-    const { task_id, chat_id, user_id } = req.body;
-    if (!task_id || !chat_id) return res.status(400).json({ error: 'task_id and chat_id required' });
+    const uid    = req.uid;
+    const taskId = Number(req.body.task_id);
+    const chatId = req.body.chat_id;
+    if (!taskId || !chatId) return res.status(400).json({ error: 'task_id and chat_id required' });
 
-    // Check already done
-    const { data: existing } = await supabase
-      .from('task_completions').select('id')
-      .eq('telegram_id', uid).eq('task_id', task_id).maybeSingle();
-    if (existing) return res.status(400).json({ error: 'Already completed', joined: true });
+    const { data: existing } = await sb.from('task_completions').select('id').eq('user_id',uid).eq('task_id',taskId).maybeSingle();
+    if (existing) return res.json({ joined: true, already: true });
 
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+    const { data: task } = await sb.from('tasks').select('*').eq('id',taskId).single();
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
-    // ── getChatMember via Telegram Bot API (backend only) ──
-    const tgUserId = user_id || uid;
+    // Call Telegram getChatMember (server-side, BOT_TOKEN never exposed to frontend)
     let joined = false;
-
     if (BOT_TOKEN) {
-      const url = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chat_id)}&user_id=${tgUserId}`;
       try {
-        const tgRes  = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        const tgData = await tgRes.json();
-        const validStatuses = ['member','administrator','creator'];
-        joined = tgData.ok && validStatuses.includes(tgData.result?.status);
+        const tgUrl  = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chatId)}&user_id=${uid}`;
+        const tgResp = await fetch(tgUrl, { signal: AbortSignal.timeout(8000) });
+        const tgData = await tgResp.json();
+        joined = tgData.ok && ['member','administrator','creator'].includes(tgData.result?.status);
       } catch(e) {
-        console.error('getChatMember error:', e);
-        // If Telegram API is unreachable, fail gracefully
-        return res.status(503).json({ error: 'Could not verify membership. Try again.' });
+        return res.status(503).json({ error: 'Telegram API unreachable, try again' });
       }
     } else {
-      // No BOT_TOKEN configured — dev mode, trust the user
-      joined = true;
+      joined = true; // dev mode — no BOT_TOKEN set
     }
 
     if (!joined) return res.json({ joined: false });
 
-    // Award reward
-    const reward   = task.reward || 1000;
-    const user     = await getUser(req.tgUser);
+    const reward   = task.reward;
+    const user     = await upsertUser(uid, req.tgUser);
     const newCoins = (user.coins||0) + reward;
     const newSpins = (user.spins||0) + 1;
 
-    await supabase.from('users').update({ coins: newCoins, spins: newSpins }).eq('telegram_id', uid);
-    await supabase.from('task_completions').insert({ telegram_id: uid, task_id });
-    await supabase.from('tasks').update({ remaining_limit: task.remaining_limit-1, completed_count: (task.completed_count||0)+1 }).eq('id', task_id);
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: reward, type: 'task', description: `Joined: ${task.title}` });
-
+    await sb.from('users').update({ coins: newCoins, spins: newSpins }).eq('user_id',uid);
+    await sb.from('task_completions').insert({ user_id: uid, task_id: taskId });
+    await sb.from('tasks').update({ remaining_limit: task.remaining_limit-1, completed_count: task.completed_count+1 }).eq('id',taskId);
+    await sb.from('transactions').insert({ user_id: uid, amount: reward, type: 'task', description: `Joined: ${task.title}` });
     await creditReferrer(uid, reward);
 
     res.json({ joined: true, coins: newCoins, spins: newSpins, reward });
   } catch(e) {
-    console.error('/verify-join error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/verify-join', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Spin ──────────────────────────────────────
-app.post('/spin', auth, async (req, res) => {
+// POST /spin
+app.post('/spin', auth, async (req,res) => {
   try {
-    const uid  = String(req.tgUser.id);
-    const user = await getUser(req.tgUser);
+    const uid  = req.uid;
+    const user = await upsertUser(uid, req.tgUser);
     if ((user.spins||0) <= 0) return res.status(400).json({ error: 'No spins left' });
 
-    // Weighted reward
-    const weights = [
-      {value:500, w:5},
-      {value:300, w:10},
-      {value:100, w:20},
-      {value:80,  w:25},
-      {value:50,  w:25},
-      {value:10,  w:15},
-    ];
-    const total  = weights.reduce((s,x)=>s+x.w, 0);
-    let rand     = Math.random() * total;
-    let reward   = 10;
-    for (const item of weights) { rand -= item.w; if (rand <= 0) { reward = item.value; break; } }
+    // Weighted prizes
+    const prizes = [{v:500,w:3},{v:300,w:7},{v:100,w:20},{v:80,w:25},{v:50,w:25},{v:10,w:20}];
+    const total  = prizes.reduce((s,p)=>s+p.w, 0);
+    let rand = Math.random()*total, reward = 10;
+    for (const p of prizes) { rand -= p.w; if (rand <= 0) { reward = p.v; break; } }
 
     const newCoins = (user.coins||0) + reward;
     const newSpins = (user.spins||0) - 1;
 
-    await supabase.from('users').update({ coins: newCoins, spins: newSpins }).eq('telegram_id', uid);
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: reward, type: 'spin', description: `Spin reward: ${reward} TR` });
+    await sb.from('users').update({ coins: newCoins, spins: newSpins }).eq('user_id',uid);
+    await sb.from('transactions').insert({ user_id: uid, amount: reward, type: 'spin', description: `Spin: +${reward} TR` });
 
     res.json({ coins: newCoins, spins: newSpins, reward });
   } catch(e) {
-    console.error('/spin error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/spin', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Withdraw ──────────────────────────────────
-const WD_OPTS = [
-  {coins:250000,  ton:0.10},
-  {coins:500000,  ton:0.20},
-  {coins:750000,  ton:0.30},
-  {coins:1000000, ton:0.40},
-];
-app.post('/withdraw', auth, async (req, res) => {
+// POST /redeem-promo
+app.post('/redeem-promo', auth, async (req,res) => {
   try {
-    const uid          = String(req.tgUser.id);
-    const { coins_option } = req.body;
-    const opt = WD_OPTS.find(o => o.coins===coins_option);
-    if (!opt) return res.status(400).json({ error: 'Invalid withdrawal option' });
+    const uid  = req.uid;
+    const code = (req.body.code||'').trim().toUpperCase();
+    if (!code) return res.status(400).json({ error: 'code required' });
 
-    const user = await getUser(req.tgUser);
-    if ((user.coins||0) < opt.coins) return res.status(400).json({ error: 'Not enough coins' });
+    const { data: promo } = await sb.from('promo_codes').select('*').eq('code',code).maybeSingle();
+    if (!promo)          return res.status(404).json({ error: 'Invalid promo code' });
+    if (promo.uses_left <= 0) return res.status(400).json({ error: 'Code expired' });
 
-    const newCoins = (user.coins||0) - opt.coins;
-    const netTon   = +(opt.ton - 0.05).toFixed(2);
+    const { data: used } = await sb.from('promo_uses').select('id').eq('code',code).eq('user_id',uid).maybeSingle();
+    if (used) return res.status(400).json({ error: 'Already used' });
 
-    await supabase.from('users').update({ coins: newCoins }).eq('telegram_id', uid);
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: -opt.coins, type: 'withdrawal', description: `Withdrawal: ${opt.ton} TON (-0.05 fee)` });
-    await supabase.from('withdrawals').insert({ telegram_id: uid, coins_spent: opt.coins, ton_gross: opt.ton, ton_net: netTon, status: 'pending' });
+    const user     = await upsertUser(uid, req.tgUser);
+    const newCoins = (user.coins||0) + promo.reward;
 
-    res.json({ coins: newCoins, net_ton: netTon });
+    await sb.from('users').update({ coins: newCoins }).eq('user_id',uid);
+    await sb.from('promo_codes').update({ uses_left: promo.uses_left-1 }).eq('code',code);
+    await sb.from('promo_uses').insert({ code, user_id: uid });
+    await sb.from('transactions').insert({ user_id: uid, amount: promo.reward, type: 'promo', description: `Promo: ${code}` });
+
+    res.json({ coins: newCoins, reward: promo.reward });
   } catch(e) {
-    console.error('/withdraw error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/redeem-promo', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Transactions ──────────────────────────────
-app.get('/transactions', auth, async (req, res) => {
+// GET /referrals
+app.get('/referrals', auth, async (req,res) => {
   try {
-    const uid = String(req.tgUser.id);
-    const { data } = await supabase
-      .from('transactions').select('*')
-      .eq('telegram_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    res.json(data || []);
+    const uid  = req.uid;
+    const user = await upsertUser(uid, req.tgUser);
+
+    const { data: refs } = await sb.from('referrals').select('referee_id,earned_coins').eq('referrer_id',uid);
+    if (!refs || !refs.length) return res.json({ friends: [], claimable: user.claimable_ref||0 });
+
+    const refIds = refs.map(r=>r.referee_id);
+    const { data: refUsers } = await sb.from('users').select('user_id,first_name,coins').in('user_id',refIds);
+
+    const friends = (refUsers||[]).map(u => {
+      const ref = refs.find(r=>r.referee_id===u.user_id);
+      return { first_name: u.first_name, coins: u.coins, my_share: ref?.earned_coins||0 };
+    });
+
+    res.json({ friends, claimable: user.claimable_ref||0 });
+  } catch(e) {
+    console.error('/referrals', e.message);
+    res.json({ friends: [], claimable: 0 });
+  }
+});
+
+// POST /claim-referral
+app.post('/claim-referral', auth, async (req,res) => {
+  try {
+    const uid  = req.uid;
+    const user = await upsertUser(uid, req.tgUser);
+    const amt  = user.claimable_ref||0;
+    if (amt <= 0) return res.status(400).json({ error: 'Nothing to claim' });
+
+    const newCoins = (user.coins||0) + amt;
+    await sb.from('users').update({ coins: newCoins, claimable_ref: 0 }).eq('user_id',uid);
+    await sb.from('transactions').insert({ user_id: uid, amount: amt, type: 'referral_claim', description: 'Referral earnings claimed' });
+
+    res.json({ coins: newCoins, claimed: amt });
+  } catch(e) {
+    console.error('/claim-referral', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /transactions
+app.get('/transactions', auth, async (req,res) => {
+  try {
+    await upsertUser(req.uid, req.tgUser);
+    const { data } = await sb.from('transactions').select('*').eq('user_id',req.uid).order('created_at',{ascending:false}).limit(50);
+    res.json(data||[]);
   } catch(e) {
     res.json([]);
   }
 });
 
-// ── Referrals ─────────────────────────────────
-app.get('/referrals', auth, async (req, res) => {
+// GET /ad-balance
+app.get('/ad-balance', auth, async (req,res) => {
   try {
-    const uid = String(req.tgUser.id);
-    const { data: refs } = await supabase
-      .from('referrals')
-      .select('referee_id, earned_coins')
-      .eq('referrer_id', uid);
-
-    if (!refs || !refs.length) return res.json({ friends: [], claimable: 0 });
-
-    const user     = await getUser(req.tgUser);
-    const refIds   = refs.map(r => r.referee_id);
-    const { data: refUsers } = await supabase.from('users').select('telegram_id,first_name,coins').in('telegram_id', refIds);
-
-    const friends = (refUsers||[]).map(u => {
-      const ref = refs.find(r => r.referee_id===u.telegram_id);
-      return { first_name: u.first_name, coins: u.coins, my_share: ref?.earned_coins || 0 };
-    });
-
-    res.json({ friends, claimable: user.claimable_ref || 0 });
-  } catch(e) {
-    console.error('/referrals error:', e);
-    res.json({ friends: [], claimable: 0 });
-  }
+    const user = await upsertUser(req.uid, req.tgUser);
+    res.json({ balance_ton: parseFloat(user.ad_balance||0) });
+  } catch(e) { res.json({ balance_ton: 0 }); }
 });
 
-app.post('/claim-referral', auth, async (req, res) => {
+// POST /create-payment
+app.post('/create-payment', auth, async (req,res) => {
   try {
-    const uid  = String(req.tgUser.id);
-    const user = await getUser(req.tgUser);
-    const amt  = user.claimable_ref || 0;
-    if (amt <= 0) return res.status(400).json({ error: 'Nothing to claim' });
-
-    const newCoins = (user.coins||0) + amt;
-    await supabase.from('users').update({ coins: newCoins, claimable_ref: 0 }).eq('telegram_id', uid);
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: amt, type: 'referral_claim', description: 'Referral earnings claimed' });
-
-    res.json({ coins: newCoins, claimed: amt });
-  } catch(e) {
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
-
-// ── Promo code ────────────────────────────────
-app.post('/redeem-promo', auth, async (req, res) => {
-  try {
-    const uid  = String(req.tgUser.id);
-    const code = (req.body.code||'').trim().toUpperCase();
-    if (!code) return res.status(400).json({ error: 'Code required' });
-
-    const { data: promo } = await supabase.from('promo_codes').select('*').eq('code', code).maybeSingle();
-    if (!promo) return res.status(404).json({ error: 'Invalid promo code' });
-    if (promo.uses_left <= 0) return res.status(400).json({ error: 'Promo code expired' });
-
-    // Check if already used
-    const { data: used } = await supabase.from('promo_uses').select('id').eq('code', code).eq('telegram_id', uid).maybeSingle();
-    if (used) return res.status(400).json({ error: 'Already used this code' });
-
-    const user     = await getUser(req.tgUser);
-    const newCoins = (user.coins||0) + promo.reward;
-    await supabase.from('users').update({ coins: newCoins }).eq('telegram_id', uid);
-    await supabase.from('promo_codes').update({ uses_left: promo.uses_left - 1 }).eq('code', code);
-    await supabase.from('promo_uses').insert({ code, telegram_id: uid });
-    await supabase.from('transactions').insert({ telegram_id: uid, amount: promo.reward, type: 'promo', description: `Promo: ${code}` });
-
-    res.json({ coins: newCoins, reward: promo.reward });
-  } catch(e) {
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
-
-// ── Ad balance ────────────────────────────────
-app.get('/ad-balance', auth, async (req, res) => {
-  try {
-    const user = await getUser(req.tgUser);
-    res.json({ balance_ton: user.ad_balance || 0 });
-  } catch(e) {
-    res.json({ balance_ton: 0 });
-  }
-});
-
-// ── Create payment ────────────────────────────
-app.post('/create-payment', auth, async (req, res) => {
-  try {
-    const uid    = String(req.tgUser.id);
+    const uid    = req.uid;
     const amount = parseFloat(req.body.amount);
-    if (!amount || amount < 0.1) return res.status(400).json({ error: 'Minimum 0.1 TON' });
-
-    // ArcPay link format
-    const amountCents = Math.round(amount * 100);
-    const cbLink = `https://t.me/arcpay_bot?start=pay_adbalance_${uid}_${amountCents}`;
-    const xrLink = `https://t.me/xrocket?start=pay_adbalance_${uid}_${amountCents}`;
-
-    res.json({ cryptobot: cbLink, xrocket: xrLink });
-  } catch(e) {
-    res.status(500).json({ error: 'Internal error' });
-  }
+    if (!amount || amount < 0.1) return res.status(400).json({ error: 'Min 0.1 TON' });
+    const cents = Math.round(amount*100);
+    res.json({
+      cryptobot: `https://t.me/arcpay_bot?start=pay_adbalance_${uid}_${cents}`,
+      xrocket:   `https://t.me/xrocket?start=pay_${uid}_${cents}`,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Create task (advertiser) ──────────────────
-app.post('/create-task', auth, async (req, res) => {
+// POST /create-task
+app.post('/create-task', auth, async (req,res) => {
   try {
-    const uid   = String(req.tgUser.id);
+    const uid   = req.uid;
     const { title, type, url, description, total_limit } = req.body;
     if (!title || !url) return res.status(400).json({ error: 'title and url required' });
 
-    const limit  = parseInt(total_limit) || 1000;
-    const cost   = +(limit * 0.001).toFixed(3);
+    const limit  = parseInt(total_limit)||1000;
+    const cost   = parseFloat((limit*0.001).toFixed(3));
     const reward = type==='visit' ? 500 : 1000;
 
-    const user = await getUser(req.tgUser);
-    if ((user.ad_balance||0) < cost) return res.status(400).json({ error: `Need ${cost} TON ad balance` });
+    const user = await upsertUser(uid, req.tgUser);
+    if (parseFloat(user.ad_balance||0) < cost) return res.status(400).json({ error: `Need ${cost} TON in ad balance` });
 
-    const newBal = +((user.ad_balance||0) - cost).toFixed(6);
-    await supabase.from('users').update({ ad_balance: newBal }).eq('telegram_id', uid);
+    const newBal = parseFloat(((user.ad_balance||0) - cost).toFixed(6));
+    await sb.from('users').update({ ad_balance: newBal }).eq('user_id',uid);
 
-    const { data: task, error } = await supabase.from('tasks').insert({
-      title, type, url,
-      description:      description || url,
-      total_limit:      limit,
-      remaining_limit:  limit,
-      completed_count:  0,
-      reward,
-      advertiser_id:    uid,
-      advertiser_name:  req.tgUser.first_name || 'Advertiser',
-      status:           'active',
+    const { data: task, error } = await sb.from('tasks').insert({
+      title, url, description: description||url, type,
+      reward, total_limit: limit, remaining_limit: limit,
+      advertiser_id: uid, advertiser_name: req.tgUser.first_name||'Advertiser',
+      status: 'active',
     }).select().single();
 
     if (error) throw error;
     res.json({ task });
   } catch(e) {
-    console.error('/create-task error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('/create-task', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── My tasks ──────────────────────────────────
-app.get('/my-tasks', auth, async (req, res) => {
+// GET /my-tasks
+app.get('/my-tasks', auth, async (req,res) => {
   try {
-    const uid = String(req.tgUser.id);
-    const { data } = await supabase.from('tasks').select('*').eq('advertiser_id', uid).order('created_at', { ascending: false });
-    res.json(data || []);
+    await upsertUser(req.uid, req.tgUser);
+    const { data } = await sb.from('tasks').select('*').eq('advertiser_id',req.uid).order('created_at',{ascending:false});
+    res.json(data||[]);
+  } catch(e) { res.json([]); }
+});
+
+// POST /withdraw
+app.post('/withdraw', auth, async (req,res) => {
+  try {
+    const uid  = req.uid;
+    const opts = {250000:0.10, 500000:0.20, 750000:0.30, 1000000:0.40};
+    const ton  = opts[req.body.coins_option];
+    if (!ton) return res.status(400).json({ error: 'Invalid option' });
+
+    const user = await upsertUser(uid, req.tgUser);
+    if ((user.coins||0) < req.body.coins_option) return res.status(400).json({ error: 'Not enough coins' });
+
+    const newCoins = (user.coins||0) - req.body.coins_option;
+    const netTon   = parseFloat((ton - 0.05).toFixed(2));
+
+    await sb.from('users').update({ coins: newCoins }).eq('user_id',uid);
+    await sb.from('transactions').insert({ user_id: uid, amount: -req.body.coins_option, type: 'withdrawal', description: `Withdrawal ${ton} TON` });
+    await sb.from('withdrawals').insert({ user_id: uid, coins_spent: req.body.coins_option, ton_gross: ton, ton_net: netTon, status: 'pending' });
+
+    res.json({ coins: newCoins, net_ton: netTon });
   } catch(e) {
-    res.json([]);
+    console.error('/withdraw', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── ArcPay webhook ────────────────────────────
-app.post('/webhook/arcpay', async (req, res) => {
+// ArcPay webhook
+app.post('/webhook/arcpay', async (req,res) => {
   try {
-    const { status, payload, amount_ton } = req.body;
-    if (status !== 'paid') return res.json({ ok: true });
-
-    // payload format: adbalance_USERID_AMOUNTCENTS
-    const match = (payload||'').match(/adbalance_(\d+)_(\d+)/);
-    if (!match) return res.json({ ok: true });
-
-    const [, uid, cents] = match;
-    const ton = parseInt(cents) / 100;
-
-    const { data: user } = await supabase.from('users').select('ad_balance').eq('telegram_id', uid).single();
-    if (!user) return res.json({ ok: true });
-
-    const newBal = +((user.ad_balance||0) + ton).toFixed(6);
-    await supabase.from('users').update({ ad_balance: newBal }).eq('telegram_id', uid);
-
     res.json({ ok: true });
-  } catch(e) {
-    console.error('webhook error:', e);
-    res.status(500).json({ error: 'Internal error' });
-  }
+    const { status, payload } = req.body;
+    if (status !== 'paid') return;
+    const m = (payload||'').match(/adbalance_(\d+)_(\d+)/);
+    if (!m) return;
+    const uid = Number(m[1]), ton = Number(m[2])/100;
+    const { data: user } = await sb.from('users').select('ad_balance').eq('user_id',uid).single();
+    if (!user) return;
+    const newBal = parseFloat(((user.ad_balance||0)+ton).toFixed(6));
+    await sb.from('users').update({ ad_balance: newBal }).eq('user_id',uid);
+  } catch(e) { console.error('webhook', e.message); }
 });
 
-// ═══════════════════════════════════════════════
-// REFERRAL COMMISSION HELPER
-// ═══════════════════════════════════════════════
+// ── REFERRAL COMMISSION ──────────────────────────────
 async function creditReferrer(uid, earnedCoins) {
   try {
-    const { data: ref } = await supabase.from('referrals').select('referrer_id').eq('referee_id', uid).maybeSingle();
+    const { data: ref } = await sb.from('referrals').select('referrer_id').eq('referee_id',uid).maybeSingle();
     if (!ref) return;
-    const commission = Math.floor(earnedCoins * 0.3);
-    if (commission <= 0) return;
-    const { data: referrer } = await supabase.from('users').select('claimable_ref').eq('telegram_id', ref.referrer_id).single();
+    const bonus = Math.floor(earnedCoins * 0.3);
+    if (bonus <= 0) return;
+    const { data: referrer } = await sb.from('users').select('claimable_ref').eq('user_id',ref.referrer_id).single();
     if (!referrer) return;
-    await supabase.from('users').update({ claimable_ref: (referrer.claimable_ref||0) + commission }).eq('telegram_id', ref.referrer_id);
-    await supabase.from('referrals').update({ earned_coins: supabase.raw('earned_coins + '+commission) }).eq('referee_id', uid);
-  } catch(e) {
-    console.error('creditReferrer error:', e);
-  }
+    await sb.from('users').update({ claimable_ref: (referrer.claimable_ref||0)+bonus }).eq('user_id',ref.referrer_id);
+  } catch(e) { /* non-fatal */ }
 }
 
-// ═══════════════════════════════════════════════
-// START
-// ═══════════════════════════════════════════════
+// ── START ────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`TRewards backend running on port ${PORT}`);
-  console.log(`Supabase: ${SUPABASE_URL ? 'connected' : 'NOT SET'}`);
-  console.log(`Bot token: ${BOT_TOKEN ? 'set' : 'NOT SET (dev mode)'}`);
+  console.log(`TRewards running on :${PORT}`);
+  if (!SUPABASE_URL) console.warn('WARNING: SUPABASE_URL not set!');
+  if (!SUPABASE_KEY) console.warn('WARNING: SUPABASE_KEY not set!');
+  if (!BOT_TOKEN)    console.warn('WARNING: BOT_TOKEN not set (dev mode active)');
 });
