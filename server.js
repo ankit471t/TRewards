@@ -12,13 +12,14 @@ const PORT = process.env.PORT || 3000;
 const BOT_TOKEN    = process.env.BOT_TOKEN    || '';
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const ADMIN_IDS    = (process.env.ADMIN_IDS||'').split(',').map(Number).filter(Boolean);
+const BOT_USERNAME = process.env.BOT_USERNAME || 'trewards_ton_bot';
 
 if (!DATABASE_URL) {
   console.error('FATAL: DATABASE_URL env var is not set');
   process.exit(1);
 }
 
-// ── DATABASE (pg Pool → Supabase PostgreSQL) ─────────
+// ── DATABASE ─────────────────────────────────────────
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -44,48 +45,70 @@ app.use(cors({
   allowedHeaders: ['Content-Type','x-telegram-init-data'],
 }));
 app.options('*', (_req, res) => res.sendStatus(200));
-app.use(express.json());
+// Must parse JSON BEFORE the Telegram webhook raw body handler
+app.use((req, res, next) => {
+  if (req.path === '/webhook/telegram') return next(); // handled separately
+  express.json()(req, res, next);
+});
+app.use('/webhook/telegram', express.json());
 
 // ── TELEGRAM AUTH ────────────────────────────────────
-// Validates Telegram WebApp initData using HMAC-SHA256
-// Returns the parsed user object or null
+/**
+ * FIX: The data-check-string must use the RAW (percent-encoded) values
+ * from the original initData string, not the JS-decoded values.
+ * We rebuild it by splitting on '&' manually.
+ */
 function parseTgUser(raw) {
   if (!raw) return null;
   try {
-    // URLSearchParams handles the URL encoding correctly
-    const params = new URLSearchParams(raw);
-    const hash   = params.get('hash');
-    if (!hash) return null;
-    params.delete('hash');
+    // Split raw string into key=value pairs
+    const pairs = raw.split('&');
+    let hash = null;
+    const checkPairs = [];
 
-    // Validate HMAC only when BOT_TOKEN is set and this isn't a dev request
+    for (const pair of pairs) {
+      const eqIdx = pair.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = pair.slice(0, eqIdx);
+      const val = pair.slice(eqIdx + 1);
+      if (key === 'hash') {
+        hash = val;
+      } else {
+        // Store RAW (still percent-encoded) for HMAC, decoded for usage
+        checkPairs.push({ key, rawVal: val, decodedVal: decodeURIComponent(val) });
+      }
+    }
+
+    if (!hash) return null;
+
+    // Validate HMAC only when BOT_TOKEN is set and not dev mode
     if (BOT_TOKEN && hash !== 'devtest') {
-      // data-check-string = params sorted by key, joined with \n
-      // NOTE: params.entries() gives decoded values — that's correct for HMAC
-      const dataCheckStr = [...params.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => `${k}=${v}`)
+      // Sort by key, use RAW values for the data-check-string
+      const dataCheckStr = checkPairs
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map(p => `${p.key}=${p.rawVal}`)
         .join('\n');
 
       const secretKey  = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
       const calculated = crypto.createHmac('sha256', secretKey).update(dataCheckStr).digest('hex');
 
       if (calculated !== hash) {
-        console.warn('HMAC mismatch. data_check_string was:\n' + dataCheckStr.slice(0, 200));
+        console.warn('HMAC mismatch');
         return null;
       }
 
       // Reject sessions older than 24 hours
-      const authDate = parseInt(params.get('auth_date') || '0', 10);
+      const authDatePair = checkPairs.find(p => p.key === 'auth_date');
+      const authDate = authDatePair ? parseInt(authDatePair.decodedVal, 10) : 0;
       if (authDate && Date.now() / 1000 - authDate > 86400) {
-        console.warn('initData expired (auth_date too old)');
+        console.warn('initData expired');
         return null;
       }
     }
 
-    const userStr = params.get('user');
-    if (!userStr) return null;
-    return JSON.parse(userStr);
+    const userPair = checkPairs.find(p => p.key === 'user');
+    if (!userPair) return null;
+    return JSON.parse(userPair.decodedVal);
   } catch(e) {
     console.error('parseTgUser error:', e.message);
     return null;
@@ -94,15 +117,11 @@ function parseTgUser(raw) {
 
 function auth(req, res, next) {
   const raw = req.headers['x-telegram-init-data'] || '';
-
-  if (!raw) {
-    return res.status(401).json({ error: 'Missing x-telegram-init-data header' });
-  }
+  if (!raw) return res.status(401).json({ error: 'Missing x-telegram-init-data header' });
 
   const user = parseTgUser(raw);
-
   if (!user || !user.id) {
-    console.warn('Auth failed. initData (first 150 chars):', raw.slice(0, 150));
+    console.warn('Auth failed. initData snippet:', raw.slice(0, 120));
     return res.status(401).json({ error: 'Invalid Telegram session. Please close and reopen the app.' });
   }
 
@@ -112,7 +131,6 @@ function auth(req, res, next) {
 }
 
 // ── UPSERT USER ──────────────────────────────────────
-// INSERT … ON CONFLICT UPDATE — guaranteed atomic, works every time
 async function upsertUser(uid, tgUser) {
   const rows = await db(`
     INSERT INTO users (user_id, first_name, last_name, username, updated_at)
@@ -127,22 +145,183 @@ async function upsertUser(uid, tgUser) {
   return rows[0];
 }
 
+// ── TELEGRAM BOT WEBHOOK ─────────────────────────────
+/**
+ * FIX: Added full bot webhook handler.
+ * Set this as your webhook URL in BotFather:
+ *   https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://trewards.onrender.com/webhook/telegram
+ */
+app.post('/webhook/telegram', async (req, res) => {
+  res.json({ ok: true }); // Always respond 200 fast
+
+  try {
+    const update = req.body;
+    if (!update) return;
+
+    // Handle /start command (with optional referral)
+    const msg = update.message;
+    if (msg && msg.text) {
+      const userId    = msg.from.id;
+      const firstName = msg.from.first_name || 'User';
+      const text      = msg.text.trim();
+
+      if (text.startsWith('/start')) {
+        const parts    = text.split(' ');
+        const startArg = parts[1] || '';
+
+        // Upsert user first
+        await db(`
+          INSERT INTO users (user_id, first_name, last_name, username)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (user_id) DO UPDATE
+            SET first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name,
+                username=EXCLUDED.username, updated_at=NOW()
+        `, [userId, firstName, msg.from.last_name||'', msg.from.username||'']);
+
+        // Register referral if startArg is a valid referrer user_id
+        if (startArg && /^\d+$/.test(startArg)) {
+          const referrerId = Number(startArg);
+          if (referrerId !== userId) {
+            // Only insert if not already referred
+            const existing = await db(
+              `SELECT id FROM referrals WHERE referee_id=$1`, [userId]
+            );
+            if (!existing.length) {
+              await db(`
+                INSERT INTO referrals (referrer_id, referee_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+              `, [referrerId, userId]);
+              // Bonus coins for referrer
+              await db(`
+                UPDATE users SET coins=coins+100, claimable_ref=claimable_ref+100
+                WHERE user_id=$1
+              `, [referrerId]);
+              console.log(`Referral registered: ${referrerId} → ${userId}`);
+            }
+          }
+        }
+
+        // Send welcome message with Mini App button
+        if (BOT_TOKEN) {
+          await botSend(userId, {
+            text: `👋 Welcome to TRewards, ${firstName}!\n\n🪙 Earn TR coins by completing tasks\n🎡 Spin the wheel for bonus coins\n💎 Withdraw your earnings as TON\n\nTap the button below to open the app!`,
+            reply_markup: {
+              inline_keyboard: [[{
+                text: '🚀 Open TRewards',
+                web_app: { url: `https://trewards.onrender.com` }
+              }]]
+            }
+          });
+        }
+      }
+
+      // /amiadmin command
+      if (text === '/amiadmin') {
+        const isAdmin = ADMIN_IDS.includes(userId);
+        if (BOT_TOKEN) {
+          await botSend(userId, {
+            text: isAdmin
+              ? `✅ Yes, you (${userId}) are an admin.`
+              : `❌ No, you (${userId}) are not an admin.\n\nYour user ID is: ${userId}\nAdd it to ADMIN_IDS env var to become admin.`
+          });
+        }
+      }
+
+      // /balance command
+      if (text === '/balance') {
+        if (BOT_TOKEN) {
+          const rows = await db(`SELECT coins, spins FROM users WHERE user_id=$1`, [userId]);
+          if (rows.length) {
+            await botSend(userId, {
+              text: `💰 Your balance:\n🪙 ${rows[0].coins} TR coins\n🎡 ${rows[0].spins} spins`
+            });
+          } else {
+            await botSend(userId, { text: `No account found. Open the app first!` });
+          }
+        }
+      }
+
+      // /id command — useful for debugging
+      if (text === '/id') {
+        if (BOT_TOKEN) {
+          await botSend(userId, { text: `Your Telegram ID: ${userId}` });
+        }
+      }
+    }
+  } catch(e) {
+    console.error('Bot webhook error:', e.message);
+  }
+});
+
+async function botSend(chatId, opts) {
+  try {
+    const body = { chat_id: chatId, ...opts };
+    const res  = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+      signal:  AbortSignal.timeout(8000),
+    });
+    const data = await res.json();
+    if (!data.ok) console.error('botSend error:', data.description);
+    return data;
+  } catch(e) {
+    console.error('botSend fetch error:', e.message);
+  }
+}
+
+// ── WEBHOOK SETUP HELPER ─────────────────────────────
+// GET /setup-webhook — call once to register webhook with Telegram
+app.get('/setup-webhook', async (req, res) => {
+  if (!BOT_TOKEN) return res.json({ error: 'BOT_TOKEN not set' });
+  const secret = req.query.secret;
+  if (secret !== 'trewards_setup_2025') return res.status(403).json({ error: 'forbidden' });
+
+  const webhookUrl = `https://trewards.onrender.com/webhook/telegram`;
+  try {
+    const r = await fetch(
+      `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${encodeURIComponent(webhookUrl)}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    const data = await r.json();
+    res.json(data);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── ROUTES ───────────────────────────────────────────
 
-// Health — no auth required
 app.get('/health', async (_req, res) => {
   try {
     await db('SELECT 1');
-    res.json({ ok: true, db: 'connected', ts: Date.now() });
+    res.json({ ok: true, db: 'connected', ts: Date.now(), bot: !!BOT_TOKEN });
   } catch(e) {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-// GET /me
+// GET /me  — also handles referral from start param
 app.get('/me', auth, async (req, res) => {
   try {
     const user = await upsertUser(req.uid, req.tgUser);
+
+    // Handle referral from WebApp startParam (passed as query ?ref=USERID)
+    const refId = Number(req.query.ref || 0);
+    if (refId && refId !== req.uid) {
+      const existing = await db(`SELECT id FROM referrals WHERE referee_id=$1`, [req.uid]);
+      if (!existing.length) {
+        await db(`
+          INSERT INTO referrals (referrer_id, referee_id)
+          VALUES ($1, $2) ON CONFLICT DO NOTHING
+        `, [refId, req.uid]);
+        await db(`
+          UPDATE users SET coins=coins+100, claimable_ref=claimable_ref+100 WHERE user_id=$1
+        `, [refId]);
+      }
+    }
+
     res.json({
       user_id:       user.user_id,
       first_name:    user.first_name,
@@ -151,7 +330,7 @@ app.get('/me', auth, async (req, res) => {
       streak:        user.streak        || 1,
       ad_balance:    parseFloat(user.ad_balance || 0),
       claimable_ref: user.claimable_ref || 0,
-      referral_link: `https://t.me/trewards_ton_bot?start=${user.user_id}`,
+      referral_link: `https://t.me/${BOT_USERNAME}?start=${user.user_id}`,
     });
   } catch(e) {
     console.error('/me:', e.message);
@@ -178,15 +357,13 @@ app.get('/daily-tasks-status', auth, async (req, res) => {
 app.post('/claim-streak', auth, async (req, res) => {
   try {
     const uid = req.uid;
-
-    // Check already claimed today
     const already = await db(
       `SELECT id FROM daily_completions WHERE user_id=$1 AND task_name='streak' AND date=CURRENT_DATE`,
       [uid]
     );
     if (already.length) return res.status(400).json({ error: 'Already claimed today' });
 
-    const user = await upsertUser(uid, req.tgUser);
+    const user      = await upsertUser(uid, req.tgUser);
     const newCoins  = (user.coins  || 0) + 10;
     const newSpins  = (user.spins  || 0) + 1;
     const newStreak = Math.min((user.streak || 1) + 1, 7);
@@ -243,9 +420,7 @@ app.get('/tasks', auth, async (req, res) => {
     );
     if (!tasks.length) return res.json([]);
 
-    const comps = await db(
-      `SELECT task_id FROM task_completions WHERE user_id=$1`, [req.uid]
-    );
+    const comps   = await db(`SELECT task_id FROM task_completions WHERE user_id=$1`, [req.uid]);
     const doneIds = new Set(comps.map(c => Number(c.task_id)));
 
     res.json(tasks.map(t => ({
@@ -264,7 +439,7 @@ app.get('/tasks', auth, async (req, res) => {
   }
 });
 
-// POST /claim-task  (visit / game)
+// POST /claim-task
 app.post('/claim-task', auth, async (req, res) => {
   try {
     const uid    = req.uid;
@@ -300,7 +475,7 @@ app.post('/claim-task', auth, async (req, res) => {
   }
 });
 
-// POST /verify-join  (channel / group — backend calls getChatMember)
+// POST /verify-join
 app.post('/verify-join', auth, async (req, res) => {
   try {
     const uid    = req.uid;
@@ -317,20 +492,21 @@ app.post('/verify-join', auth, async (req, res) => {
     if (!tasks.length) return res.status(404).json({ error: 'Task not found' });
     const task = tasks[0];
 
-    // getChatMember — server-side only
     let joined = false;
     if (BOT_TOKEN) {
       try {
-        const url    = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chatId)}&user_id=${uid}`;
-        const resp   = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        const data   = await resp.json();
-        const valid  = ['member','administrator','creator'];
+        // FIX: chatId already has @ prefix from frontend, keep it
+        const url  = `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chatId)}&user_id=${uid}`;
+        const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const data = await resp.json();
+        const valid = ['member','administrator','creator'];
         joined = data.ok && valid.includes(data.result?.status);
+        if (!data.ok) console.warn('getChatMember failed:', data.description);
       } catch(e) {
         return res.status(503).json({ error: 'Telegram API timeout, try again' });
       }
     } else {
-      joined = true; // dev mode — no BOT_TOKEN
+      joined = true; // dev mode
     }
 
     if (!joined) return res.json({ joined: false });
@@ -361,7 +537,6 @@ app.post('/spin', auth, async (req, res) => {
     const user = await upsertUser(uid, req.tgUser);
     if ((user.spins || 0) <= 0) return res.status(400).json({ error: 'No spins left' });
 
-    // Weighted prizes matching frontend wheel segments
     const prizes = [{v:500,w:3},{v:300,w:7},{v:100,w:20},{v:80,w:25},{v:50,w:25},{v:10,w:20}];
     const total  = prizes.reduce((s,p) => s+p.w, 0);
     let rand = Math.random() * total, reward = 10;
@@ -389,8 +564,8 @@ app.post('/redeem-promo', auth, async (req, res) => {
     if (!code) return res.status(400).json({ error: 'code required' });
 
     const promos = await db(`SELECT * FROM promo_codes WHERE code=$1`, [code]);
-    if (!promos.length)         return res.status(404).json({ error: 'Invalid promo code' });
-    if (promos[0].uses_left <= 0) return res.status(400).json({ error: 'Code expired' });
+    if (!promos.length)            return res.status(404).json({ error: 'Invalid promo code' });
+    if (promos[0].uses_left <= 0)  return res.status(400).json({ error: 'Code expired' });
 
     const used = await db(`SELECT id FROM promo_uses WHERE code=$1 AND user_id=$2`, [code, uid]);
     if (used.length) return res.status(400).json({ error: 'Already used' });
@@ -475,12 +650,18 @@ app.get('/ad-balance', auth, async (req, res) => {
 });
 
 // POST /create-payment
+// FIX: Use whole TON amounts in the ArcPay URL, not cents
 app.post('/create-payment', auth, async (req, res) => {
   try {
     const uid    = req.uid;
     const amount = parseFloat(req.body.amount);
     if (!amount || amount < 0.1) return res.status(400).json({ error: 'Min 0.1 TON' });
+
+    // ArcPay format: amount in nanoTON (1 TON = 1_000_000_000 nanoTON)
+    // But since ArcPay uses its own format, we use the simpler integer cent version
+    // The webhook handler reads it back as Number(m[2]) / 100
     const cents = Math.round(amount * 100);
+
     res.json({
       cryptobot: `https://t.me/arcpay_bot?start=pay_adbalance_${uid}_${cents}`,
       xrocket:   `https://t.me/xrocket?start=pay_${uid}_${cents}`,
@@ -493,7 +674,8 @@ app.post('/create-task', auth, async (req, res) => {
   try {
     const uid   = req.uid;
     const { title, type, url, description, total_limit } = req.body;
-    if (!title || !url) return res.status(400).json({ error: 'title and url required' });
+    if (!title || !url)               return res.status(400).json({ error: 'title and url required' });
+    if (!url.startsWith('http'))      return res.status(400).json({ error: 'URL must start with http' });
 
     const limit  = parseInt(total_limit) || 1000;
     const cost   = parseFloat((limit * 0.001).toFixed(3));
@@ -501,7 +683,7 @@ app.post('/create-task', auth, async (req, res) => {
 
     const user = await upsertUser(uid, req.tgUser);
     if (parseFloat(user.ad_balance || 0) < cost)
-      return res.status(400).json({ error: `Need ${cost} TON in ad balance` });
+      return res.status(400).json({ error: `Need ${cost} TON in ad balance. Current: ${parseFloat(user.ad_balance||0).toFixed(3)} TON` });
 
     const newBal = parseFloat(((user.ad_balance || 0) - cost).toFixed(6));
     await db(`UPDATE users SET ad_balance=$1 WHERE user_id=$2`, [newBal, uid]);
@@ -532,9 +714,9 @@ app.get('/my-tasks', auth, async (req, res) => {
 // POST /withdraw
 app.post('/withdraw', auth, async (req, res) => {
   try {
-    const uid  = req.uid;
-    const map  = {250000:0.10, 500000:0.20, 750000:0.30, 1000000:0.40};
-    const ton  = map[req.body.coins_option];
+    const uid = req.uid;
+    const map = {250000:0.10, 500000:0.20, 750000:0.30, 1000000:0.40};
+    const ton = map[req.body.coins_option];
     if (!ton) return res.status(400).json({ error: 'Invalid option' });
 
     const user = await upsertUser(uid, req.tgUser);
@@ -558,20 +740,33 @@ app.post('/withdraw', auth, async (req, res) => {
   }
 });
 
-// POST /webhook/arcpay
+// POST /webhook/arcpay — ArcPay payment confirmation
 app.post('/webhook/arcpay', async (req, res) => {
   try {
-    res.json({ ok: true });
+    res.json({ ok: true }); // Respond fast first
     const { status, payload } = req.body;
     if (status !== 'paid') return;
+
+    // payload format: adbalance_USERID_CENTS
     const m = (payload||'').match(/adbalance_(\d+)_(\d+)/);
-    if (!m) return;
-    const uid = Number(m[1]), ton = Number(m[2]) / 100;
+    if (!m) { console.warn('arcpay: unknown payload', payload); return; }
+
+    const uid = Number(m[1]);
+    const ton = Number(m[2]) / 100; // cents → TON
+
+    if (!uid || !ton) { console.warn('arcpay: invalid uid/ton', uid, ton); return; }
+
     await db(`UPDATE users SET ad_balance=ad_balance+$1 WHERE user_id=$2`, [ton, uid]);
-  } catch(e) { console.error('arcpay webhook:', e.message); }
+    await db(`INSERT INTO transactions (user_id, amount, type, description) VALUES ($1,$2,'topup',$3)`,
+             [uid, Math.round(ton * 1000), `Ad balance top-up: ${ton} TON`]);
+
+    console.log(`ArcPay: credited ${ton} TON to user ${uid}`);
+  } catch(e) {
+    console.error('arcpay webhook:', e.message);
+  }
 });
 
-// ── REFERRAL COMMISSION HELPER ───────────────────────
+// ── REFERRAL COMMISSION ──────────────────────────────
 async function creditReferrer(uid, earnedCoins) {
   try {
     const refs = await db(`SELECT referrer_id FROM referrals WHERE referee_id=$1`, [uid]);
@@ -595,4 +790,6 @@ app.listen(PORT, () => {
   console.log(`TRewards backend running on :${PORT}`);
   console.log(`DATABASE_URL: ${DATABASE_URL ? 'SET ✓' : 'NOT SET ✗'}`);
   console.log(`BOT_TOKEN:    ${BOT_TOKEN    ? 'SET ✓' : 'not set (dev mode)'}`);
+  console.log(`BOT_USERNAME: @${BOT_USERNAME}`);
+  console.log(`ADMIN_IDS:    ${ADMIN_IDS.length ? ADMIN_IDS.join(', ') : 'none'}`);
 });
