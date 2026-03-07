@@ -1,1334 +1,1631 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <title>TRewards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0A0800;--c1:#1C1700;--c2:#221C00;
-  --gold:#FFB800;--gl:#FFD454;--gd:#CC9200;
-  --tx:#FFF8E7;--tm:#B8A060;--td:#6B5A2A;
-  --bdr:rgba(255,184,0,0.18);
-  --ton:#0098EA;--tl:#33B5FF;
-  --ok:#44FF88;--er:#FF4444;
-  --r:16px;--rs:10px;--rx:6px;
-  --t:0.2s ease;--hh:64px;--nh:68px;
+  --bg:#0A0800;--bg2:#120F00;--bg3:#1A1500;--bg4:#221C00;
+  --gold:#FFB800;--gold-light:#FFD454;--gold-dark:#CC9200;--gold-dim:#664A00;
+  --ton:#0098EA;--success:#44FF88;--error:#FF4444;--warn:#FF9800;
+  --text:#F0E0A0;--text2:#A89060;--text3:#6A5A30;
+  --card:rgba(255,184,0,0.06);--card-border:rgba(255,184,0,0.15);
+  --radius:16px;--radius-sm:10px;--transition:0.25s cubic-bezier(.4,0,.2,1);
 }
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);font-family:'Exo 2',sans-serif;font-size:15px;line-height:1.5}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--gd);border-radius:2px}
-body::before{content:'';position:fixed;top:-40%;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(ellipse,rgba(255,184,0,0.07),transparent 70%);pointer-events:none;z-index:0}
-#app{position:fixed;inset:0;max-width:430px;margin:0 auto;display:flex;flex-direction:column;overflow:hidden}
-#ls{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999;transition:opacity .4s}
-#ls.gone{opacity:0;pointer-events:none}
-.ll{font-family:'Orbitron',monospace;font-size:28px;font-weight:900;color:var(--gl);letter-spacing:3px}
-.sp{width:36px;height:36px;border:3px solid rgba(255,184,0,.15);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-#hdr{z-index:100;height:var(--hh);background:rgba(10,8,0,.96);backdrop-filter:blur(20px);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 14px;gap:8px;flex-shrink:0}
-.logo{display:flex;align-items:center;gap:8px}
-.logo-ico{width:36px;height:36px;background:linear-gradient(135deg,var(--gold),var(--gd));border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:14px;color:#0A0800;letter-spacing:-1px;box-shadow:0 0 16px rgba(255,184,0,.4);flex-shrink:0}
-.logo-txt{font-family:'Orbitron',monospace;font-weight:800;font-size:16px;color:var(--gl);letter-spacing:1px}
-.hsp{flex:1}
-.ccoin{display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(255,184,0,.15),rgba(255,184,0,.08));border:1px solid var(--bdr);border-radius:20px;padding:6px 12px;cursor:pointer;transition:var(--t)}
-.ccoin:active{transform:scale(.96)}
-.ccoin-v{font-family:'Orbitron',monospace;font-weight:700;font-size:13px;color:var(--gl)}
-.hbtn{height:36px;border-radius:10px;border:1px solid var(--bdr);background:rgba(255,184,0,.08);color:var(--tm);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;transition:var(--t);font-family:'Exo 2',sans-serif;font-weight:600;flex-shrink:0;padding:0 10px}
-.hbtn:active{transform:scale(.92)}
-.hbtn.g{background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-weight:700;font-size:12px;box-shadow:0 0 12px rgba(255,184,0,.3);white-space:nowrap}
-#pages{flex:1;overflow:hidden;position:relative}
-.page{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:16px 14px calc(var(--nh)+16px);display:none;animation:pi .2s ease}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Exo 2',sans-serif;font-size:15px}
+body{display:flex;flex-direction:column;max-width:430px;margin:0 auto;position:relative}
+
+/* SCROLLBARS */
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--gold-dim);border-radius:3px}
+
+/* HEADER */
+#header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px 8px;background:var(--bg);
+  border-bottom:1px solid var(--card-border);
+  position:relative;z-index:10;flex-shrink:0;
+}
+.logo{font-family:'Orbitron',sans-serif;font-size:20px;font-weight:900;
+  background:linear-gradient(135deg,var(--gold-light),var(--gold));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  letter-spacing:2px;}
+.header-actions{display:flex;gap:8px;align-items:center}
+#lang-btn{
+  background:var(--card);border:1px solid var(--card-border);
+  color:var(--gold);font-family:'Exo 2',sans-serif;font-size:11px;font-weight:600;
+  padding:5px 10px;border-radius:8px;cursor:pointer;letter-spacing:1px;
+  transition:var(--transition);
+}
+#lang-btn:hover{background:var(--gold-dim)}
+#advertise-btn{
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;
+  padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
+  letter-spacing:1px;transition:var(--transition);
+}
+#advertise-btn:active{transform:scale(.96)}
+
+/* MAIN CONTENT */
+#main{flex:1;overflow-y:auto;overflow-x:hidden;position:relative}
+.page{display:none;padding:16px;padding-bottom:80px;min-height:100%}
 .page.active{display:block}
-@keyframes pi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-#nav{height:var(--nh);background:rgba(10,8,0,.97);backdrop-filter:blur(20px);border-top:1px solid var(--bdr);display:flex;align-items:stretch;flex-shrink:0;z-index:100}
-.nt{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;transition:var(--t);border:none;background:none;color:var(--td);padding:8px 0;position:relative}
-.nt:active{transform:scale(.92)}
-.nt.active{color:var(--gold)}
-.nt.active::before{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);border-radius:0 0 2px 2px}
-.ni{font-size:20px}.nl{font-size:10px;font-weight:600;letter-spacing:.5px}
-.card{background:var(--c1);border:1px solid var(--bdr);border-radius:var(--r);padding:16px;margin-bottom:12px;position:relative;overflow:hidden}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,184,0,.3),transparent)}
-.c2{background:var(--c2)}
-.st{font-family:'Orbitron',monospace;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--tm);text-transform:uppercase;margin-bottom:12px}
-.pt{font-family:'Orbitron',monospace;font-size:18px;font-weight:800;color:var(--gl);margin-bottom:16px}
-.bal-card{background:linear-gradient(135deg,#1C1700,#2A1F00 50%,#1C1700);border:1px solid rgba(255,184,0,.25);border-radius:var(--r);padding:20px;margin-bottom:12px;position:relative;overflow:hidden}
-.bal-card::after{content:'';position:absolute;bottom:-30px;right:-30px;width:120px;height:120px;background:radial-gradient(circle,rgba(255,184,0,.1),transparent 70%);pointer-events:none}
-.bal-lbl{font-size:11px;font-weight:600;letter-spacing:2px;color:var(--tm);text-transform:uppercase;margin-bottom:6px}
-.bal-amt{font-family:'Orbitron',monospace;font-size:32px;font-weight:800;color:var(--gl);letter-spacing:-1px;line-height:1;margin-bottom:6px}
-.bal-ton{font-size:13px;color:var(--tl);margin-bottom:14px}
-.bal-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.bd1{display:inline-flex;align-items:center;gap:5px;background:rgba(255,184,0,.15);border:1px solid rgba(255,184,0,.3);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--gold)}
-.bd2{display:inline-flex;align-items:center;gap:5px;background:rgba(0,152,234,.15);border:1px solid rgba(0,152,234,.3);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--tl)}
-.srow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.sd{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1}
-.sdl{font-size:9px;font-weight:600;color:var(--td);letter-spacing:.5px}
-.sdot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px}
-.sdot.past{background:rgba(255,184,0,.2);border:2px solid var(--gold);color:var(--gold)}
-.sdot.today{background:rgba(255,184,0,.1);border:2px solid var(--gl);box-shadow:0 0 10px rgba(255,184,0,.4);animation:pg 2s infinite}
-.sdot.future{background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.1);color:var(--td)}
-@keyframes pg{0%,100%{box-shadow:0 0 10px rgba(255,184,0,.4)}50%{box-shadow:0 0 22px rgba(255,184,0,.7)}}
-.scbtn{width:100%;height:44px;border-radius:var(--rs);background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:14px;cursor:pointer;margin-top:12px;box-shadow:0 4px 16px rgba(255,184,0,.3);transition:var(--t)}
-.scbtn:active{transform:scale(.97)}
-.scbtn:disabled{background:rgba(255,255,255,.08);color:var(--td);box-shadow:none;cursor:not-allowed}
-.spin-wrap{text-align:center;padding:20px 16px}
-.sw{position:relative;display:inline-block;margin:0 auto 16px}
-.sp-ptr{position:absolute;top:-12px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:20px solid var(--gold);filter:drop-shadow(0 0 6px rgba(255,184,0,.8));z-index:10}
-.sp-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:var(--bg);border:3px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:9px;font-weight:900;color:var(--gold);z-index:5;box-shadow:0 0 16px rgba(255,184,0,.5);text-align:center}
-.spbtn{width:100%;height:48px;border-radius:var(--rs);background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 4px 20px rgba(255,184,0,.35);transition:var(--t);display:flex;align-items:center;justify-content:center;gap:8px}
-.spbtn:active{transform:scale(.97)}
-.spbtn:disabled{background:rgba(255,255,255,.06);color:var(--td);box-shadow:none;cursor:not-allowed}
-.qg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.qb{height:68px;border-radius:var(--rs);background:var(--c2);border:1px solid var(--bdr);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:var(--t)}
-.qb:active{transform:scale(.95);border-color:rgba(255,184,0,.4)}
-.qi{font-size:22px}.ql{font-size:12px;font-weight:600;color:var(--tm)}
-.pw{display:flex;gap:8px}
-.pi{flex:1;height:44px;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--tx);font-family:'Exo 2',sans-serif;font-size:14px;padding:0 14px;outline:none;transition:var(--t)}
-.pi:focus{border-color:rgba(255,184,0,.4)}
-.pi::placeholder{color:var(--td)}
-.psb{height:44px;padding:0 16px;border-radius:var(--rs);background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:var(--t);white-space:nowrap}
-.psb:active{transform:scale(.95)}
-.dti{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);margin-bottom:8px;transition:var(--t)}
-.dti.clk{cursor:pointer}.dti.clk:active{transform:scale(.98);border-color:rgba(255,184,0,.35)}
-.dtic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(255,184,0,.1);flex-shrink:0}
-.dtif{flex:1;min-width:0}
-.dtn{font-size:14px;font-weight:600;color:var(--tx);margin-bottom:2px}
-.dtd{font-size:11px;color:var(--tm)}
-.dtrw{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
-.dtrc{font-family:'Orbitron',monospace;font-size:12px;font-weight:700;color:var(--gold)}
-.dtrs{font-size:11px;color:var(--tl)}
-.dts{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-.dts.pending{background:rgba(255,184,0,.1);color:var(--gold)}
-.dts.done{background:rgba(68,255,136,.15);color:var(--ok)}
-.dts.started{background:rgba(0,152,234,.15);color:var(--tl)}
-.tsec{border-radius:14px;padding:14px 14px 8px;margin-bottom:18px;position:relative;overflow:hidden}
-.tsec::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.tsec.ch{background:rgba(0,152,234,.07);border:1px solid rgba(0,152,234,.22)}
-.tsec.ch::before{background:linear-gradient(90deg,transparent,rgba(0,152,234,.6),transparent)}
-.tsec.gr{background:rgba(68,255,136,.06);border:1px solid rgba(68,255,136,.2)}
-.tsec.gr::before{background:linear-gradient(90deg,transparent,rgba(68,255,136,.5),transparent)}
-.tsec.gm{background:rgba(255,184,0,.07);border:1px solid rgba(255,184,0,.22)}
-.tsec.gm::before{background:linear-gradient(90deg,transparent,rgba(255,184,0,.55),transparent)}
-.tsec.vi{background:rgba(255,120,0,.07);border:1px solid rgba(255,120,0,.22)}
-.tsec.vi::before{background:linear-gradient(90deg,transparent,rgba(255,120,0,.5),transparent)}
-.tsec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
-.tsec-title{font-family:'Orbitron',monospace;font-size:13px;font-weight:800;color:var(--tx);letter-spacing:.5px}
-.tsec-badge{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;color:var(--tm);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:2px 9px}
-.tsec-sub{font-size:11px;color:var(--tm);margin-bottom:14px}
-.tsec-ico{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;margin-right:6px;flex-shrink:0}
-.tsec-ico.ch{background:rgba(0,152,234,.2)}
-.tsec-ico.gr{background:rgba(68,255,136,.18)}
-.tsec-ico.gm{background:rgba(255,184,0,.18)}
-.tsec-ico.vi{background:rgba(255,120,0,.18)}
-.tcard{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.07);border-radius:var(--rs);padding:13px;margin-bottom:8px}
-.tcard-hd{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
-.tcard-inf{flex:1}
-.tcard-name{font-size:14px;font-weight:600;color:var(--tx);margin-bottom:2px}
-.tcard-desc{font-size:11px;color:var(--tm)}
-.tcard-by{font-size:10px;color:var(--td);margin-top:2px}
-.tcard-rw{display:flex;align-items:center;gap:7px;margin-bottom:10px;flex-wrap:wrap}
-.rb{display:inline-flex;align-items:center;gap:4px;background:rgba(255,184,0,.12);border:1px solid rgba(255,184,0,.25);border-radius:20px;padding:3px 9px;font-family:'Orbitron',monospace;font-size:10px;font-weight:700;color:var(--gold)}
-.rb.spin{background:rgba(0,152,234,.1);border-color:rgba(0,152,234,.22);color:var(--tl);font-family:'Exo 2',sans-serif;font-size:11px}
-.tcard-act{display:flex;gap:8px;align-items:center}
-.t-start{flex:1;height:38px;border-radius:var(--rx);background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:var(--t)}
-.t-start:active{transform:scale(.96)}
-.t-claim{flex:1;height:38px;border-radius:var(--rx);background:rgba(68,255,136,.15);border:1px solid rgba(68,255,136,.3);color:var(--ok);font-family:'Exo 2',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:var(--t)}
-.t-claim:active{transform:scale(.96)}
-.t-claim:disabled{opacity:.5;cursor:not-allowed}
-.t-done{flex:1;height:38px;border-radius:var(--rx);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--td);font-family:'Exo 2',sans-serif;font-weight:600;font-size:13px;cursor:default}
-.tbar-w{flex:2;display:flex;flex-direction:column;gap:4px}
-.tbar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
-.tbar-f{height:100%;background:linear-gradient(90deg,var(--gd),var(--gold));border-radius:3px;transition:width 1s linear}
-.tbar-l{font-size:10px;color:var(--tm);text-align:center}
-.fh{text-align:center;padding:20px 0 4px}
-.fhe{font-size:56px;margin-bottom:12px}
-.fht{font-family:'Orbitron',monospace;font-size:20px;font-weight:800;color:var(--gl);margin-bottom:6px}
-.fhs{font-size:13px;color:var(--tm)}
-.ce{background:linear-gradient(135deg,rgba(68,255,136,.1),rgba(68,255,136,.05));border:1px solid rgba(68,255,136,.25);border-radius:var(--rs);padding:14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.cela{font-size:12px;color:var(--tm);font-weight:600;margin-bottom:3px}
-.cev{font-family:'Orbitron',monospace;font-size:20px;font-weight:800;color:var(--ok)}
-.cebtn{height:40px;padding:0 16px;border-radius:var(--rx);background:var(--ok);border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:var(--t)}
-.cebtn:active{transform:scale(.95)}
-.fsg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.fsi{background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);padding:14px;text-align:center}
-.fsiv{font-family:'Orbitron',monospace;font-size:22px;font-weight:800;color:var(--gl);margin-bottom:4px}
-.fsil{font-size:11px;color:var(--tm);font-weight:600}
-.rbox{background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);padding:14px;margin-bottom:12px}
-.rlbl{font-size:11px;color:var(--tm);margin-bottom:6px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
-.rrow{display:flex;gap:8px}
-.rltxt{flex:1;height:40px;background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:var(--rx);color:var(--tm);font-size:11px;padding:0 10px;display:flex;align-items:center;overflow:hidden;white-space:nowrap;font-family:monospace}
-.cpbtn{height:40px;padding:0 14px;border-radius:var(--rx);background:rgba(255,184,0,.15);border:1px solid rgba(255,184,0,.3);color:var(--gold);font-family:'Exo 2',sans-serif;font-weight:600;font-size:13px;cursor:pointer;transition:var(--t);white-space:nowrap}
-.cpbtn:active{transform:scale(.95)}
-.ivbtn{width:100%;height:52px;border-radius:var(--rs);background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:16px;cursor:pointer;margin-bottom:16px;box-shadow:0 4px 20px rgba(255,184,0,.3);display:flex;align-items:center;justify-content:center;gap:8px;transition:var(--t)}
-.ivbtn:active{transform:scale(.97)}
-.fri{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);margin-bottom:8px}
-.fra{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;background:rgba(255,184,0,.15);border:2px solid rgba(255,184,0,.2);flex-shrink:0}
-.frn{font-size:14px;font-weight:600;color:var(--tx)}
-.fre{font-size:11px;color:var(--tm)}
-.frv{font-family:'Orbitron',monospace;font-size:12px;font-weight:700;color:var(--gold)}
-.dv{height:1px;background:var(--bdr);margin:16px 0}
-.wlttop{text-align:center;padding:20px;background:linear-gradient(135deg,#1C1700,#2A1F00 50%,#1C1700);border:1px solid rgba(255,184,0,.25);border-radius:var(--r);margin-bottom:12px}
-.wlt-c{font-family:'Orbitron',monospace;font-size:40px;font-weight:900;color:var(--gl);line-height:1;margin-bottom:4px}
-.wlt-cl{font-size:11px;color:var(--tm);font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
-.wlt-t{font-family:'Orbitron',monospace;font-size:20px;font-weight:700;color:var(--tl)}
-.wlt-tl{font-size:12px;color:var(--tm);margin-top:2px}
-.wg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.wo{background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);padding:14px;text-align:center;cursor:pointer;transition:var(--t)}
-.wo:active{transform:scale(.95)}
-.wo.sel{border-color:rgba(255,184,0,.5);background:rgba(255,184,0,.08)}
-.wo.lck{opacity:.4;cursor:not-allowed}
-.woc{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;color:var(--gold);margin-bottom:4px}
-.woa{font-size:12px;color:var(--td);margin-bottom:4px}
-.wot{font-family:'Orbitron',monospace;font-size:16px;font-weight:800;color:var(--tl)}
-.wof{font-size:10px;color:var(--td);margin-top:4px}
-.wbtn{width:100%;height:52px;border-radius:var(--rs);background:linear-gradient(135deg,var(--ton),#0070B8);border:none;color:#fff;font-family:'Exo 2',sans-serif;font-weight:700;font-size:16px;cursor:pointer;margin-bottom:12px;box-shadow:0 4px 16px rgba(0,152,234,.3);transition:var(--t)}
-.wbtn:active{transform:scale(.97)}
-.wbtn:disabled{background:rgba(255,255,255,.06);color:var(--td);box-shadow:none;cursor:not-allowed}
-.wbox{background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--tm)}
-.txi{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);margin-bottom:8px}
-.txic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.txic.out{background:rgba(255,68,68,.15)}.txic.in{background:rgba(68,255,136,.15)}
-.txif{flex:1}
-.txn{font-size:14px;font-weight:600;color:var(--tx)}
-.txd{font-size:11px;color:var(--td)}
-.txa{font-family:'Orbitron',monospace;font-size:13px;font-weight:700}
-.txa.out{color:var(--er)}.txa.in{color:var(--ok)}
-.tabs{display:flex;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);padding:4px;margin-bottom:16px;gap:4px}
-.tabb{flex:1;height:36px;border-radius:7px;border:none;background:none;color:var(--tm);font-family:'Exo 2',sans-serif;font-weight:600;font-size:13px;cursor:pointer;transition:var(--t)}
-.tabb.active{background:linear-gradient(135deg,var(--gold),var(--gd));color:#0A0800}
-.fg{margin-bottom:14px}
-.fl{display:block;font-size:12px;font-weight:600;color:var(--tm);letter-spacing:1px;text-transform:uppercase;margin-bottom:7px}
-.fi{width:100%;height:44px;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--tx);font-family:'Exo 2',sans-serif;font-size:14px;padding:0 14px;outline:none;transition:var(--t)}
-.fi:focus{border-color:rgba(255,184,0,.4)}
-.fi::placeholder{color:var(--td)}
-.fsel{width:100%;height:44px;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--tx);font-family:'Exo 2',sans-serif;font-size:14px;padding:0 14px;outline:none;appearance:none;cursor:pointer}
-.fsel option{background:#1C1700}
-.cg{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px}
-.co{height:44px;border-radius:var(--rx);border:1px solid var(--bdr);background:var(--c2);color:var(--tm);font-family:'Orbitron',monospace;font-size:10px;font-weight:700;cursor:pointer;transition:var(--t);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px}
-.co.active{border-color:rgba(255,184,0,.5);background:rgba(255,184,0,.1);color:var(--gold)}
-.co-sub{font-size:8px;color:var(--td);font-family:'Exo 2',sans-serif;font-weight:600}
-.cd{background:rgba(0,152,234,.1);border:1px solid rgba(0,152,234,.2);border-radius:var(--rs);padding:14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.cd-lbl{font-size:13px;color:var(--tm);font-weight:600}
-.cd-val{font-family:'Orbitron',monospace;font-size:18px;font-weight:800;color:var(--tl)}
-.stbtn{width:100%;height:52px;border-radius:var(--rs);background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:16px;cursor:pointer;box-shadow:0 4px 16px rgba(255,184,0,.3);transition:var(--t)}
-.stbtn:active{transform:scale(.97)}
-.abb{background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);padding:14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.abb-lbl{font-size:11px;color:var(--tm);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
-.abb-val{font-family:'Orbitron',monospace;font-size:20px;font-weight:800;color:var(--tl)}
-.tpbtn{height:40px;padding:0 16px;border-radius:var(--rx);background:linear-gradient(135deg,var(--ton),#0070B8);border:none;color:#fff;font-family:'Exo 2',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:var(--t)}
-.tpbtn:active{transform:scale(.95)}
-.mti{background:var(--c1);border:1px solid var(--bdr);border-radius:var(--rs);padding:14px;margin-bottom:10px}
-.mti-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.mti-n{font-size:14px;font-weight:600;color:var(--tx)}
-.mti-s{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px}
-.mti-s.active{background:rgba(68,255,136,.15);color:var(--ok)}
-.mti-st{display:flex;gap:12px;flex-wrap:wrap}
-.mti-d{font-size:12px;color:var(--tm)}
-.mti-d span{color:var(--tx);font-weight:600}
-.ov{position:fixed;inset:0;z-index:200;display:none;flex-direction:column}
-.ov.open{display:flex;animation:ovin .25s ease}
-@keyframes ovin{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
-.ovbg{position:absolute;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px)}
-.ovsh{position:absolute;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:var(--c1);border-top:1px solid var(--bdr);border-radius:24px 24px 0 0;padding:20px 16px 44px;max-height:92vh;overflow-y:auto}
-.ovh{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 16px}
-.ovtitle{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:var(--gl);margin-bottom:20px;text-align:center}
-.sow{display:flex;flex-direction:column;align-items:center;gap:20px;padding:10px 0}
-.srd{display:none;flex-direction:column;align-items:center;gap:8px;padding:20px;background:rgba(255,184,0,.1);border:1px solid rgba(255,184,0,.3);border-radius:var(--r);width:100%;animation:rdin .4s ease}
-.srd.show{display:flex}
-@keyframes rdin{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
-.srl{font-size:13px;color:var(--tm);font-weight:600}
-.srv{font-family:'Orbitron',monospace;font-size:36px;font-weight:900;color:var(--gold)}
-.srs{font-size:12px;color:var(--tm)}
-.tpa{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
-.tpao{height:52px;border-radius:var(--rs);border:1px solid var(--bdr);background:var(--c2);color:var(--tx);font-family:'Orbitron',monospace;font-size:12px;font-weight:700;cursor:pointer;transition:var(--t);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-.tpao.active{border-color:rgba(0,152,234,.5);background:rgba(0,152,234,.1);color:var(--tl)}
-.tpao .sub{font-family:'Exo 2',sans-serif;font-size:9px;font-weight:600;color:var(--td)}
-.pmg{display:grid;gap:12px;margin-bottom:16px}
-.pmb{display:flex;align-items:center;gap:14px;padding:16px;background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);cursor:pointer;transition:var(--t)}
-.pmb:active{transform:scale(.97);border-color:rgba(0,152,234,.5)}
-.pmi{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
-.pmi.cb{background:rgba(0,152,234,.15)}.pmi.xr{background:rgba(255,184,0,.15)}
-.pmif{flex:1}
-.pmn{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:2px}
-.pmd{font-size:12px;color:var(--tm)}
-.pmar{font-size:18px;color:var(--td)}
-.jcb{text-align:center;padding:10px 0}
-.jci{font-size:48px;margin-bottom:12px}
-.jct{font-family:'Orbitron',monospace;font-size:18px;font-weight:800;color:var(--tx);margin-bottom:8px}
-.jcd{font-size:13px;color:var(--tm);margin-bottom:20px;line-height:1.6}
-.jco{display:block;width:100%;height:48px;border-radius:var(--rs);background:linear-gradient(135deg,var(--ton),#0070B8);border:none;color:#fff;font-family:'Exo 2',sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px;transition:var(--t)}
-.jco:active{transform:scale(.97)}
-.jcv{display:block;width:100%;height:48px;border-radius:var(--rs);background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:15px;cursor:pointer;transition:var(--t)}
-.jcv:active{transform:scale(.97)}
-.jcv:disabled{background:rgba(255,255,255,.06);color:var(--td);cursor:not-allowed}
-.wdc{text-align:center;padding:10px 0}
-.wdci{font-size:48px;margin-bottom:12px}
-.wdct{font-family:'Orbitron',monospace;font-size:20px;font-weight:800;color:var(--tx);margin-bottom:6px}
-.wdcd{font-size:14px;color:var(--tm);margin-bottom:20px}
-.wdd{background:var(--c2);border:1px solid var(--bdr);border-radius:var(--rs);padding:14px;margin-bottom:20px}
-.wdr{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
-.wdr:last-child{border-bottom:none}
-.wdrl{font-size:13px;color:var(--tm)}
-.wdrv{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--tx)}
-.brow{display:flex;gap:10px}
-.bcan{flex:1;height:48px;border-radius:var(--rs);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--tm);font-family:'Exo 2',sans-serif;font-weight:600;font-size:15px;cursor:pointer;transition:var(--t)}
-.bcan:active{transform:scale(.96)}
-.bcon{flex:2;height:48px;border-radius:var(--rs);background:linear-gradient(135deg,var(--ton),#0070B8);border:none;color:#fff;font-family:'Exo 2',sans-serif;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 4px 14px rgba(0,152,234,.3);transition:var(--t)}
-.bcon:active{transform:scale(.96)}
-.lmenu{position:absolute;top:calc(var(--hh)+4px);right:14px;background:var(--c1);border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden;z-index:150;box-shadow:0 8px 24px rgba(0,0,0,.5);display:none}
-.lmenu.open{display:block;animation:dpin .15s ease}
-@keyframes dpin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
-.lo{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;font-size:14px;font-weight:600;color:var(--tx);border:none;background:none;width:100%;transition:var(--t)}
-.lo:hover{background:rgba(255,184,0,.08)}
-.lo.active{color:var(--gold)}
-.empty{text-align:center;padding:40px 20px;color:var(--td)}
-.empty-ico{font-size:40px;margin-bottom:12px;opacity:.5}
-.empty-txt{font-size:14px;line-height:1.7}
-#tc{position:fixed;top:calc(var(--hh)+12px);left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:390px;width:calc(100% - 28px)}
-.toast{background:var(--c1);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:tin .25s ease;pointer-events:auto}
-.toast.removing{animation:tout .25s ease forwards}
-@keyframes tin{from{opacity:0;transform:translateY(-16px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes tout{to{opacity:0;transform:translateY(-16px) scale(.95)}}
-.toast-ico{font-size:20px;flex-shrink:0}
-.toast-txt{font-size:13px;font-weight:600;color:var(--tx);flex:1}
-.toast.success{border-color:rgba(68,255,136,.3)}
-.toast.error{border-color:rgba(255,68,68,.3)}
-.toast.info{border-color:rgba(0,152,234,.3)}
-#wp{position:fixed;inset:0;z-index:8000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.9);backdrop-filter:blur(10px);animation:pi .3s ease}
-.wp-card{background:linear-gradient(145deg,#1C1700,#2A1F00 55%,#1C1700);border:1px solid rgba(255,184,0,.45);border-radius:24px;padding:36px 24px 28px;max-width:320px;width:100%;text-align:center;box-shadow:0 0 60px rgba(255,184,0,.2);position:relative;overflow:hidden}
-.wp-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(255,184,0,.8),transparent)}
-.wp-sub{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:3px;color:var(--tm);text-transform:uppercase;margin-bottom:8px}
-.wp-title{font-family:'Orbitron',monospace;font-size:28px;font-weight:900;color:var(--gl);letter-spacing:2px;margin-bottom:14px;text-shadow:0 0 30px rgba(255,184,0,.4)}
-.wp-name{font-size:18px;font-weight:700;color:var(--tx);margin-bottom:22px}
-.wp-name span{color:var(--gl)}
-.wp-btn{width:100%;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--gold),var(--gd));border:none;color:#0A0800;font-family:'Exo 2',sans-serif;font-weight:700;font-size:17px;cursor:pointer;box-shadow:0 4px 22px rgba(255,184,0,.45);transition:var(--t)}
-.wp-btn:active{transform:scale(.97)}
+
+/* BOTTOM NAV */
+#nav{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:430px;
+  display:flex;background:var(--bg2);
+  border-top:1px solid var(--card-border);
+  z-index:100;
+}
+.nav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  padding:10px 4px 8px;gap:4px;border:none;background:transparent;
+  cursor:pointer;transition:var(--transition);position:relative;
+}
+.nav-btn svg{width:22px;height:22px;transition:var(--transition)}
+.nav-btn span{font-family:'Exo 2',sans-serif;font-size:10px;font-weight:600;
+  color:var(--text3);letter-spacing:.5px;transition:var(--transition)}
+.nav-btn svg path,.nav-btn svg circle,.nav-btn svg rect,.nav-btn svg polygon{
+  stroke:var(--text3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+  transition:var(--transition)
+}
+.nav-btn.active span{color:var(--gold)}
+.nav-btn.active svg path,.nav-btn.active svg circle,.nav-btn.active svg rect,.nav-btn.active svg polygon{stroke:var(--gold)}
+.nav-btn.active::after{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--gold);border-radius:0 0 2px 2px}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card-title{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:600;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+
+/* BALANCE CARD */
+#balance-card{
+  background:linear-gradient(135deg,var(--bg3) 0%,var(--bg4) 100%);
+  border:1px solid var(--gold-dim);border-radius:20px;padding:20px;
+  position:relative;overflow:hidden;margin-bottom:16px;
+}
+#balance-card::before{
+  content:'';position:absolute;top:-40px;right:-40px;
+  width:140px;height:140px;background:radial-gradient(circle,rgba(255,184,0,.15),transparent 70%);
+  pointer-events:none;
+}
+.balance-badges{display:flex;gap:8px;margin-bottom:12px}
+.badge{
+  background:rgba(255,184,0,.1);border:1px solid var(--gold-dim);
+  border-radius:20px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--gold);
+  display:flex;align-items:center;gap:5px;
+}
+.badge svg{width:13px;height:13px}
+.balance-main{margin-bottom:6px}
+.balance-coins{font-family:'Orbitron',sans-serif;font-size:34px;font-weight:900;
+  color:var(--gold-light);line-height:1;letter-spacing:-1px}
+.balance-label{font-size:11px;color:var(--text3);margin-top:4px;letter-spacing:.5px}
+.balance-ton{font-size:13px;color:var(--ton);font-weight:600;margin-top:8px}
+
+/* STREAK */
+.streak-dots{display:flex;gap:8px;margin:10px 0}
+.streak-dot{
+  width:34px;height:34px;border-radius:50%;
+  background:var(--bg3);border:2px solid var(--text3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--text3);font-weight:700;
+  transition:var(--transition);position:relative;
+}
+.streak-dot.done{background:radial-gradient(circle,var(--gold),var(--gold-dark));border-color:var(--gold);color:#0A0800}
+.streak-dot.today{border-color:var(--gold);animation:pulse-dot 1.5s infinite}
+@keyframes pulse-dot{0%,100%{box-shadow:0 0 0 0 rgba(255,184,0,.4)}50%{box-shadow:0 0 0 6px rgba(255,184,0,0)}}
+.claim-btn{
+  width:100%;padding:13px;background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;
+  border:none;border-radius:var(--radius-sm);cursor:pointer;letter-spacing:1px;
+  transition:var(--transition);margin-top:10px;
+}
+.claim-btn:active{transform:scale(.97)}
+.claim-btn:disabled{background:var(--bg4);color:var(--text3);cursor:not-allowed;transform:none}
+.claim-btn.claimed{background:var(--bg4);color:var(--success);border:1px solid var(--success)}
+
+/* SPIN WHEEL */
+#spin-container{position:relative;display:flex;flex-direction:column;align-items:center;padding:8px 0}
+#spin-canvas{display:block;margin:0 auto;filter:drop-shadow(0 0 20px rgba(255,184,0,.3))}
+#spin-pointer{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  width:0;height:0;
+  border-left:10px solid transparent;border-right:10px solid transparent;
+  border-top:22px solid var(--gold);
+  filter:drop-shadow(0 2px 8px rgba(255,184,0,.6));z-index:2;
+}
+#spin-btn{
+  margin-top:14px;padding:12px 40px;
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;
+  border:none;border-radius:40px;cursor:pointer;letter-spacing:2px;
+  box-shadow:0 4px 20px rgba(255,184,0,.3);transition:var(--transition);
+}
+#spin-btn:active{transform:scale(.97)}
+#spin-btn:disabled{background:var(--bg4);color:var(--text3);cursor:not-allowed;box-shadow:none;transform:none}
+#spins-count{font-size:12px;color:var(--text2);margin-top:6px}
+
+/* QUICK ACTIONS */
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.quick-btn{
+  background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-sm);
+  padding:14px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;
+  cursor:pointer;transition:var(--transition);
+}
+.quick-btn:active{transform:scale(.96);background:rgba(255,184,0,.1)}
+.quick-btn svg{width:24px;height:24px}
+.quick-btn svg path,.quick-btn svg circle,.quick-btn svg rect,.quick-btn svg polyline,.quick-btn svg polygon,.quick-btn svg line{stroke:var(--gold);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.quick-btn span{font-size:12px;font-weight:600;color:var(--text2)}
+
+/* PROMO */
+.promo-row{display:flex;gap:8px}
+.input-field{
+  flex:1;background:var(--bg3);border:1px solid var(--card-border);
+  border-radius:var(--radius-sm);padding:11px 14px;
+  color:var(--text);font-family:'Exo 2',sans-serif;font-size:14px;outline:none;
+  transition:var(--transition);
+}
+.input-field:focus{border-color:var(--gold)}
+.input-field::placeholder{color:var(--text3)}
+.btn-gold{
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;
+  padding:11px 16px;border:none;border-radius:var(--radius-sm);cursor:pointer;
+  letter-spacing:1px;white-space:nowrap;transition:var(--transition);
+}
+.btn-gold:active{transform:scale(.97)}
+.btn-outline{
+  background:transparent;color:var(--gold);font-family:'Orbitron',sans-serif;
+  font-size:11px;font-weight:700;padding:10px 16px;
+  border:1px solid var(--gold);border-radius:var(--radius-sm);cursor:pointer;
+  letter-spacing:1px;white-space:nowrap;transition:var(--transition);
+}
+.btn-outline:active{transform:scale(.97);background:rgba(255,184,0,.08)}
+
+/* DAILY TASKS */
+.task-item{
+  display:flex;align-items:center;gap:12px;padding:12px;
+  background:var(--bg3);border:1px solid var(--card-border);border-radius:var(--radius-sm);
+  margin-bottom:8px;transition:var(--transition);
+}
+.task-icon{
+  width:42px;height:42px;border-radius:10px;
+  background:rgba(255,184,0,.1);border:1px solid var(--gold-dim);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.task-icon svg{width:20px;height:20px}
+.task-icon svg path,.task-icon svg circle,.task-icon svg rect,.task-icon svg polyline{stroke:var(--gold);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.task-info{flex:1;min-width:0}
+.task-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.task-reward{font-size:11px;color:var(--gold);font-weight:700}
+.task-action-btn{
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;
+  padding:7px 12px;border:none;border-radius:8px;cursor:pointer;
+  letter-spacing:.5px;white-space:nowrap;transition:var(--transition);flex-shrink:0;
+}
+.task-action-btn:active{transform:scale(.96)}
+.task-action-btn.done{background:var(--bg4);color:var(--success);border:1px solid rgba(68,255,136,.3)}
+.task-action-btn.pending{background:rgba(255,152,0,.15);color:var(--warn);border:1px solid rgba(255,152,0,.3)}
+
+/* TASKS PAGE */
+.tasks-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px}
+.tasks-tabs::-webkit-scrollbar{display:none}
+.tab-btn{
+  padding:7px 14px;background:var(--bg3);border:1px solid var(--card-border);
+  border-radius:20px;font-size:12px;font-weight:600;color:var(--text3);
+  cursor:pointer;white-space:nowrap;transition:var(--transition);
+}
+.tab-btn.active{background:rgba(255,184,0,.15);border-color:var(--gold);color:var(--gold)}
+.ad-task-item{
+  background:var(--bg3);border:1px solid var(--card-border);border-radius:var(--radius-sm);
+  padding:14px;margin-bottom:8px;
+}
+.ad-task-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ad-task-icon{
+  width:40px;height:40px;border-radius:9px;background:rgba(255,184,0,.08);
+  border:1px solid var(--gold-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.ad-task-icon svg{width:18px;height:18px}
+.ad-task-icon svg path,.ad-task-icon svg circle,.ad-task-icon svg rect,.ad-task-icon svg polyline,.ad-task-icon svg polygon{stroke:var(--gold);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ad-task-name{font-size:13px;font-weight:600;color:var(--text)}
+.ad-task-type{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.ad-task-footer{display:flex;align-items:center;justify-content:space-between}
+.ad-task-reward{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;color:var(--gold)}
+.ad-task-reward small{font-size:10px;font-weight:400}
+.start-task-btn{
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;
+  padding:8px 16px;border:none;border-radius:8px;cursor:pointer;letter-spacing:.5px;
+  transition:var(--transition);
+}
+.start-task-btn:active{transform:scale(.96)}
+.start-task-btn.started{background:rgba(255,152,0,.15);color:var(--warn);border:1px solid rgba(255,152,0,.3)}
+.start-task-btn.done{background:rgba(68,255,136,.1);color:var(--success);border:1px solid rgba(68,255,136,.3)}
+.progress-bar-wrap{margin-top:10px;display:none}
+.progress-bar-bg{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold-dark),var(--gold));border-radius:2px;transition:width .5s linear;width:0%}
+.claim-task-btn{
+  width:100%;margin-top:8px;padding:10px;display:none;
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;
+  border:none;border-radius:8px;cursor:pointer;letter-spacing:1px;transition:var(--transition);
+}
+.claim-task-btn:active{transform:scale(.97)}
+
+/* FRIENDS PAGE */
+.referral-box{
+  background:var(--bg3);border:1px solid var(--gold-dim);border-radius:var(--radius-sm);
+  padding:14px;margin-bottom:12px;
+}
+.referral-link-wrap{display:flex;gap:8px;margin-top:8px}
+.referral-link{
+  flex:1;background:var(--bg4);border:1px solid var(--card-border);
+  border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.copy-btn{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:8px;padding:10px 14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:var(--transition);
+}
+.copy-btn:active{background:rgba(255,184,0,.1)}
+.copy-btn svg{width:16px;height:16px}
+.copy-btn svg path,.copy-btn svg rect{stroke:var(--gold);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.invite-btn{
+  width:100%;margin-top:10px;padding:12px;
+  background:linear-gradient(135deg,var(--ton),#0076B6);
+  color:#fff;font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;
+  border:none;border-radius:var(--radius-sm);cursor:pointer;letter-spacing:1px;
+  transition:var(--transition);display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.invite-btn:active{transform:scale(.97)}
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-sm);padding:14px;text-align:center}
+.stat-num{font-family:'Orbitron',sans-serif;font-size:22px;font-weight:700;color:var(--gold)}
+.stat-label{font-size:11px;color:var(--text3);margin-top:4px}
+.pending-box{
+  background:rgba(255,184,0,.06);border:1px solid var(--gold-dim);
+  border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.pending-amount{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700;color:var(--gold)}
+.pending-label{font-size:11px;color:var(--text3);margin-top:2px}
+.friend-item{
+  display:flex;align-items:center;gap:12px;padding:10px 12px;
+  background:var(--bg3);border:1px solid var(--card-border);border-radius:var(--radius-sm);margin-bottom:6px;
+}
+.friend-avatar{
+  width:36px;height:36px;border-radius:50%;background:var(--gold-dim);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:var(--gold);flex-shrink:0;
+}
+.friend-name{font-size:13px;font-weight:600;color:var(--text)}
+.friend-coins{font-size:11px;color:var(--text2);margin-top:2px}
+.friend-share{font-size:11px;color:var(--gold);font-weight:600;margin-left:auto}
+
+/* WALLET PAGE */
+.wallet-balance{
+  text-align:center;padding:24px 16px;
+  background:linear-gradient(135deg,var(--bg3),var(--bg4));
+  border:1px solid var(--gold-dim);border-radius:20px;margin-bottom:16px;
+}
+.wallet-coins{font-family:'Orbitron',sans-serif;font-size:40px;font-weight:900;color:var(--gold-light)}
+.wallet-ton{font-size:14px;color:var(--ton);font-weight:600;margin-top:8px}
+.withdraw-tiers{margin-bottom:16px}
+.tier-item{
+  background:var(--bg3);border:1px solid var(--card-border);border-radius:var(--radius-sm);
+  padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;
+  transition:var(--transition);
+}
+.tier-item:active{border-color:var(--gold)}
+.tier-item.selected{border-color:var(--gold);background:rgba(255,184,0,.08)}
+.tier-radio{
+  width:18px;height:18px;border-radius:50%;border:2px solid var(--text3);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:var(--transition);
+}
+.tier-item.selected .tier-radio{border-color:var(--gold)}
+.tier-radio::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--gold);transform:scale(0);transition:var(--transition)}
+.tier-item.selected .tier-radio::after{transform:scale(1)}
+.tier-info{flex:1}
+.tier-coins{font-size:13px;font-weight:600;color:var(--text)}
+.tier-ton{font-size:12px;color:var(--ton);font-weight:600}
+.tier-fee{font-size:10px;color:var(--text3)}
+#withdraw-btn{
+  width:100%;padding:14px;
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;
+  border:none;border-radius:var(--radius-sm);cursor:pointer;letter-spacing:2px;
+  transition:var(--transition);margin-bottom:16px;
+}
+#withdraw-btn:active{transform:scale(.97)}
+#withdraw-btn:disabled{background:var(--bg4);color:var(--text3);cursor:not-allowed}
+.tx-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 12px;background:var(--bg3);border:1px solid var(--card-border);
+  border-radius:var(--radius-sm);margin-bottom:6px;
+}
+.tx-desc{font-size:12px;color:var(--text2)}
+.tx-date{font-size:10px;color:var(--text3);margin-top:2px}
+.tx-amount{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700}
+.tx-amount.credit{color:var(--success)}
+.tx-amount.debit{color:var(--error)}
+
+/* OVERLAYS */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);
+  z-index:200;display:none;align-items:flex-end;justify-content:center;
+  max-width:430px;left:50%;transform:translateX(-50%);
+}
+.overlay.open{display:flex}
+.overlay-box{
+  width:100%;background:var(--bg2);border:1px solid var(--card-border);
+  border-radius:24px 24px 0 0;padding:24px;
+  animation:slide-up .3s cubic-bezier(.4,0,.2,1);
+}
+@keyframes slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.overlay-title{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:16px;text-align:center}
+.overlay-close{
+  position:absolute;top:16px;right:16px;width:32px;height:32px;
+  background:var(--bg3);border:1px solid var(--card-border);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.overlay-close svg{width:16px;height:16px}
+.overlay-close svg path{stroke:var(--text2);fill:none;stroke-width:2;stroke-linecap:round}
+.breakdown-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--card-border)}
+.breakdown-row:last-child{border:none;font-weight:700;color:var(--gold)}
+.breakdown-label{color:var(--text2);font-size:13px}
+.breakdown-val{font-size:13px;font-weight:600}
+.confirm-btn{
+  width:100%;padding:14px;margin-top:16px;
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:#0A0800;font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;
+  border:none;border-radius:var(--radius-sm);cursor:pointer;letter-spacing:1px;transition:var(--transition);
+}
+.confirm-btn:active{transform:scale(.97)}
+.cancel-btn{
+  width:100%;padding:12px;margin-top:8px;
+  background:transparent;color:var(--text3);font-size:13px;
+  border:1px solid var(--card-border);border-radius:var(--radius-sm);cursor:pointer;transition:var(--transition);
+}
+.cancel-btn:hover{color:var(--text2)}
+
+/* JOIN VERIFY OVERLAY */
+.verify-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.verify-step{
+  display:flex;align-items:center;gap:12px;padding:12px;
+  background:var(--bg3);border:1px solid var(--card-border);border-radius:var(--radius-sm);
+}
+.verify-step-num{
+  width:28px;height:28px;border-radius:50%;background:var(--gold-dim);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;color:var(--gold);flex-shrink:0;
+}
+.verify-step-text{font-size:13px;color:var(--text2)}
+
+/* ADVERTISER DASHBOARD */
+#adv-overlay .overlay-box{max-height:90vh;overflow-y:auto}
+.adv-tabs{display:flex;gap:8px;margin-bottom:16px}
+.adv-tab{
+  flex:1;padding:10px;background:var(--bg3);border:1px solid var(--card-border);
+  border-radius:var(--radius-sm);text-align:center;cursor:pointer;
+  font-size:12px;font-weight:600;color:var(--text3);transition:var(--transition);
+}
+.adv-tab.active{background:rgba(255,184,0,.1);border-color:var(--gold);color:var(--gold)}
+.adv-tab-content{display:none}
+.adv-tab-content.active{display:block}
+.form-group{margin-bottom:12px}
+.form-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;margin-bottom:6px;display:block}
+.form-select{
+  width:100%;background:var(--bg3);border:1px solid var(--card-border);
+  border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);
+  font-family:'Exo 2',sans-serif;font-size:14px;outline:none;
+  transition:var(--transition);appearance:none;
+}
+.form-select:focus{border-color:var(--gold)}
+.cost-preview{
+  background:rgba(255,184,0,.06);border:1px solid var(--gold-dim);
+  border-radius:var(--radius-sm);padding:12px;margin:12px 0;text-align:center;
+}
+.cost-preview-val{font-family:'Orbitron',sans-serif;font-size:20px;font-weight:700;color:var(--gold)}
+.cost-preview-label{font-size:11px;color:var(--text3);margin-top:4px}
+.my-task-item{
+  background:var(--bg3);border:1px solid var(--card-border);border-radius:var(--radius-sm);
+  padding:12px;margin-bottom:8px;
+}
+.my-task-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.my-task-progress{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;margin:8px 0}
+.my-task-prog-fill{height:100%;background:linear-gradient(90deg,var(--gold-dark),var(--gold));border-radius:2px}
+.my-task-stats{display:flex;justify-content:space-between;align-items:center}
+.my-task-count{font-size:11px;color:var(--text2)}
+.task-status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
+.task-status.active{color:var(--success);background:rgba(68,255,136,.1)}
+.task-status.paused{color:var(--warn);background:rgba(255,152,0,.1)}
+.task-status.completed{color:var(--text3);background:var(--bg4)}
+.ad-balance-box{
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.2);
+  border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;
+}
+.ad-balance-val{font-family:'Orbitron',sans-serif;font-size:20px;font-weight:700;color:var(--ton)}
+.ad-balance-label{font-size:10px;color:var(--text3);margin-top:2px}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--bg2);border:1px solid var(--card-border);border-radius:40px;
+  padding:10px 20px;font-size:13px;font-weight:600;color:var(--text);
+  z-index:500;opacity:0;transition:all .3s;white-space:nowrap;pointer-events:none;
+  max-width:320px;text-align:center;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.success{border-color:var(--success);color:var(--success)}
+#toast.error{border-color:var(--error);color:var(--error)}
+
+/* SPIN RESULT */
+#spin-result{
+  text-align:center;font-family:'Orbitron',sans-serif;font-size:22px;
+  font-weight:700;color:var(--gold);margin-top:10px;min-height:28px;
+  animation:result-pop .4s cubic-bezier(.4,0,.2,1);display:none;
+}
+@keyframes result-pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* SECTION DIVIDER */
+.section-title{
+  font-family:'Orbitron',sans-serif;font-size:11px;font-weight:600;
+  color:var(--text3);letter-spacing:2px;text-transform:uppercase;
+  margin:16px 0 10px;display:flex;align-items:center;gap:8px;
+}
+.section-title::after{content:'';flex:1;height:1px;background:var(--card-border)}
+
+/* LOADING SPINNER */
+.spinner{
+  width:32px;height:32px;border:3px solid var(--card-border);
+  border-top-color:var(--gold);border-radius:50%;
+  animation:spin .7s linear infinite;margin:20px auto;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:32px 16px;color:var(--text3);font-size:13px}
+.empty-state svg{width:40px;height:40px;margin:0 auto 12px;opacity:.3;display:block}
+
+/* PULSE GLOW ANIMATION */
+@keyframes glow{0%,100%{text-shadow:0 0 8px rgba(255,184,0,.5)}50%{text-shadow:0 0 20px rgba(255,184,0,.9)}}
+.glow-text{animation:glow 2s infinite}
+
+/* COMING SOON */
+.coming-soon{
+  text-align:center;padding:40px 20px;
+  background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);
+}
+.coming-soon-icon{font-size:40px;margin-bottom:12px}
+.coming-soon-title{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:8px}
+.coming-soon-text{font-size:13px;color:var(--text3)}
 </style>
 </head>
 <body>
 
-<div id="ls"><div class="ll">TR EWARDS</div><div class="sp"></div></div>
-
-<div id="app">
-  <header id="hdr">
-    <div class="logo">
-      <div class="logo-ico">TR</div>
-      <span class="logo-txt">REWARDS</span>
-    </div>
-    <div class="hsp"></div>
-    <div class="ccoin" onclick="switchTab('wallet')">
-      <span>🪙</span>
-      <span class="ccoin-v" id="headerCoins">0</span>
-    </div>
-    <button class="hbtn" id="langBtn" onclick="toggleLangMenu()"><span id="langFlag">EN</span></button>
-    <button class="hbtn g" onclick="openOverlay('addTaskOverlay')">+TASK</button>
-  </header>
-
-  <div class="lmenu" id="langMenu">
-    <button class="lo active" id="langEn" onclick="setLang('en')">🇬🇧 English</button>
-    <button class="lo" id="langRu" onclick="setLang('ru')">🇷🇺 Русский</button>
+<!-- HEADER -->
+<div id="header">
+  <div class="logo">TRewards</div>
+  <div class="header-actions">
+    <button id="lang-btn" onclick="toggleLang()">EN</button>
+    <button id="advertise-btn" onclick="openAdv()">+ <span data-i18n="task">TASK</span></button>
   </div>
+</div>
 
-  <div id="pages">
-    <div class="page active" id="page-home">
-      <div class="bal-card">
-        <div class="bal-lbl">TOTAL BALANCE</div>
-        <div class="bal-amt" id="balanceAmount">0</div>
-        <div class="bal-ton" id="balanceTon">≈ 0.00000000 TON</div>
-        <div class="bal-row">
-          <div class="bd1">🔥 Streak <span id="streakBadge">1</span></div>
-          <div class="bd2">🎡 <span id="spinsBadge">0</span> Spins</div>
+<!-- MAIN CONTENT -->
+<div id="main">
+
+  <!-- HOME PAGE -->
+  <div id="page-home" class="page active">
+    <!-- Balance Card -->
+    <div id="balance-card">
+      <div class="balance-badges">
+        <div class="badge">
+          <svg viewBox="0 0 16 16"><path d="M8 1l1.5 3.5L13 5l-2.5 2.5.5 3.5L8 9.5 5 11l.5-3.5L3 5l3.5-.5z" fill="var(--gold)" stroke="none"/></svg>
+          <span id="streak-badge-val">0</span>
+          <span data-i18n="streak-days">day streak</span>
+        </div>
+        <div class="badge">
+          🎰 <span id="spins-badge-val">0</span>
+          <span data-i18n="spins">spins</span>
         </div>
       </div>
-      <div class="card">
-        <div class="st">DAILY STREAK</div>
-        <div class="srow" id="streakRow"></div>
-        <button class="scbtn" id="streakClaimBtn" onclick="claimStreak()">Claim Daily Reward (+10 🪙 +1 🎡)</button>
+      <div class="balance-main">
+        <div class="balance-coins glow-text" id="balance-display">0</div>
+        <div class="balance-label" data-i18n="tr-coins">TR COINS</div>
+        <div class="balance-ton" id="ton-display">≈ 0.00000000 TON</div>
       </div>
-      <div class="card spin-wrap">
-        <div class="st">SPIN WHEEL</div>
-        <div class="sw">
-          <canvas id="spinCanvas" width="240" height="240" style="display:block;border-radius:50%;box-shadow:0 0 30px rgba(255,184,0,.25)"></canvas>
-          <div class="sp-ptr"></div>
-          <div class="sp-badge" id="spinBadge">SPIN</div>
+    </div>
+
+    <!-- Daily Streak -->
+    <div class="card">
+      <div class="card-title" data-i18n="daily-streak">Daily Streak</div>
+      <div class="streak-dots" id="streak-dots">
+        <div class="streak-dot" data-day="1">1</div>
+        <div class="streak-dot" data-day="2">2</div>
+        <div class="streak-dot" data-day="3">3</div>
+        <div class="streak-dot" data-day="4">4</div>
+        <div class="streak-dot" data-day="5">5</div>
+        <div class="streak-dot" data-day="6">6</div>
+        <div class="streak-dot" data-day="7">7</div>
+      </div>
+      <button class="claim-btn" id="streak-claim-btn" onclick="claimStreak()">
+        <span data-i18n="claim-streak">Claim +10 TR + 1 Spin</span>
+      </button>
+    </div>
+
+    <!-- Spin Wheel -->
+    <div class="card">
+      <div class="card-title" data-i18n="spin-wheel">Spin Wheel</div>
+      <div id="spin-container">
+        <div id="spin-pointer"></div>
+        <canvas id="spin-canvas" width="240" height="240"></canvas>
+        <div id="spin-result"></div>
+        <button id="spin-btn" onclick="doSpin()">
+          <span data-i18n="spin">SPIN</span>
+        </button>
+        <div id="spins-count"><span data-i18n="spins-left">Spins:</span> <span id="spin-count-num">0</span></div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="section-title" data-i18n="quick-actions">Quick Actions</div>
+    <div class="quick-grid">
+      <button class="quick-btn" onclick="switchPage('friends')">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span data-i18n="invite-friend">Invite Friend</span>
+      </button>
+      <button class="quick-btn" onclick="switchPage('wallet')">
+        <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+        <span data-i18n="withdraw">Withdraw</span>
+      </button>
+      <button class="quick-btn" onclick="switchPage('tasks')">
+        <svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span data-i18n="earn-more">Earn More</span>
+      </button>
+      <button class="quick-btn" onclick="switchPage('friends')">
+        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <span data-i18n="referral">Referral</span>
+      </button>
+    </div>
+
+    <!-- Promo Code -->
+    <div class="card">
+      <div class="card-title" data-i18n="promo-code">Promo Code</div>
+      <div class="promo-row">
+        <input type="text" class="input-field" id="promo-input" placeholder="Enter code..." data-i18n-ph="enter-code"/>
+        <button class="btn-gold" onclick="redeemPromo()" data-i18n="redeem">REDEEM</button>
+      </div>
+    </div>
+
+    <!-- Daily Tasks -->
+    <div class="section-title" data-i18n="daily-tasks">Daily Tasks</div>
+    <div id="daily-tasks-list">
+      <!-- Daily Check-In -->
+      <div class="task-item" id="dt-checkin">
+        <div class="task-icon">
+          <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         </div>
-        <button class="spbtn" id="spinBtn" onclick="openSpinOverlay()">🎡 Spin Now (<span id="spinsLeft">0</span>)</button>
+        <div class="task-info">
+          <div class="task-name" data-i18n="daily-checkin">Daily Check-In</div>
+          <div class="task-reward">+10 TR + 1 🎰</div>
+        </div>
+        <button class="task-action-btn" id="dt-checkin-btn" onclick="claimStreak()">
+          <span data-i18n="claim">Claim</span>
+        </button>
       </div>
-      <div class="qg">
-        <div class="qb" onclick="switchTab('friends')"><span class="qi">👥</span><span class="ql">Invite Friend</span></div>
-        <div class="qb" onclick="switchTab('wallet')"><span class="qi">💎</span><span class="ql">Withdraw TON</span></div>
-        <div class="qb" onclick="switchTab('tasks')"><span class="qi">✅</span><span class="ql">Earn More</span></div>
-        <div class="qb" onclick="switchTab('friends')"><span class="qi">🎁</span><span class="ql">Referral</span></div>
+      <!-- Check Updates -->
+      <div class="task-item" id="dt-updates">
+        <div class="task-icon">
+          <svg viewBox="0 0 24 24"><path d="M21.5 2L12 11"/><path d="M21.5 2H15"/><path d="M21.5 2V8"/><rect x="3" y="4" width="12" height="16" rx="2"/></svg>
+        </div>
+        <div class="task-info">
+          <div class="task-name" data-i18n="check-updates">Check for Updates</div>
+          <div class="task-reward">+50 TR</div>
+        </div>
+        <button class="task-action-btn" id="dt-updates-btn" onclick="handleUpdatesTask()">
+          <span data-i18n="start">Start</span>
+        </button>
       </div>
-      <div class="card c2">
-        <div class="st">PROMO CODE</div>
-        <div class="pw">
-          <input class="pi" id="promoInput" type="text" placeholder="Enter promo code...">
-          <button class="psb" onclick="redeemPromo()">Redeem</button>
+      <!-- Share -->
+      <div class="task-item" id="dt-share">
+        <div class="task-icon">
+          <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </div>
+        <div class="task-info">
+          <div class="task-name" data-i18n="share-friends">Share with Friends</div>
+          <div class="task-reward">+100 TR</div>
+        </div>
+        <button class="task-action-btn" id="dt-share-btn" onclick="handleShareTask()">
+          <span data-i18n="share">Share</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TASKS PAGE -->
+  <div id="page-tasks" class="page">
+    <div class="tasks-tabs">
+      <button class="tab-btn active" onclick="filterTasks('all')" data-i18n="all">All</button>
+      <button class="tab-btn" onclick="filterTasks('channel')" data-i18n="join-channel">Join Channel</button>
+      <button class="tab-btn" onclick="filterTasks('group')" data-i18n="join-group">Join Group</button>
+      <button class="tab-btn" onclick="filterTasks('game')" data-i18n="play-game">Play Game</button>
+      <button class="tab-btn" onclick="filterTasks('visit')" data-i18n="visit-website">Visit Website</button>
+    </div>
+    <div id="tasks-list">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- FRIENDS PAGE -->
+  <div id="page-friends" class="page">
+    <div class="card-title" data-i18n="your-referral">Your Referral Link</div>
+    <div class="referral-box">
+      <div style="font-size:12px;color:var(--text3);" data-i18n="referral-desc">Earn 30% of your friends' coins automatically!</div>
+      <div class="referral-link-wrap">
+        <div class="referral-link" id="referral-link-display">https://t.me/trewards_ton_bot?start=...</div>
+        <button class="copy-btn" onclick="copyReferral()" title="Copy">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <button class="invite-btn" onclick="inviteFriend()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+        <span data-i18n="invite-telegram">Invite via Telegram</span>
+      </button>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num" id="friends-count">0</div>
+        <div class="stat-label" data-i18n="total-friends">Total Friends</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="friends-earned">0</div>
+        <div class="stat-label" data-i18n="coins-earned">TR Earned</div>
+      </div>
+    </div>
+
+    <div class="pending-box" id="pending-referral-box">
+      <div>
+        <div class="pending-amount" id="pending-referral">0 TR</div>
+        <div class="pending-label" data-i18n="pending-earnings">Pending Earnings</div>
+      </div>
+      <button class="btn-gold" onclick="claimReferral()" data-i18n="claim">Claim</button>
+    </div>
+
+    <div class="section-title" data-i18n="your-friends">Your Friends</div>
+    <div id="friends-list">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span data-i18n="no-friends">No friends yet. Invite some!</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- WALLET PAGE -->
+  <div id="page-wallet" class="page">
+    <div class="wallet-balance">
+      <div class="wallet-coins" id="wallet-coins-display">0</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;" data-i18n="tr-coins">TR COINS</div>
+      <div class="wallet-ton" id="wallet-ton-display">≈ 0.00000000 TON</div>
+    </div>
+
+    <div class="card-title" data-i18n="withdraw-ton">Withdraw TON</div>
+    <div class="withdraw-tiers" id="withdraw-tiers">
+      <div class="tier-item" onclick="selectTier(this,250000,0.10,0.05)" data-coins="250000" data-ton="0.10" data-net="0.05">
+        <div class="tier-radio"></div>
+        <div class="tier-info">
+          <div class="tier-coins">250,000 TR</div>
+          <div class="tier-ton">0.10 TON → <span style="color:var(--success)">0.05 TON</span></div>
+          <div class="tier-fee" data-i18n="network-fee">Network fee: 0.05 TON</div>
         </div>
       </div>
-      <div class="st" style="margin-top:4px">DAILY TASKS</div>
-      <div id="dailyList"></div>
-    </div>
-
-    <div class="page" id="page-tasks">
-      <div class="pt">Available Tasks</div>
-      <div id="tasksContainer"></div>
-    </div>
-
-    <div class="page" id="page-friends">
-      <div class="fh">
-        <div class="fhe">👥</div>
-        <div class="fht">Invite Friends</div>
-        <div class="fhs">Earn 30% of their lifetime rewards</div>
-      </div>
-      <div class="dv"></div>
-      <div class="ce">
-        <div>
-          <div class="cela">Claimable Earnings</div>
-          <div class="cev" id="claimableAmount">0 🪙</div>
-        </div>
-        <button class="cebtn" onclick="claimFriendEarnings()">Claim</button>
-      </div>
-      <div class="fsg">
-        <div class="fsi"><div class="fsiv" id="totalFriends">0</div><div class="fsil">Total Friends</div></div>
-        <div class="fsi"><div class="fsiv" id="totalEarned">0</div><div class="fsil">Total Earned TR</div></div>
-      </div>
-      <div class="rbox">
-        <div class="rlbl">YOUR REFERRAL LINK</div>
-        <div class="rrow">
-          <div class="rltxt" id="refLink">Loading...</div>
-          <button class="cpbtn" onclick="copyRef()">Copy</button>
+      <div class="tier-item" onclick="selectTier(this,500000,0.20,0.15)" data-coins="500000" data-ton="0.20" data-net="0.15">
+        <div class="tier-radio"></div>
+        <div class="tier-info">
+          <div class="tier-coins">500,000 TR</div>
+          <div class="tier-ton">0.20 TON → <span style="color:var(--success)">0.15 TON</span></div>
+          <div class="tier-fee" data-i18n="network-fee">Network fee: 0.05 TON</div>
         </div>
       </div>
-      <button class="ivbtn" onclick="inviteFriend()">📤 Invite via Telegram</button>
-      <div class="st">YOUR FRIENDS</div>
-      <div id="friendsList"></div>
+      <div class="tier-item" onclick="selectTier(this,750000,0.30,0.25)" data-coins="750000" data-ton="0.30" data-net="0.25">
+        <div class="tier-radio"></div>
+        <div class="tier-info">
+          <div class="tier-coins">750,000 TR</div>
+          <div class="tier-ton">0.30 TON → <span style="color:var(--success)">0.25 TON</span></div>
+          <div class="tier-fee" data-i18n="network-fee">Network fee: 0.05 TON</div>
+        </div>
+      </div>
+      <div class="tier-item" onclick="selectTier(this,1000000,0.40,0.35)" data-coins="1000000" data-ton="0.40" data-net="0.35">
+        <div class="tier-radio"></div>
+        <div class="tier-info">
+          <div class="tier-coins">1,000,000 TR</div>
+          <div class="tier-ton">0.40 TON → <span style="color:var(--success)">0.35 TON</span></div>
+          <div class="tier-fee" data-i18n="network-fee">Network fee: 0.05 TON</div>
+        </div>
+      </div>
     </div>
 
-    <div class="page" id="page-wallet">
-      <div class="wlttop">
-        <div class="wlt-cl">TR COINS</div>
-        <div class="wlt-c" id="walletCoins">0</div>
-        <div class="wlt-tl">≈ TON</div>
-        <div class="wlt-t" id="walletTon">0.00000000</div>
-      </div>
-      <div class="card">
-        <div class="st">WITHDRAW OPTIONS</div>
-        <div class="wg" id="withdrawGrid"></div>
-        <div class="wbox">⚠️ Network fee: 0.05 TON deducted. Processed within 24h.</div>
-        <button class="wbtn" id="withdrawBtn" onclick="openWithdrawOverlay()" disabled>Select an option above</button>
-      </div>
-      <div class="st">TRANSACTION HISTORY</div>
-      <div id="txHistory"></div>
+    <button id="withdraw-btn" onclick="openWithdraw()" disabled data-i18n="select-tier">SELECT TIER</button>
+
+    <div class="section-title" data-i18n="transactions">Transactions</div>
+    <div id="tx-list">
+      <div class="empty-state" data-i18n="no-transactions">No transactions yet.</div>
     </div>
   </div>
 
-  <nav id="nav">
-    <button class="nt active" id="tab-home" onclick="switchTab('home')"><span class="ni">🏠</span><span class="nl">Home</span></button>
-    <button class="nt" id="tab-tasks" onclick="switchTab('tasks')"><span class="ni">✅</span><span class="nl">Tasks</span></button>
-    <button class="nt" id="tab-friends" onclick="switchTab('friends')"><span class="ni">👥</span><span class="nl">Friends</span></button>
-    <button class="nt" id="tab-wallet" onclick="switchTab('wallet')"><span class="ni">💰</span><span class="nl">Wallet</span></button>
-  </nav>
-</div>
+</div><!-- end #main -->
 
-<div id="tc"></div>
-
-<!-- SPIN OVERLAY -->
-<div class="ov" id="spinOverlay">
-  <div class="ovbg" onclick="closeOverlay('spinOverlay')"></div>
-  <div class="ovsh">
-    <div class="ovh"></div>
-    <div class="ovtitle">🎡 Spin Wheel</div>
-    <div class="sow">
-      <div style="position:relative">
-        <canvas id="spinCanvas2" width="260" height="260" style="border-radius:50%;box-shadow:0 0 40px rgba(255,184,0,.3);display:block"></canvas>
-        <div class="sp-ptr" style="top:-14px;border-left:12px solid transparent;border-right:12px solid transparent;border-top:24px solid var(--gold)"></div>
-        <div class="sp-badge" id="spinBadge2" style="width:64px;height:64px;font-size:10px">SPIN</div>
-      </div>
-      <div style="width:100%;text-align:center">
-        <div style="font-size:13px;color:var(--tm);margin-bottom:10px">Spins left: <b style="color:var(--gold);font-family:'Orbitron',monospace" id="overlaySpinsLeft">0</b></div>
-        <button class="spbtn" id="overlaySpinBtn" onclick="doSpin()" style="max-width:280px;margin:0 auto">🎡 Spin!</button>
-      </div>
-      <div class="srd" id="spinResult">
-        <div class="srl">🎉 YOU WON!</div>
-        <div class="srv" id="spinResultVal">0</div>
-        <div class="srs">TR coins added to balance</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- TOPUP OVERLAY -->
-<div class="ov" id="topupOverlay">
-  <div class="ovbg" onclick="closeOverlay('topupOverlay')"></div>
-  <div class="ovsh">
-    <div class="ovh"></div>
-    <div class="ovtitle">💎 Top Up Ad Balance</div>
-    <div style="font-size:13px;color:var(--tm);text-align:center;margin-bottom:18px">Select amount to add to your ad balance</div>
-    <div class="tpa" id="topupAmounts"></div>
-    <div class="fg">
-      <label class="fl">Custom Amount (TON)</label>
-      <input class="fi" id="customTopup" type="number" placeholder="0.00" min="0.1" step="0.1" oninput="onCustomTopup()">
-    </div>
-    <button class="stbtn" onclick="proceedPay()" style="background:linear-gradient(135deg,var(--ton),#0070B8);box-shadow:0 4px 16px rgba(0,152,234,.3)">Select Payment Method →</button>
-  </div>
-</div>
-
-<!-- PAY METHOD OVERLAY -->
-<div class="ov" id="payMethodOverlay">
-  <div class="ovbg" onclick="closeOverlay('payMethodOverlay')"></div>
-  <div class="ovsh">
-    <div class="ovh"></div>
-    <div class="ovtitle">Select Payment</div>
-    <div style="font-size:13px;color:var(--tm);text-align:center;margin-bottom:6px">Paying <b id="payAmtDisp" style="color:var(--gl)">0 TON</b></div>
-    <div style="font-size:11px;color:var(--td);text-align:center;margin-bottom:20px">Credited to your ad balance instantly</div>
-    <div id="pmLoading" style="text-align:center;padding:30px;display:none"><div class="sp" style="margin:0 auto 12px"></div><div style="font-size:13px;color:var(--tm)">Creating invoice...</div></div>
-    <div class="pmg" id="pmGrid">
-      <div class="pmb" onclick="openPayUrl('cryptobot')"><div class="pmi cb">💸</div><div class="pmif"><div class="pmn">CryptoBot</div><div class="pmd">Pay via @CryptoBot</div></div><div class="pmar">→</div></div>
-      <div class="pmb" onclick="openPayUrl('xrocket')"><div class="pmi xr">🚀</div><div class="pmif"><div class="pmn">xRocket</div><div class="pmd">Pay via @xRocket wallet</div></div><div class="pmar">→</div></div>
-    </div>
-  </div>
-</div>
-
-<!-- JOIN CHECK OVERLAY -->
-<div class="ov" id="joinOverlay">
-  <div class="ovbg" onclick="closeOverlay('joinOverlay')"></div>
-  <div class="ovsh">
-    <div class="ovh"></div>
-    <div class="jcb">
-      <div class="jci" id="joinIcon">📢</div>
-      <div class="jct" id="joinTitle">Join Channel</div>
-      <div class="jcd" id="joinDesc">Open the link, join, then verify.</div>
-      <button class="jco" onclick="openJoinLink()">🔗 Open Link</button>
-      <button class="jcv" id="joinVerifyBtn" onclick="verifyJoin()">✅ I've Joined — Verify &amp; Claim</button>
-    </div>
-  </div>
-</div>
-
-<!-- ADD TASK OVERLAY -->
-<div class="ov" id="addTaskOverlay">
-  <div class="ovbg" onclick="closeOverlay('addTaskOverlay')"></div>
-  <div class="ovsh">
-    <div class="ovh"></div>
-    <div class="ovtitle">📣 Advertiser Dashboard</div>
-    <div class="abb">
-      <div><div class="abb-lbl">AD BALANCE</div><div class="abb-val"><span id="adBal">0.00</span> TON</div></div>
-      <button class="tpbtn" onclick="openOverlay('topupOverlay')">Top Up</button>
-    </div>
-    <div class="tabs">
-      <button class="tabb active" id="tab-addtask" onclick="switchAdTab('add')">Add Task</button>
-      <button class="tabb" id="tab-mytasks" onclick="switchAdTab('my')">My Tasks</button>
-    </div>
-    <div id="addTaskForm">
-      <div class="fg"><label class="fl">Task Name</label><input class="fi" id="taskName" type="text" placeholder="e.g. Join our channel"></div>
-      <div class="fg"><label class="fl">Task Type</label>
-        <select class="fsel" id="taskType">
-          <option value="channel">📢 Join Channel (+1000 TR)</option>
-          <option value="group">👥 Join Group (+1000 TR)</option>
-          <option value="game">🎮 Play Game Bot (+1000 TR)</option>
-          <option value="visit">🌐 Visit Website (+500 TR)</option>
-        </select>
-      </div>
-      <div class="fg"><label class="fl">Target URL</label><input class="fi" id="taskUrl" type="text" placeholder="https://t.me/yourchannel"></div>
-      <div class="fg"><label class="fl">Target Completions</label><div class="cg" id="completionGrid"></div></div>
-      <div class="cd"><div class="cd-lbl">Total Cost</div><div class="cd-val"><span id="costDisp">1.000</span> TON</div></div>
-      <button class="stbtn" onclick="submitTask()">🚀 Publish Task</button>
-    </div>
-    <div id="myTasksSection" style="display:none"><div id="myTasksList"></div></div>
-  </div>
-</div>
+<!-- BOTTOM NAV -->
+<nav id="nav">
+  <button class="nav-btn active" id="nav-home" onclick="switchPage('home')">
+    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span data-i18n="home">Home</span>
+  </button>
+  <button class="nav-btn" id="nav-tasks" onclick="switchPage('tasks')">
+    <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h4"/></svg>
+    <span data-i18n="tasks">Tasks</span>
+  </button>
+  <button class="nav-btn" id="nav-friends" onclick="switchPage('friends')">
+    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    <span data-i18n="friends">Friends</span>
+  </button>
+  <button class="nav-btn" id="nav-wallet" onclick="switchPage('wallet')">
+    <svg viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
+    <span data-i18n="wallet">Wallet</span>
+  </button>
+</nav>
 
 <!-- WITHDRAW CONFIRM OVERLAY -->
-<div class="ov" id="withdrawOverlay">
-  <div class="ovbg" onclick="closeOverlay('withdrawOverlay')"></div>
-  <div class="ovsh">
-    <div class="ovh"></div>
-    <div class="ovtitle">Confirm Withdrawal</div>
-    <div class="wdc">
-      <div class="wdci">💎</div>
-      <div class="wdct">Withdrawal Request</div>
-      <div class="wdcd">TON processed within 24 hours</div>
-      <div class="wdd">
-        <div class="wdr"><span class="wdrl">Coins spent</span><span class="wdrv" id="wdCoins">0 TR</span></div>
-        <div class="wdr"><span class="wdrl">Gross amount</span><span class="wdrv" id="wdGross" style="color:var(--tl)">0 TON</span></div>
-        <div class="wdr"><span class="wdrl">Network fee</span><span class="wdrv" style="color:var(--er)">-0.05 TON</span></div>
-        <div class="wdr"><span class="wdrl" style="font-weight:700;color:var(--tx)">You receive</span><span class="wdrv" id="wdNet" style="color:var(--ok);font-size:16px">0 TON</span></div>
+<div class="overlay" id="withdraw-overlay">
+  <div class="overlay-box" style="position:relative">
+    <button class="overlay-close" onclick="closeOverlay('withdraw-overlay')">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="overlay-title" data-i18n="confirm-withdraw">Confirm Withdrawal</div>
+    <div id="withdraw-breakdown">
+      <div class="breakdown-row"><span class="breakdown-label" data-i18n="amount">Amount</span><span class="breakdown-val" id="wd-coins-val">-</span></div>
+      <div class="breakdown-row"><span class="breakdown-label" data-i18n="ton-value">TON Value</span><span class="breakdown-val" id="wd-ton-val">-</span></div>
+      <div class="breakdown-row"><span class="breakdown-label" data-i18n="network-fee">Network Fee</span><span class="breakdown-val" style="color:var(--error)">-0.05 TON</span></div>
+      <div class="breakdown-row"><span class="breakdown-label" data-i18n="you-receive">You Receive</span><span class="breakdown-val" id="wd-net-val" style="color:var(--success)">-</span></div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:12px;" data-i18n="processed-24h">⏱ Processed within 24 hours</div>
+    <button class="confirm-btn" onclick="confirmWithdraw()" data-i18n="confirm">Confirm</button>
+    <button class="cancel-btn" onclick="closeOverlay('withdraw-overlay')" data-i18n="cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- JOIN VERIFY OVERLAY -->
+<div class="overlay" id="join-overlay">
+  <div class="overlay-box" style="position:relative">
+    <button class="overlay-close" onclick="closeOverlay('join-overlay')">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="overlay-title" data-i18n="verify-join">Verify Join</div>
+    <div class="verify-steps">
+      <div class="verify-step">
+        <div class="verify-step-num">1</div>
+        <div class="verify-step-text" data-i18n="step-open">Open the channel/group link</div>
       </div>
-      <div class="brow">
-        <button class="bcan" onclick="closeOverlay('withdrawOverlay')">Cancel</button>
-        <button class="bcon" onclick="confirmWithdraw()">Confirm</button>
+      <div class="verify-step">
+        <div class="verify-step-num">2</div>
+        <div class="verify-step-text" data-i18n="step-join">Join the channel/group</div>
+      </div>
+      <div class="verify-step">
+        <div class="verify-step-num">3</div>
+        <div class="verify-step-text" data-i18n="step-verify">Tap I've Joined below</div>
+      </div>
+    </div>
+    <button class="btn-gold" style="width:100%;margin-bottom:8px;" id="join-open-btn" onclick="openJoinLink()" data-i18n="open-link">Open Link</button>
+    <button class="confirm-btn" onclick="verifyJoin()" data-i18n="ive-joined">I've Joined ✓</button>
+  </div>
+</div>
+
+<!-- ADVERTISER OVERLAY -->
+<div class="overlay" id="adv-overlay" style="align-items:flex-end">
+  <div class="overlay-box" style="position:relative;max-height:90vh;overflow-y:auto">
+    <button class="overlay-close" onclick="closeOverlay('adv-overlay')">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="overlay-title" data-i18n="advertiser-dashboard">Advertiser Dashboard</div>
+
+    <div class="ad-balance-box">
+      <div>
+        <div class="ad-balance-val" id="adv-balance-val">0.00 TON</div>
+        <div class="ad-balance-label" data-i18n="ad-balance">Ad Balance</div>
+      </div>
+      <button class="btn-gold" onclick="openTopup()" data-i18n="top-up">TOP UP</button>
+    </div>
+
+    <div class="adv-tabs">
+      <div class="adv-tab active" onclick="switchAdvTab('add')" data-i18n="add-task">Add Task</div>
+      <div class="adv-tab" onclick="switchAdvTab('my')" data-i18n="my-tasks">My Tasks</div>
+    </div>
+
+    <!-- Add Task Form -->
+    <div class="adv-tab-content active" id="adv-add-tab">
+      <div class="form-group">
+        <label class="form-label" data-i18n="task-name">Task Name</label>
+        <input type="text" class="input-field" id="adv-task-name" placeholder="e.g. Join Our Channel" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="task-type">Task Type</label>
+        <select class="form-select" id="adv-task-type" onchange="updateCostPreview()">
+          <option value="visit" data-i18n="visit-website">Visit Website (+500 TR)</option>
+          <option value="channel" data-i18n="join-channel">Join Channel (+1000 TR)</option>
+          <option value="group" data-i18n="join-group">Join Group (+1000 TR)</option>
+          <option value="game" data-i18n="play-game">Play Game Bot (+1000 TR)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="target-url">Target URL</label>
+        <input type="url" class="input-field" id="adv-task-url" placeholder="https://" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="completions">Target Completions</label>
+        <select class="form-select" id="adv-task-limit" onchange="updateCostPreview()">
+          <option value="500">500</option>
+          <option value="1000">1,000</option>
+          <option value="2000">2,000</option>
+          <option value="5000">5,000</option>
+          <option value="10000">10,000</option>
+        </select>
+      </div>
+      <div class="cost-preview">
+        <div class="cost-preview-val" id="adv-cost-val">0.50 TON</div>
+        <div class="cost-preview-label" data-i18n="total-cost">Total Cost</div>
+      </div>
+      <button class="confirm-btn" onclick="publishTask()" data-i18n="publish-task">Publish Task</button>
+    </div>
+
+    <!-- My Tasks -->
+    <div class="adv-tab-content" id="adv-my-tab">
+      <div id="adv-my-tasks-list">
+        <div class="empty-state" data-i18n="no-tasks-yet">No tasks published yet.</div>
+      </div>
+    </div>
+
+    <!-- Top Up -->
+    <div id="adv-topup-section" style="display:none;margin-top:16px;">
+      <div class="coming-soon">
+        <div class="coming-soon-icon">⚡</div>
+        <div class="coming-soon-title">TOP UP</div>
+        <div class="coming-soon-text">Coming soon</div>
       </div>
     </div>
   </div>
 </div>
 
+<!-- TOAST -->
+<div id="toast"></div>
+
 <script>
-'use strict';
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const API_BASE = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000' 
+  : 'https://YOUR_BACKEND_URL'; // Replace with production URL
 
-const API_BASE = 'https://trewards.onrender.com';
-
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 // TELEGRAM INIT
-// ═══════════════════════════════════════════════════
-const TG = window.Telegram?.WebApp;
-const TG_USER = TG?.initDataUnsafe?.user;
-const INIT_DATA = TG?.initData || '';
-if (TG) {
-  TG.ready(); TG.expand();
-  try { TG.setHeaderColor('#0A0800'); } catch(e){}
-  try { TG.setBackgroundColor('#0A0800'); } catch(e){}
-}
-const ME = TG_USER || { id: 0, first_name: 'User', username: '' };
+// ═══════════════════════════════════════════
+const tg = window.Telegram?.WebApp;
+let userId = null, userName = 'User', userUsername = '';
 
-// ═══════════════════════════════════════════════════
-// UNIVERSAL LINK OPENER — fixes all "Invalid URL" errors
-// Rule: t.me / telegram.me  →  openTelegramLink
-//       everything else     →  openLink
-// ═══════════════════════════════════════════════════
-function openLink(url) {
-  if (!url) return;
-  try {
-    if (TG) {
-      if (url.includes('t.me/') || url.includes('telegram.me/')) {
-        TG.openTelegramLink(url);
-      } else {
-        TG.openLink(url);
-      }
-    } else {
-      window.open(url, '_blank');
-    }
-  } catch(e) {
-    console.error('openLink error:', e.message, url);
-    try { window.open(url, '_blank'); } catch(e2){}
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setBackgroundColor('#0A0800');
+  tg.setHeaderColor('#0A0800');
+  const u = tg.initDataUnsafe?.user;
+  if (u) {
+    userId = u.id;
+    userName = u.first_name || 'User';
+    userUsername = u.username || '';
   }
+} else {
+  // Dev fallback
+  userId = 12345678;
+  userName = 'TestUser';
 }
 
-// ═══════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════
-function displayName() {
-  if (ME.first_name && ME.last_name) return ME.first_name + ' ' + ME.last_name;
-  if (ME.first_name) return ME.first_name;
-  if (ME.username)   return '@' + ME.username;
-  return 'there';
-}
-function isFirst() {
-  if (!ME.id) return false;
-  try { return !localStorage.getItem('tr_v' + ME.id); } catch(e) { return false; }
-}
-function markVisited() {
-  if (!ME.id) return;
-  try { localStorage.setItem('tr_v' + ME.id, '1'); } catch(e) {}
-}
-function H(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function fmt(n){ n=n||0; return n>=1e6?(n/1e6).toFixed(2)+'M':n>=1000?(n/1000).toFixed(1)+'K':String(n); }
-function set(id,v){ const e=document.getElementById(id); if(e) e.textContent=v; }
+// ═══════════════════════════════════════════
+// TRANSLATIONS
+// ═══════════════════════════════════════════
+let currentLang = 'en';
+const i18n = {
+  en: {
+    home:'Home',tasks:'Tasks',friends:'Friends',wallet:'Wallet',
+    'tr-coins':'TR COINS','streak-days':'day streak',spins:'spins',
+    'daily-streak':'Daily Streak','claim-streak':'Claim +10 TR + 1 Spin',
+    'spin-wheel':'Spin Wheel',spin:'SPIN','spins-left':'Spins:',
+    'quick-actions':'Quick Actions','invite-friend':'Invite Friend',
+    withdraw:'Withdraw','earn-more':'Earn More',referral:'Referral',
+    'promo-code':'Promo Code','enter-code':'Enter code...','redeem':'REDEEM',
+    'daily-tasks':'Daily Tasks','daily-checkin':'Daily Check-In',
+    'check-updates':'Check for Updates','share-friends':'Share with Friends',
+    start:'Start',share:'Share',claim:'Claim',
+    all:'All','join-channel':'Join Channel','join-group':'Join Group',
+    'play-game':'Play Game','visit-website':'Visit Website',
+    'your-referral':'Your Referral Link',
+    'referral-desc':'Earn 30% of your friends\' coins automatically!',
+    'invite-telegram':'Invite via Telegram',
+    'total-friends':'Total Friends','coins-earned':'TR Earned',
+    'pending-earnings':'Pending Earnings','your-friends':'Your Friends',
+    'no-friends':'No friends yet. Invite some!',
+    'withdraw-ton':'Withdraw TON','network-fee':'Network fee: 0.05 TON',
+    'select-tier':'SELECT TIER','confirm-withdraw':'Confirm Withdrawal',
+    amount:'Amount','ton-value':'TON Value','you-receive':'You Receive',
+    'processed-24h':'⏱ Processed within 24 hours',
+    confirm:'Confirm',cancel:'Cancel','verify-join':'Verify Join',
+    'step-open':'Open the channel/group link',
+    'step-join':'Join the channel/group',
+    'step-verify':'Tap I\'ve Joined below',
+    'open-link':'Open Link','ive-joined':'I\'ve Joined ✓',
+    'advertiser-dashboard':'Advertiser Dashboard',
+    'ad-balance':'Ad Balance','top-up':'TOP UP',
+    'add-task':'Add Task','my-tasks':'My Tasks',
+    'task-name':'Task Name','task-type':'Task Type',
+    'target-url':'Target URL',completions:'Target Completions',
+    'total-cost':'Total Cost','publish-task':'Publish Task',
+    'no-tasks-yet':'No tasks published yet.',
+    transactions:'Transactions','no-transactions':'No transactions yet.',
+    task:'TASK',
+  },
+  ru: {
+    home:'Главная',tasks:'Задания',friends:'Друзья',wallet:'Кошелёк',
+    'tr-coins':'TR МОНЕТ','streak-days':'дн. серии',spins:'вращений',
+    'daily-streak':'Ежедневная серия','claim-streak':'Получить +10 TR + 1 Вращение',
+    'spin-wheel':'Колесо Фортуны',spin:'КРУТИТЬ','spins-left':'Вращений:',
+    'quick-actions':'Быстрые действия','invite-friend':'Пригласить',
+    withdraw:'Вывести','earn-more':'Заработать',referral:'Рефералы',
+    'promo-code':'Промо код','enter-code':'Введите код...','redeem':'ПРИМЕНИТЬ',
+    'daily-tasks':'Ежедневные задания','daily-checkin':'Ежедневная отметка',
+    'check-updates':'Проверить обновления','share-friends':'Поделиться с друзьями',
+    start:'Начать',share:'Поделиться',claim:'Получить',
+    all:'Все','join-channel':'Канал','join-group':'Группа',
+    'play-game':'Игра','visit-website':'Сайт',
+    'your-referral':'Ваша реферальная ссылка',
+    'referral-desc':'Зарабатывайте 30% монет ваших друзей!',
+    'invite-telegram':'Пригласить в Telegram',
+    'total-friends':'Всего друзей','coins-earned':'Заработано TR',
+    'pending-earnings':'Ожидаемые выплаты','your-friends':'Ваши друзья',
+    'no-friends':'Нет друзей. Пригласите кого-нибудь!',
+    'withdraw-ton':'Вывод TON','network-fee':'Комиссия сети: 0.05 TON',
+    'select-tier':'ВЫБРАТЬ УРОВЕНЬ','confirm-withdraw':'Подтвердить вывод',
+    amount:'Сумма','ton-value':'TON эквивалент','you-receive':'Получите',
+    'processed-24h':'⏱ Обработка в течение 24 часов',
+    confirm:'Подтвердить',cancel:'Отмена','verify-join':'Подтвердить вступление',
+    'step-open':'Откройте ссылку канала/группы',
+    'step-join':'Вступите в канал/группу',
+    'step-verify':'Нажмите «Я вступил» ниже',
+    'open-link':'Открыть ссылку','ive-joined':'Я вступил ✓',
+    'advertiser-dashboard':'Панель рекламодателя',
+    'ad-balance':'Баланс','top-up':'ПОПОЛНИТЬ',
+    'add-task':'Добавить','my-tasks':'Мои задания',
+    'task-name':'Название','task-type':'Тип задания',
+    'target-url':'Целевой URL',completions:'Целевое кол-во',
+    'total-cost':'Итоговая стоимость','publish-task':'Опубликовать',
+    'no-tasks-yet':'Нет опубликованных заданий.',
+    transactions:'Транзакции','no-transactions':'Нет транзакций.',
+    task:'ЗАДАНИЕ',
+  }
+};
 
-// ═══════════════════════════════════════════════════
-// API
-// ═══════════════════════════════════════════════════
-async function api(method, path, body) {
+function t(key){ return (i18n[currentLang]||{})[key] || (i18n.en||{})[key] || key; }
+function applyTranslations(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+}
+function toggleLang(){
+  currentLang = currentLang==='en'?'ru':'en';
+  document.getElementById('lang-btn').textContent = currentLang.toUpperCase();
+  applyTranslations();
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let state = {
+  balance:0, spins:0, streak:0, streakDays:[],
+  transactions:[], friends:[], pendingReferral:0,
+  dailyTasksDone:{checkin:false, updates:false, share:false},
+  allTasks:[], filteredType:'all',
+  selectedTier:null, advBalance:0, myAdvTasks:[],
+  updatesTaskStep:0 // 0=not started, 1=opened link, claim available
+};
+let currentJoinTask = null;
+
+// ═══════════════════════════════════════════
+// API HELPER
+// ═══════════════════════════════════════════
+async function api(path, method='GET', body=null){
   const opts = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-telegram-init-data': INIT_DATA || ('user=' + encodeURIComponent(JSON.stringify(ME)) + '&hash=devtest'),
-    },
+    headers:{'Content-Type':'application/json','X-User-Id':String(userId),'X-Init-Data':tg?.initData||''},
   };
-  if (body) opts.body = JSON.stringify(body);
-  try {
-    const res = await fetch(API_BASE + path, opts);
-    const json = await res.json().catch(() => ({ error: 'Bad response from server' }));
-    if (!res.ok) {
-      const msg = json.error || json.message || ('Server error ' + res.status);
-      console.error('[API]', method, path, '→', res.status, msg);
-      return { error: msg };
-    }
-    return json;
-  } catch(e) {
-    console.error('[API network]', method, path, e.message);
-    return { error: 'Network error — check your connection' };
-  }
+  if(body) opts.body = JSON.stringify(body);
+  try{
+    const r = await fetch(API_BASE+path,opts);
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error||'Request failed');
+    return data;
+  }catch(e){throw e;}
 }
 
-// ═══════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════
-const S = {
-  coins:0, spins:0, streak:1, adBalance:0, claimableRef:0,
-  refLink: 'https://t.me/trewards_ton_bot?start=' + ME.id,
-  taskUI: {}, taskTimers: {},
-  payUrls: {cryptobot:null, xrocket:null},
-  pendingTaskId: null, pendingChatId: null,
-  dailyDone: [], selComp: 1000, selWd: null, lang: 'en',
-};
-const WD_OPTS = [{coins:250000,ton:.10},{coins:500000,ton:.20},{coins:750000,ton:.30},{coins:1000000,ton:.40}];
-const COMP_PRESETS = [500,1000,2000,5000,10000];
-const TOPUP_PRESETS = [0.5,1.0,2.0,5.0,10.0,20.0];
-let selTopup = 1.0;
-
-// ═══════════════════════════════════════════════════
-// BOOT
-// ═══════════════════════════════════════════════════
-async function initApp() {
-  const first = isFirst();
-  try {
-    const [profile, daily] = await Promise.all([api('GET','/me'), api('GET','/daily-tasks-status')]);
-    if (profile && !profile.error) {
-      S.coins        = profile.coins        || 0;
-      S.spins        = profile.spins        || 0;
-      S.streak       = Math.max(1, Math.min(profile.streak || 1, 7));
-      S.adBalance    = profile.ad_balance   || 0;
-      S.claimableRef = profile.claimable_ref|| 0;
-      S.refLink      = profile.referral_link|| S.refLink;
-    }
-    if (daily && !daily.error) S.dailyDone = Array.isArray(daily.done) ? daily.done : [];
-  } catch(e) { console.error(e); }
-
-  if (first) markVisited();
-  updateUI(); renderStreak(); renderDaily(); initWheels();
-  hideLoading();
-  if (first) setTimeout(() => showWelcome(displayName()), 350);
+// ═══════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════
+let toastTimer;
+function toast(msg, type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+(type||'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.className='',2800);
 }
 
-function hideLoading() {
-  const el = document.getElementById('ls');
-  if (!el) return;
-  el.classList.add('gone');
-  setTimeout(() => el.remove(), 400);
+// ═══════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════
+let currentPage='home';
+function switchPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name)?.classList.add('active');
+  document.getElementById('nav-'+name)?.classList.add('active');
+  document.getElementById('main').scrollTop=0;
+  currentPage=name;
+  if(name==='tasks') loadTasks();
+  if(name==='friends') loadFriends();
+  if(name==='wallet') refreshWallet();
 }
 
-function showWelcome(name) {
-  const el = document.createElement('div');
-  el.id = 'wp';
-  el.innerHTML = `<div class="wp-card">
-    <div class="wp-sub">Welcome to</div>
-    <div class="wp-title">TRewards</div>
-    <div class="wp-name">Hello, <span>${H(name)}</span> 👋</div>
-    <button class="wp-btn" onclick="document.getElementById('wp').remove()">Let's Go! 🚀</button>
-  </div>`;
-  document.body.appendChild(el);
+// ═══════════════════════════════════════════
+// BALANCE DISPLAY
+// ═══════════════════════════════════════════
+function updateBalanceDisplay(){
+  const bal = state.balance;
+  document.getElementById('balance-display').textContent = bal.toLocaleString();
+  document.getElementById('ton-display').textContent = '≈ '+(bal*0.0000004).toFixed(8)+' TON';
+  document.getElementById('wallet-coins-display').textContent = bal.toLocaleString();
+  document.getElementById('wallet-ton-display').textContent = '≈ '+(bal*0.0000004).toFixed(8)+' TON';
+  document.getElementById('spins-badge-val').textContent = state.spins;
+  document.getElementById('streak-badge-val').textContent = state.streak;
+  document.getElementById('spin-count-num').textContent = state.spins;
+  updateSpinBtn();
 }
 
-function updateUI() {
-  const c = S.coins||0, sp = S.spins||0;
-  set('headerCoins', fmt(c));
-  set('balanceAmount', c.toLocaleString());
-  set('balanceTon', '≈ '+(c*4e-7).toFixed(8)+' TON');
-  set('streakBadge', S.streak);
-  set('spinsBadge', sp);
-  set('spinsLeft', sp);
-  set('walletCoins', c.toLocaleString());
-  set('walletTon', (c*4e-7).toFixed(8));
-  set('overlaySpinsLeft', sp);
-  const sb = document.getElementById('spinBtn');
-  const ob = document.getElementById('overlaySpinBtn');
-  if (sb) sb.disabled = sp <= 0;
-  if (ob) ob.disabled = sp <= 0;
+function updateSpinBtn(){
+  const btn = document.getElementById('spin-btn');
+  btn.disabled = state.spins<=0 || spinning;
 }
 
-// ═══════════════════════════════════════════════════
-// NAV
-// ═══════════════════════════════════════════════════
-function switchTab(tab) {
-  document.querySelectorAll('.nt').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-'+tab)?.classList.add('active');
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-'+tab)?.classList.add('active');
-  if (tab==='tasks')   loadTasks();
-  if (tab==='friends') loadFriends();
-  if (tab==='wallet')  { renderWallet(); loadTx(); }
-  if (tab==='home')    { renderStreak(); renderDaily(); }
-}
-
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 // STREAK
-// ═══════════════════════════════════════════════════
-const DAYS = ['M','T','W','T','F','S','S'];
-function renderStreak() {
-  const row = document.getElementById('streakRow'); if (!row) return;
-  const d = Math.max(1, Math.min(S.streak, 7));
-  row.innerHTML = DAYS.map((l,i) => {
-    let cls, ico;
-    if (i < d-1)     { cls='past';   ico='✓'; }
-    else if (i===d-1){ cls='today';  ico='⚡'; }
-    else              { cls='future'; ico='•'; }
-    return `<div class="sd"><div class="sdl">${l}</div><div class="sdot ${cls}">${ico}</div></div>`;
-  }).join('');
-  const btn = document.getElementById('streakClaimBtn');
-  const done = S.dailyDone.includes('streak');
-  if (btn) { btn.disabled = done; btn.textContent = done ? '✓ Claimed Today' : 'Claim Daily Reward (+10 🪙 +1 🎡)'; }
+// ═══════════════════════════════════════════
+function renderStreak(){
+  const dots = document.querySelectorAll('.streak-dot');
+  const today = state.streak % 7 || (state.streak>0?7:0);
+  dots.forEach((d,i)=>{
+    d.classList.remove('done','today');
+    const day=i+1;
+    if(day < today) d.classList.add('done');
+    else if(day===today) d.classList.add('today');
+  });
+  const btn = document.getElementById('streak-claim-btn');
+  const checkinBtn = document.getElementById('dt-checkin-btn');
+  if(state.dailyTasksDone.checkin){
+    btn.disabled=true; btn.classList.add('claimed'); btn.textContent='✓ Claimed';
+    checkinBtn.classList.add('done'); checkinBtn.textContent='✓';
+  } else {
+    btn.disabled=false; btn.classList.remove('claimed'); btn.textContent=t('claim-streak');
+    checkinBtn.classList.remove('done'); checkinBtn.textContent=t('claim');
+  }
 }
 
-async function claimStreak() {
-  const btn = document.getElementById('streakClaimBtn');
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Claiming...'; }
-  const r = await api('POST', '/claim-streak');
-  if (r.error) { showToast('error','❌',r.error); renderStreak(); return; }
-  S.coins=r.coins; S.spins=r.spins; S.streak=Math.max(1,Math.min(r.streak||S.streak,7));
-  S.dailyDone.push('streak'); updateUI(); renderStreak();
-  showToast('success','🔥','+10 coins & +1 spin!');
+async function claimStreak(){
+  if(state.dailyTasksDone.checkin) return;
+  try{
+    const r = await api('/daily-checkin','POST');
+    state.balance=r.balance; state.spins=r.spins; state.streak=r.streak;
+    state.dailyTasksDone.checkin=true;
+    updateBalanceDisplay(); renderStreak();
+    toast('+10 TR + 1 Spin!','success');
+  }catch(e){toast(e.message,'error');}
 }
 
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════
+// SPIN WHEEL
+// ═══════════════════════════════════════════
+const SEGMENTS=[10,50,80,100,300,500];
+const SEG_COLORS=['#CC9200','#FFB800','#CC9200','#FFB800','#CC9200','#FFD454'];
+let spinning=false, spinAngle=0, spinVel=0, rafId=null;
+
+function drawWheel(angle){
+  const canvas=document.getElementById('spin-canvas');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,r=cx-8;
+  ctx.clearRect(0,0,W,H);
+  const segAngle=Math.PI*2/SEGMENTS.length;
+  SEGMENTS.forEach((val,i)=>{
+    const start=angle+i*segAngle, end=start+segAngle;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,start,end);
+    ctx.closePath();
+    ctx.fillStyle=SEG_COLORS[i];
+    ctx.fill();
+    ctx.strokeStyle='rgba(10,8,0,0.6)';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    // text
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(start+segAngle/2);
+    ctx.fillStyle='#0A0800';
+    ctx.font="bold 13px 'Orbitron',sans-serif";
+    ctx.textAlign='right';
+    ctx.fillText(val,r-12,5);
+    ctx.restore();
+  });
+  // center circle
+  ctx.beginPath();
+  ctx.arc(cx,cy,22,0,Math.PI*2);
+  const grad=ctx.createRadialGradient(cx,cy,4,cx,cy,22);
+  grad.addColorStop(0,'#FFD454');grad.addColorStop(1,'#CC9200');
+  ctx.fillStyle=grad;
+  ctx.fill();
+  ctx.strokeStyle='rgba(10,8,0,0.4)';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#0A0800';ctx.font="bold 11px 'Orbitron',sans-serif";
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('TR',cx,cy);
+}
+
+drawWheel(0);
+
+async function doSpin(){
+  if(spinning||state.spins<=0) return;
+  spinning=true;
+  document.getElementById('spin-btn').disabled=true;
+  document.getElementById('spin-result').style.display='none';
+  let serverResult=null;
+  try{
+    const r=await api('/spin','POST');
+    serverResult=r.result; state.balance=r.balance; state.spins=r.spins;
+  }catch(e){spinning=false;updateSpinBtn();toast(e.message,'error');return;}
+  // Animate to server result
+  const segAngle=Math.PI*2/SEGMENTS.length;
+  const targetIdx=SEGMENTS.indexOf(serverResult);
+  // pointer at top = angle 0, segment center at top means segment i center angle = spinAngle + i*segAngle + segAngle/2 = 3PI/2 (top)
+  // we want targetIdx center at pointer (top = -PI/2)
+  const totalRot=Math.PI*2*6 + ((-Math.PI/2) - (spinAngle + targetIdx*segAngle + segAngle/2));
+  const start=spinAngle, targetAngle=spinAngle+totalRot;
+  const duration=4000, startTime=performance.now();
+  function animateSpin(now){
+    const elapsed=now-startTime;
+    const progress=Math.min(elapsed/duration,1);
+    const ease=1-Math.pow(1-progress,4);
+    spinAngle=start+totalRot*ease;
+    drawWheel(spinAngle);
+    if(progress<1){rafId=requestAnimationFrame(animateSpin);}
+    else{
+      spinAngle=targetAngle%(Math.PI*2);
+      spinning=false;
+      updateBalanceDisplay();
+      const el=document.getElementById('spin-result');
+      el.textContent='+'+serverResult+' TR!'; el.style.display='block';
+      toast('+'+serverResult+' TR!','success');
+    }
+  }
+  requestAnimationFrame(animateSpin);
+}
+
+// ═══════════════════════════════════════════
+// PROMO CODE
+// ═══════════════════════════════════════════
+async function redeemPromo(){
+  const code=document.getElementById('promo-input').value.trim();
+  if(!code){toast('Enter a promo code','error');return;}
+  try{
+    const r=await api('/redeem-promo','POST',{code});
+    state.balance=r.balance; state.spins=r.spins||state.spins;
+    updateBalanceDisplay();
+    document.getElementById('promo-input').value='';
+    toast('+'+r.reward+' TR!','success');
+  }catch(e){toast(e.message,'error');}
+}
+
+// ═══════════════════════════════════════════
 // DAILY TASKS
-// ═══════════════════════════════════════════════════
-const DAILY = [
-  {id:'checkin',       icon:'📅', name:'Daily Check-In',     desc:'Login bonus'},
-  {id:'visit_channel', icon:'🔔', name:'Check for Updates',  desc:'Visit TRewards channel', url:'https://t.me/trewards_ton'},
-  {id:'share',         icon:'📤', name:'Share with Friends', desc:'Share your referral link'},
-];
-const visitOpen = {};
-
-function renderDaily() {
-  const c = document.getElementById('dailyList'); if (!c) return;
-  c.innerHTML = DAILY.map(t => {
-    const done = S.dailyDone.includes(t.id);
-    const open = !done && visitOpen[t.id];
-    const cls  = done ? 'done' : open ? 'started' : 'pending';
-    const ico  = done ? '✓'   : open ? '🎁'       : '→';
-    const desc = open ? 'Tap again to claim →' : t.desc;
-    return `<div class="dti${done?'':' clk'}" onclick="${done ? '' : `doDailyTask('${t.id}')`}">
-      <div class="dtic">${t.icon}</div>
-      <div class="dtif"><div class="dtn">${t.name}</div><div class="dtd">${desc}</div></div>
-      <div class="dtrw"><div class="dtrc">+10 🪙</div><div class="dtrs">+1 🎡</div></div>
-      <div class="dts ${cls}">${ico}</div>
-    </div>`;
-  }).join('');
+// ═══════════════════════════════════════════
+function handleUpdatesTask(){
+  const btn=document.getElementById('dt-updates-btn');
+  if(state.dailyTasksDone.updates){return;}
+  if(state.updatesTaskStep===0){
+    window.open('https://t.me/trewards_ton','_blank');
+    btn.textContent='Claim'; btn.classList.add('pending');
+    state.updatesTaskStep=1;
+  } else if(state.updatesTaskStep===1){
+    api('/claim-daily-task','POST',{task:'updates'}).then(r=>{
+      state.balance=r.balance; state.spins=r.spins||state.spins;
+      state.dailyTasksDone.updates=true;
+      btn.textContent='✓'; btn.classList.remove('pending'); btn.classList.add('done');
+      updateBalanceDisplay(); toast('+50 TR!','success');
+    }).catch(e=>toast(e.message,'error'));
+  }
 }
 
-async function doDailyTask(id) {
-  if (S.dailyDone.includes(id)) return;
-  const t = DAILY.find(x => x.id===id); if (!t) return;
-  if (t.url && !visitOpen[id]) {
-    visitOpen[id] = true;
-    openLink(t.url); // ✅ fixed
-    showToast('info','🔔','Come back and tap again to claim!');
-    renderDaily(); return;
+async function handleShareTask(){
+  if(state.dailyTasksDone.share) return;
+  const btn=document.getElementById('dt-share-btn');
+  const link=`https://t.me/trewards_ton_bot?start=${userId}`;
+  const msg=`Join TRewards and earn TON! ${link}`;
+  if(tg){
+    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join TRewards and earn TON!')}`);
+  } else {
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join TRewards!')}`, '_blank');
   }
-  if (id==='share') {
-    const u = `https://t.me/share/url?url=${encodeURIComponent(S.refLink)}&text=${encodeURIComponent('🚀 Join TRewards and earn TON!')}`;
-    openLink(u); // ✅ fixed
-  }
-  const r = await api('POST','/daily-task',{task_name:id});
-  if (r.error) { showToast('error','❌',r.error); return; }
-  S.coins = r.coins!==undefined ? r.coins : S.coins+10;
-  S.spins = r.spins!==undefined ? r.spins : S.spins+1;
-  S.dailyDone.push(id); updateUI(); renderDaily();
-  showToast('success','✅','+10 coins & +1 spin!');
+  setTimeout(async()=>{
+    try{
+      const r=await api('/claim-daily-task','POST',{task:'share'});
+      state.balance=r.balance; state.spins=r.spins||state.spins;
+      state.dailyTasksDone.share=true;
+      btn.textContent='✓'; btn.classList.add('done');
+      updateBalanceDisplay(); toast('+100 TR!','success');
+    }catch(e){}
+  },2000);
 }
 
-// ═══════════════════════════════════════════════════
-// TASKS
-// ═══════════════════════════════════════════════════
-let allTasks = [];
-const TASK_SECS = [
-  {type:'channel', cls:'ch', icon:'📢', label:'📢 Join Channels',   desc:'Subscribe and earn TR coins'},
-  {type:'group',   cls:'gr', icon:'👥', label:'👥 Join Groups',     desc:'Join groups and earn TR coins'},
-  {type:'game',    cls:'gm', icon:'🎮', label:'🎮 Play Game Bots',  desc:'Play games and earn TR coins'},
-  {type:'visit',   cls:'vi', icon:'🌐', label:'🌐 Visit Websites',  desc:'Visit links and earn TR coins'},
-];
-
-async function loadTasks() {
-  const c = document.getElementById('tasksContainer'); if (!c) return;
-  c.innerHTML = `<div class="empty"><div class="sp" style="margin:0 auto 12px"></div><div class="empty-txt">Loading tasks...</div></div>`;
-  const data = await api('GET','/tasks');
-  if (!Array.isArray(data)) {
-    c.innerHTML = `<div class="empty"><div class="empty-ico">⚠️</div><div class="empty-txt">${H(data?.error||'Failed to load tasks')}</div></div>`;
-    return;
+// ═══════════════════════════════════════════
+// TASKS PAGE
+// ═══════════════════════════════════════════
+async function loadTasks(){
+  document.getElementById('tasks-list').innerHTML='<div class="spinner"></div>';
+  try{
+    const r=await api('/tasks');
+    state.allTasks=r.tasks||[];
+    renderTasks();
+  }catch(e){
+    document.getElementById('tasks-list').innerHTML='<div class="empty-state">Failed to load tasks.</div>';
   }
-  allTasks = data;
-  allTasks.forEach(t => { if (!S.taskUI[t.id]) S.taskUI[t.id] = {status: t.user_status||'pending'}; });
+}
+
+function filterTasks(type){
+  state.filteredType=type;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    const types=['all','channel','group','game','visit'];
+    b.classList.toggle('active',types[i]===type);
+  });
   renderTasks();
 }
 
-function renderTasks() {
-  const c = document.getElementById('tasksContainer'); if (!c) return;
-  let html = '', any = false;
-  TASK_SECS.forEach(sec => {
-    const tasks = allTasks.filter(t => t.type===sec.type);
-    if (!tasks.length) return;
-    any = true;
-    const done  = tasks.filter(t => (S.taskUI[t.id]?.status||t.user_status)==='done').length;
-    const total = tasks.length;
-    html += `<div class="tsec ${sec.cls}">
-      <div class="tsec-hd">
-        <div style="display:flex;align-items:center"><div class="tsec-ico ${sec.cls}">${sec.icon}</div><div class="tsec-title">${sec.label}</div></div>
-        <div class="tsec-badge">${done}/${total}</div>
-      </div>
-      <div class="tsec-sub">${sec.desc}</div>
-      ${tasks.map(t => buildTaskCard(t, sec.cls)).join('')}
-    </div>`;
-  });
-  c.innerHTML = any ? html : `<div class="empty"><div class="empty-ico">📋</div><div class="empty-txt">No tasks available yet.<br>Post via <b style="color:var(--gold)">+TASK</b> button.</div></div>`;
+function renderTasks(){
+  const list=document.getElementById('tasks-list');
+  const tasks=state.filteredType==='all'?state.allTasks:state.allTasks.filter(t=>t.type===state.filteredType);
+  if(!tasks.length){list.innerHTML='<div class="empty-state">No tasks available.</div>';return;}
+  list.innerHTML=tasks.map(task=>buildTaskHtml(task)).join('');
 }
 
-function buildTaskCard(task, cls) {
-  const ui = S.taskUI[task.id] || {status:'pending'};
-  let act = '';
-  switch (ui.status) {
-    case 'done':          act = `<button class="t-done">✓ Completed</button>`; break;
-    case 'pending':       act = `<button class="t-start" onclick="startTask(${task.id})">▶ Start</button>`; break;
-    case 'can-claim':     act = `<button class="t-claim" onclick="claimTask(${task.id})">🎁 Claim</button>`; break;
-    case 'waiting-join':  act = `<button class="t-claim" onclick="openJoinVerify(${task.id})">✅ Verify &amp; Claim</button>`; break;
-    case 'waiting-timer': {
-      const pct = Math.round((1-(ui.timerLeft/(ui.timerTotal||1)))*100);
-      act = `<div class="tbar-w"><div class="tbar"><div class="tbar-f" id="tbar_${task.id}" style="width:${pct}%"></div></div><div class="tbar-l" id="tlbl_${task.id}">Wait ${ui.timerLeft}s...</div></div>`;
-      break;
-    }
-  }
-  return `<div class="tcard" id="tcard_${task.id}">
-    <div class="tcard-hd">
-      <div class="tsec-ico ${cls}" style="width:42px;height:42px;border-radius:11px;font-size:21px">${{channel:'📢',group:'👥',game:'🎮',visit:'🌐'}[task.type]||'📋'}</div>
-      <div class="tcard-inf">
-        <div class="tcard-name">${H(task.title)}</div>
-        <div class="tcard-desc">${H(task.description||task.url||'')}</div>
-        <div class="tcard-by">by ${H(task.advertiser_name||'Advertiser')}</div>
+const taskIcons={
+  channel:`<svg viewBox="0 0 24 24"><path d="M21.5 2L12 11"/><path d="M21.5 2H15"/><path d="M21.5 2V8"/><rect x="3" y="4" width="12" height="16" rx="2"/></svg>`,
+  group:`<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  game:`<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4"/><path d="M8 10v4"/><circle cx="16" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg>`,
+  visit:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+};
+const rewardMap={channel:1000,group:1000,game:1000,visit:500};
+
+function buildTaskHtml(task){
+  const reward=task.reward||rewardMap[task.type]||500;
+  const isJoin=task.type==='channel'||task.type==='group';
+  const timerSec=task.type==='game'?10:15;
+  const done=task.completed;
+  return `
+  <div class="ad-task-item" id="task-${task.id}">
+    <div class="ad-task-header">
+      <div class="ad-task-icon">${taskIcons[task.type]||taskIcons.visit}</div>
+      <div style="flex:1">
+        <div class="ad-task-name">${escHtml(task.name)}</div>
+        <div class="ad-task-type">${task.type.toUpperCase()}</div>
       </div>
     </div>
-    <div class="tcard-rw">
-      <div class="rb">+${(task.reward||0).toLocaleString()} TR</div>
-      <div class="rb spin">+1 🎡 Spin</div>
+    <div class="ad-task-footer">
+      <div class="ad-task-reward">${reward}<small> TR</small></div>
+      <button class="start-task-btn ${done?'done':''}" id="btn-${task.id}" 
+        onclick="${done?'':isJoin?`openJoinTask('${task.id}')`:`startTimerTask('${task.id}',${timerSec},'${task.url}')`}">
+        ${done?'✓ Done':'Start'}
+      </button>
     </div>
-    <div class="tcard-act" id="tact_${task.id}">${act}</div>
+    <div class="progress-bar-wrap" id="prog-${task.id}">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="fill-${task.id}"></div></div>
+    </div>
+    <button class="claim-task-btn" id="claim-${task.id}" onclick="claimTask('${task.id}','${task.type}')">
+      Claim +${reward} TR
+    </button>
   </div>`;
 }
 
-function startTask(tid) {
-  const task = allTasks.find(t => t.id===tid); if (!task) return;
-  if (task.url) openLink(task.url); // ✅ fixed
-  if (task.type==='visit')      startTimer(tid, 15);
-  else if (task.type==='game')  startTimer(tid, 10);
-  else {
-    S.taskUI[tid] = {status:'waiting-join'};
-    updateTaskAct(tid);
-    showToast('info','🔗','Join first, then tap Verify & Claim');
-  }
-}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-function startTimer(tid, secs) {
-  if (S.taskTimers[tid]) clearInterval(S.taskTimers[tid]);
-  S.taskUI[tid] = {status:'waiting-timer', timerLeft:secs, timerTotal:secs};
-  updateTaskAct(tid);
-  S.taskTimers[tid] = setInterval(() => {
-    const ui = S.taskUI[tid];
-    if (!ui || ui.status!=='waiting-timer') { clearInterval(S.taskTimers[tid]); return; }
-    ui.timerLeft = Math.max(0, ui.timerLeft - 1);
-    const bar = document.getElementById('tbar_'+tid);
-    const lbl = document.getElementById('tlbl_'+tid);
-    if (bar) bar.style.width = Math.round((1-ui.timerLeft/ui.timerTotal)*100)+'%';
-    if (lbl) lbl.textContent = ui.timerLeft > 0 ? `Wait ${ui.timerLeft}s...` : 'Ready!';
-    if (ui.timerLeft <= 0) {
-      clearInterval(S.taskTimers[tid]); delete S.taskTimers[tid];
-      S.taskUI[tid] = {status:'can-claim'};
-      updateTaskAct(tid);
-      showToast('success','🎁','Ready to claim!');
+function startTimerTask(taskId, seconds, url){
+  const btn=document.getElementById('btn-'+taskId);
+  const prog=document.getElementById('prog-'+taskId);
+  const fill=document.getElementById('fill-'+taskId);
+  const claimBtn=document.getElementById('claim-'+taskId);
+  btn.classList.add('started'); btn.textContent='Opening...';
+  window.open(url,'_blank');
+  prog.style.display='block'; fill.style.width='0%';
+  let elapsed=0;
+  const interval=setInterval(()=>{
+    elapsed++;
+    fill.style.width=((elapsed/seconds)*100)+'%';
+    if(elapsed>=seconds){
+      clearInterval(interval);
+      claimBtn.style.display='block';
+      btn.textContent='Waiting...';
     }
-  }, 1000);
+  },1000);
 }
 
-function updateTaskAct(tid) {
-  const el = document.getElementById('tact_'+tid);
-  if (!el) { renderTasks(); return; }
-  const task = allTasks.find(t => t.id===tid); if (!task) return;
-  const ui   = S.taskUI[tid] || {status:'pending'};
-  let html = '';
-  switch (ui.status) {
-    case 'done':         html = `<button class="t-done">✓ Completed</button>`; break;
-    case 'pending':      html = `<button class="t-start" onclick="startTask(${task.id})">▶ Start</button>`; break;
-    case 'can-claim':    html = `<button class="t-claim" onclick="claimTask(${task.id})">🎁 Claim</button>`; break;
-    case 'waiting-join': html = `<button class="t-claim" onclick="openJoinVerify(${task.id})">✅ Verify &amp; Claim</button>`; break;
-    case 'waiting-timer':html = `<div class="tbar-w"><div class="tbar"><div class="tbar-f" id="tbar_${tid}" style="width:0%"></div></div><div class="tbar-l" id="tlbl_${tid}">Wait ${ui.timerLeft}s...</div></div>`; break;
+function openJoinTask(taskId){
+  const task=state.allTasks.find(t=>t.id==taskId);
+  if(!task) return;
+  currentJoinTask=task;
+  document.getElementById('join-open-btn').onclick=()=>window.open(task.url,'_blank');
+  openOverlay('join-overlay');
+}
+
+function openJoinLink(){
+  if(currentJoinTask) window.open(currentJoinTask.url,'_blank');
+}
+
+async function verifyJoin(){
+  if(!currentJoinTask) return;
+  try{
+    const r=await api('/verify-join','POST',{taskId:currentJoinTask.id});
+    state.balance=r.balance; state.spins=r.spins||state.spins;
+    const task=state.allTasks.find(t=>t.id==currentJoinTask.id);
+    if(task) task.completed=true;
+    updateBalanceDisplay(); renderTasks();
+    closeOverlay('join-overlay');
+    toast('+'+(task?.reward||1000)+' TR!','success');
+  }catch(e){toast(e.message,'error');}
+}
+
+async function claimTask(taskId, type){
+  try{
+    const r=await api('/claim-task','POST',{taskId});
+    state.balance=r.balance; state.spins=r.spins||state.spins;
+    const task=state.allTasks.find(t=>t.id==taskId);
+    if(task) task.completed=true;
+    updateBalanceDisplay(); renderTasks();
+    toast('+'+(task?.reward||500)+' TR!','success');
+  }catch(e){toast(e.message,'error');}
+}
+
+// ═══════════════════════════════════════════
+// FRIENDS PAGE
+// ═══════════════════════════════════════════
+async function loadFriends(){
+  try{
+    const r=await api('/friends');
+    state.friends=r.friends||[];
+    state.pendingReferral=r.pending||0;
+    document.getElementById('friends-count').textContent=state.friends.length;
+    document.getElementById('friends-earned').textContent=(r.totalEarned||0).toLocaleString();
+    document.getElementById('pending-referral').textContent=(state.pendingReferral).toLocaleString()+' TR';
+    renderFriends();
+  }catch(e){}
+}
+
+function renderFriends(){
+  const list=document.getElementById('friends-list');
+  if(!state.friends.length){
+    list.innerHTML=`<div class="empty-state">${t('no-friends')}</div>`;return;
   }
-  el.innerHTML = html;
+  list.innerHTML=state.friends.map(f=>`
+    <div class="friend-item">
+      <div class="friend-avatar">${(f.name||'?')[0].toUpperCase()}</div>
+      <div style="flex:1">
+        <div class="friend-name">${escHtml(f.name)}</div>
+        <div class="friend-coins">${(f.coins||0).toLocaleString()} TR</div>
+      </div>
+      <div class="friend-share">+${Math.floor((f.coins||0)*0.3).toLocaleString()} TR</div>
+    </div>`).join('');
 }
 
-async function claimTask(tid) {
-  const btn = document.querySelector(`#tact_${tid} .t-claim`);
-  if (btn) { btn.disabled=true; btn.textContent='⏳...'; }
-  const r = await api('POST','/claim-task',{task_id:tid});
-  if (r.error) { showToast('error','❌',r.error); if (btn){btn.disabled=false;btn.textContent='🎁 Claim';} return; }
-  S.coins=r.coins; S.spins=r.spins;
-  S.taskUI[tid] = {status:'done'};
-  updateUI(); updateTaskAct(tid);
-  showToast('success','🎉',`+${(r.reward||0).toLocaleString()} coins & +1 spin!`);
+async function claimReferral(){
+  if(state.pendingReferral<=0){toast('Nothing to claim','error');return;}
+  try{
+    const r=await api('/claim-referral','POST');
+    state.balance=r.balance; state.pendingReferral=0;
+    updateBalanceDisplay();
+    document.getElementById('pending-referral').textContent='0 TR';
+    toast('+'+r.claimed+' TR!','success');
+  }catch(e){toast(e.message,'error');}
 }
 
-function openJoinVerify(tid) {
-  const task = allTasks.find(t => t.id===tid); if (!task) return;
-  S.pendingTaskId = tid;
-  let chatId = task.url || '';
-  const m = chatId.match(/t\.me\/([^/?+]+)/);
-  if (m) chatId = '@' + m[1];
-  S.pendingChatId = chatId;
-  set('joinIcon',  task.type==='channel' ? '📢' : '👥');
-  set('joinTitle', task.title);
-  set('joinDesc',  `Open the link and ${task.type==='channel'?'subscribe to the channel':'join the group'}, then press Verify.`);
-  const btn = document.getElementById('joinVerifyBtn');
-  if (btn) { btn.disabled=false; btn.textContent="✅ I've Joined — Verify & Claim"; }
-  openOverlay('joinOverlay');
+function copyReferral(){
+  const link=`https://t.me/trewards_ton_bot?start=${userId}`;
+  navigator.clipboard?.writeText(link).then(()=>toast('Link copied!','success'))
+    .catch(()=>toast('Could not copy','error'));
 }
 
-function openJoinLink() {
-  const task = allTasks.find(t => t.id===S.pendingTaskId); if (!task) return;
-  openLink(task.url); // ✅ fixed
+function inviteFriend(){
+  const link=`https://t.me/trewards_ton_bot?start=${userId}`;
+  if(tg) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join TRewards and earn TON!')}`);
+  else window.open(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join TRewards!')}`, '_blank');
 }
 
-async function verifyJoin() {
-  const btn = document.getElementById('joinVerifyBtn');
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Checking membership...'; }
-  const r = await api('POST','/verify-join', {
-    task_id: S.pendingTaskId,
-    chat_id: S.pendingChatId,
-    user_id: ME.id,
-  });
-  if (btn) { btn.disabled=false; btn.textContent="✅ I've Joined — Verify & Claim"; }
-  if (r.error) { showToast('error','❌',r.error); return; }
-  if (!r.joined) { showToast('error','❌','Not a member yet — please join first!'); return; }
-  S.coins=r.coins; S.spins=r.spins;
-  const jid = S.pendingTaskId;
-  S.taskUI[jid] = {status:'done'}; S.pendingTaskId=null;
-  updateUI(); closeOverlay('joinOverlay'); updateTaskAct(jid);
-  showToast('success','🎉',`+${(r.reward||1000).toLocaleString()} coins! Verified ✅`);
-}
-
-// ═══════════════════════════════════════════════════
-// FRIENDS
-// ═══════════════════════════════════════════════════
-async function loadFriends() {
-  set('refLink', S.refLink);
-  set('claimableAmount', S.claimableRef.toLocaleString()+' 🪙');
-  const data = await api('GET','/referrals');
-  if (!data || data.error) return;
-  S.claimableRef = data.claimable || 0;
-  set('claimableAmount', S.claimableRef.toLocaleString()+' 🪙');
-  const friends = Array.isArray(data.friends) ? data.friends : [];
-  set('totalFriends', friends.length);
-  set('totalEarned', friends.reduce((a,f)=>a+parseInt(f.my_share||0),0).toLocaleString());
-  const list = document.getElementById('friendsList'); if (!list) return;
-  if (!friends.length) { list.innerHTML=`<div class="empty"><div class="empty-ico">👥</div><div class="empty-txt">No friends yet.<br>Invite someone to start!</div></div>`; return; }
-  const em = ['👨','👩','🧔','👱','🙎','👦','👧','🧑'];
-  list.innerHTML = friends.map((f,i) => `<div class="fri">
-    <div class="fra">${em[i%em.length]}</div>
-    <div style="flex:1"><div class="frn">${H(f.first_name||'Friend')}</div><div class="fre">Earned: ${parseInt(f.coins||0).toLocaleString()} TR</div></div>
-    <div class="frv">+${parseInt(f.my_share||0).toLocaleString()} 🪙</div>
-  </div>`).join('');
-}
-
-async function claimFriendEarnings() {
-  if (S.claimableRef<=0) { showToast('error','❌','Nothing to claim'); return; }
-  const r = await api('POST','/claim-referral');
-  if (r.error) { showToast('error','❌',r.error); return; }
-  S.coins=r.coins;
-  showToast('success','🎉',`+${(r.claimed||S.claimableRef).toLocaleString()} coins!`);
-  S.claimableRef=0; set('claimableAmount','0 🪙'); updateUI();
-}
-
-function copyRef() {
-  try {
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(S.refLink);
-    else { const t=document.createElement('textarea');t.value=S.refLink;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();document.execCommand('copy');t.remove(); }
-  } catch(e) {}
-  showToast('success','📋','Referral link copied!');
-}
-
-function inviteFriend() {
-  const u=`https://t.me/share/url?url=${encodeURIComponent(S.refLink)}&text=${encodeURIComponent('🚀 Join TRewards and earn TON coins!')}`;
-  openLink(u); // ✅ fixed
-}
-
-// ═══════════════════════════════════════════════════
-// WALLET
-// ═══════════════════════════════════════════════════
-function renderWallet() {
-  const c = S.coins||0;
-  set('walletCoins', c.toLocaleString()); set('walletTon', (c*4e-7).toFixed(8));
-  const g = document.getElementById('withdrawGrid'); if (!g) return;
-  g.innerHTML = WD_OPTS.map((o,i) => {
-    const ok = c >= o.coins;
-    return `<div class="wo ${S.selWd===i?'sel':''} ${ok?'':'lck'}"
-      onclick="${ok ? `selWithdraw(${i})` : `showToast('error','🔒','Need ${o.coins.toLocaleString()} coins')`}">
-      <div class="woc">${(o.coins/1000).toFixed(0)}K TR</div>
-      <div class="woa">${ok?'↓':'🔒'}</div>
-      <div class="wot">${o.ton.toFixed(2)} TON</div>
-      <div class="wof">-0.05 fee</div>
-    </div>`;
-  }).join('');
-  const btn = document.getElementById('withdrawBtn');
-  if (btn) {
-    const ok = S.selWd!==null && c>=WD_OPTS[S.selWd].coins;
-    btn.disabled=!ok; btn.textContent=ok?'Withdraw TON':'Select an option above';
+// ═══════════════════════════════════════════
+// WALLET PAGE
+// ═══════════════════════════════════════════
+let selectedTierData=null;
+function selectTier(el, coins, ton, net){
+  document.querySelectorAll('.tier-item').forEach(t=>t.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedTierData={coins,ton,net};
+  const btn=document.getElementById('withdraw-btn');
+  if(state.balance>=coins){
+    btn.disabled=false; btn.textContent='WITHDRAW';
+  } else {
+    btn.disabled=true; btn.textContent='INSUFFICIENT BALANCE';
   }
 }
-function selWithdraw(i) { S.selWd=i; renderWallet(); }
-function openWithdrawOverlay() {
-  if (S.selWd===null) { showToast('error','❌','Select a withdrawal amount'); return; }
-  const o = WD_OPTS[S.selWd];
-  if (S.coins<o.coins) { showToast('error','❌','Not enough coins'); return; }
-  set('wdCoins', o.coins.toLocaleString()+' TR');
-  set('wdGross', o.ton.toFixed(2)+' TON');
-  set('wdNet',   (o.ton-.05).toFixed(2)+' TON');
-  openOverlay('withdrawOverlay');
-}
-async function confirmWithdraw() {
-  const btn = document.querySelector('#withdrawOverlay .bcon');
-  if (btn) { btn.disabled=true; btn.textContent='⏳ Processing...'; }
-  const o = WD_OPTS[S.selWd];
-  const r = await api('POST','/withdraw',{coins_option:o.coins});
-  if (btn) { btn.disabled=false; btn.textContent='Confirm'; }
-  if (r.error) { showToast('error','❌',r.error); closeOverlay('withdrawOverlay'); return; }
-  S.coins=r.coins; S.selWd=null; updateUI(); renderWallet(); loadTx();
-  closeOverlay('withdrawOverlay');
-  showToast('success','💎',`${r.net_ton} TON withdrawal queued!`);
-}
-async function loadTx() {
-  const c = document.getElementById('txHistory'); if (!c) return;
-  const data = await api('GET','/transactions');
-  if (!Array.isArray(data)||!data.length) { c.innerHTML=`<div class="empty"><div class="empty-ico">📋</div><div class="empty-txt">No transactions yet</div></div>`; return; }
-  c.innerHTML = data.slice(0,30).map(tx => {
-    const isIn = tx.amount>0;
-    let ds=''; try { ds=new Date(tx.created_at).toLocaleString(); } catch(e){}
-    return `<div class="txi">
-      <div class="txic ${isIn?'in':'out'}">${isIn?'↓':'↑'}</div>
-      <div class="txif"><div class="txn">${H(tx.description||tx.type||'Transaction')}</div><div class="txd">${ds}</div></div>
-      <div class="txa ${isIn?'in':'out'}">${isIn?'+':''}${(tx.amount||0).toLocaleString()} TR</div>
-    </div>`;
-  }).join('');
+
+function openWithdraw(){
+  if(!selectedTierData){toast('Select a tier first','error');return;}
+  if(state.balance<selectedTierData.coins){toast('Insufficient balance','error');return;}
+  document.getElementById('wd-coins-val').textContent=selectedTierData.coins.toLocaleString()+' TR';
+  document.getElementById('wd-ton-val').textContent=selectedTierData.ton+' TON';
+  document.getElementById('wd-net-val').textContent=selectedTierData.net+' TON';
+  openOverlay('withdraw-overlay');
 }
 
-// ═══════════════════════════════════════════════════
-// PROMO
-// ═══════════════════════════════════════════════════
-async function redeemPromo() {
-  const inp = document.getElementById('promoInput');
-  const code = (inp?.value||'').trim();
-  if (!code) { showToast('error','❌','Enter a promo code'); return; }
-  const r = await api('POST','/redeem-promo',{code});
-  if (r.error) { showToast('error','❌',r.error); return; }
-  S.coins=r.coins; if (inp) inp.value='';
-  updateUI(); showToast('success','🎁',`+${(r.reward||0).toLocaleString()} coins!`);
+async function confirmWithdraw(){
+  if(!selectedTierData) return;
+  try{
+    const r=await api('/withdraw','POST',{tier:selectedTierData.coins});
+    state.balance=r.balance;
+    state.transactions=r.transactions||state.transactions;
+    updateBalanceDisplay(); refreshWallet();
+    closeOverlay('withdraw-overlay');
+    toast('Withdrawal queued!','success');
+  }catch(e){toast(e.message,'error');}
 }
 
-// ═══════════════════════════════════════════════════
-// SPIN WHEEL
-// ═══════════════════════════════════════════════════
-const SEGS = [
-  {label:'10',  value:10,  color:'#1C1700'},
-  {label:'50',  value:50,  color:'#221C00'},
-  {label:'80',  value:80,  color:'#1A1600'},
-  {label:'100', value:100, color:'#2A1F00'},
-  {label:'300', value:300, color:'#221C00'},
-  {label:'500', value:500, color:'#1C1700'},
-];
-let wAngle=0, spinning=false;
-
-function drawWheel(canvas, angle) {
-  if (!canvas) return;
-  const ctx=canvas.getContext('2d'), cx=canvas.width/2, cy=canvas.height/2;
-  const r=cx-6, n=SEGS.length, arc=2*Math.PI/n;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.save(); ctx.strokeStyle='rgba(255,184,0,.55)'; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.arc(cx,cy,r+2,0,2*Math.PI); ctx.stroke(); ctx.restore();
-  for (let i=0; i<n; i++) {
-    const sa=angle+i*arc, ea=sa+arc;
-    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,sa,ea); ctx.closePath();
-    ctx.fillStyle=SEGS[i].color; ctx.fill();
-    ctx.strokeStyle='rgba(255,184,0,.3)'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.save(); ctx.translate(cx,cy); ctx.rotate(sa+arc/2);
-    ctx.fillStyle='#FFD454';
-    ctx.font=`bold ${canvas.width<250?13:15}px Orbitron,monospace`;
-    ctx.textAlign='right'; ctx.shadowColor='rgba(255,184,0,.5)'; ctx.shadowBlur=6;
-    ctx.fillText(SEGS[i].label, r-12, 5); ctx.restore();
-  }
-  ctx.beginPath(); ctx.arc(cx,cy,26,0,2*Math.PI);
-  ctx.fillStyle='#0A0800'; ctx.fill();
-  ctx.strokeStyle='rgba(255,184,0,.45)'; ctx.lineWidth=2; ctx.stroke();
+async function refreshWallet(){
+  try{
+    const r=await api('/transactions');
+    state.transactions=r.transactions||[];
+    renderTransactions();
+  }catch(e){}
 }
 
-function initWheels() {
-  drawWheel(document.getElementById('spinCanvas'), wAngle);
-  drawWheel(document.getElementById('spinCanvas2'), wAngle);
+function renderTransactions(){
+  const list=document.getElementById('tx-list');
+  if(!state.transactions.length){list.innerHTML=`<div class="empty-state">${t('no-transactions')}</div>`;return;}
+  list.innerHTML=state.transactions.slice(0,50).map(tx=>`
+    <div class="tx-item">
+      <div>
+        <div class="tx-desc">${escHtml(tx.description)}</div>
+        <div class="tx-date">${new Date(tx.created_at||tx.createdAt||Date.now()).toLocaleDateString()}</div>
+      </div>
+      <div class="tx-amount ${tx.amount>0?'credit':'debit'}">${tx.amount>0?'+':''}${tx.amount.toLocaleString()} TR</div>
+    </div>`).join('');
 }
 
-function openSpinOverlay() {
-  openOverlay('spinOverlay');
-  requestAnimationFrame(() => {
-    drawWheel(document.getElementById('spinCanvas2'), wAngle);
-    set('spinBadge2','SPIN');
-    const rd=document.getElementById('spinResult'); if(rd) rd.classList.remove('show');
-  });
-}
-
-async function doSpin() {
-  if (spinning || S.spins<=0) return;
-  spinning=true;
-  const ob=document.getElementById('overlaySpinBtn'); if(ob) ob.disabled=true;
-  const rd=document.getElementById('spinResult'); if(rd) rd.classList.remove('show');
-  set('spinBadge2','...');
-  const r = await api('POST','/spin');
-  if (r.error) { showToast('error','❌',r.error); spinning=false; if(ob) ob.disabled=S.spins<=0; return; }
-  S.coins=r.coins; S.spins=r.spins;
-  const si = SEGS.findIndex(s=>s.value===r.reward); const ui=si>=0?si:0;
-  const arc = 2*Math.PI/SEGS.length;
-  const target = -(ui*arc+arc/2)+(Math.PI*1.5);
-  const start  = wAngle;
-  const extra  = (5+Math.floor(Math.random()*4))*2*Math.PI;
-  const final  = start+extra+((target-start)%(2*Math.PI)+2*Math.PI)%(2*Math.PI);
-  const t0=performance.now(), dur=3500;
-  function ease(t){ return 1-Math.pow(1-t,4); }
-  function anim(now) {
-    const p=Math.min((now-t0)/dur,1);
-    wAngle=start+(final-start)*ease(p);
-    drawWheel(document.getElementById('spinCanvas2'), wAngle);
-    if (p<1) { requestAnimationFrame(anim); }
-    else {
-      wAngle=wAngle%(2*Math.PI); spinning=false;
-      updateUI(); set('spinResultVal',r.reward);
-      const rd2=document.getElementById('spinResult'); if(rd2) rd2.classList.add('show');
-      set('spinBadge2', SEGS[ui].label); set('spinBadge', SEGS[ui].label);
-      drawWheel(document.getElementById('spinCanvas'), wAngle);
-      if (ob) ob.disabled=S.spins<=0;
-      showToast('success','🎡',`You won ${r.reward} coins!`);
-    }
-  }
-  requestAnimationFrame(anim);
-}
-
-// ═══════════════════════════════════════════════════
-// TOPUP
-// ═══════════════════════════════════════════════════
-function renderTopup() {
-  const c=document.getElementById('topupAmounts'); if(!c) return;
-  c.innerHTML=TOPUP_PRESETS.map(a=>`<div class="tpao ${selTopup===a?'active':''}" onclick="pickTopup(${a})"><span>${a.toFixed(1)}</span><span class="sub">TON</span></div>`).join('');
-}
-function pickTopup(a){ selTopup=a; const ci=document.getElementById('customTopup'); if(ci) ci.value=''; renderTopup(); }
-function onCustomTopup(){ const v=parseFloat(document.getElementById('customTopup').value); if(v>0){ selTopup=null; renderTopup(); } }
-
-async function proceedPay() {
-  const cv=parseFloat(document.getElementById('customTopup').value);
-  const amt=cv>0?cv:selTopup;
-  if (!amt||amt<0.1) { showToast('error','❌','Minimum 0.1 TON'); return; }
-  closeOverlay('topupOverlay'); openOverlay('payMethodOverlay');
-  set('payAmtDisp', amt+' TON');
-  const pm=document.getElementById('pmGrid'), pl=document.getElementById('pmLoading');
-  if(pm) pm.style.display='none'; if(pl) pl.style.display='block';
-  S.payUrls={cryptobot:null,xrocket:null};
-  const r=await api('POST','/create-payment',{amount:amt});
-  if(pl) pl.style.display='none'; if(pm) pm.style.display='grid';
-  if(r.error){ showToast('error','❌','Payment creation failed'); closeOverlay('payMethodOverlay'); return; }
-  S.payUrls.cryptobot=r.cryptobot; S.payUrls.xrocket=r.xrocket;
-}
-
-function openPayUrl(p) {
-  const url=S.payUrls[p];
-  if(!url){ showToast('error','❌','Payment URL not ready'); return; }
-  openLink(url); // ✅ fixed
-  closeOverlay('payMethodOverlay');
-  showToast('info','💳',`Opening ${p==='cryptobot'?'CryptoBot':'xRocket'}...`);
-}
-
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════
 // ADVERTISER
-// ═══════════════════════════════════════════════════
-let adTab='add';
-function renderAdDash() {
-  const el=document.getElementById('adBal'); if(el) el.textContent=(S.adBalance||0).toFixed(2);
-  renderCompGrid(); renderCost();
-  api('GET','/ad-balance').then(r=>{ if(!r.error&&r.balance_ton!=null){ S.adBalance=r.balance_ton; if(el) el.textContent=S.adBalance.toFixed(2); } });
+// ═══════════════════════════════════════════
+function openAdv(){
+  loadAdvData();
+  openOverlay('adv-overlay');
 }
-function renderCompGrid() {
-  const g=document.getElementById('completionGrid'); if(!g) return;
-  g.innerHTML=COMP_PRESETS.map(n=>`<div class="co ${S.selComp===n?'active':''}" onclick="selComp(${n})"><span>${n>=1000?n/1000+'K':n}</span><span class="co-sub">${(n*.001).toFixed(2)} TON</span></div>`).join('');
+async function loadAdvData(){
+  try{
+    const r=await api('/advertiser/dashboard');
+    state.advBalance=r.balance||0;
+    state.myAdvTasks=r.tasks||[];
+    document.getElementById('adv-balance-val').textContent=(state.advBalance).toFixed(4)+' TON';
+    renderMyAdvTasks();
+  }catch(e){}
 }
-function selComp(n){ S.selComp=n; renderCompGrid(); renderCost(); }
-function renderCost(){ const el=document.getElementById('costDisp'); if(el) el.textContent=(S.selComp*.001).toFixed(3); }
-function switchAdTab(t) {
-  adTab=t;
-  document.getElementById('tab-addtask')?.classList.toggle('active',t==='add');
-  document.getElementById('tab-mytasks')?.classList.toggle('active',t==='my');
-  const af=document.getElementById('addTaskForm'), ms=document.getElementById('myTasksSection');
-  if(af) af.style.display=t==='add'?'block':'none';
-  if(ms) ms.style.display=t==='my'?'block':'none';
-  if(t==='my') loadMyTasks();
+function switchAdvTab(tab){
+  document.querySelectorAll('.adv-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.adv-tab-content').forEach(c=>c.classList.remove('active'));
+  document.querySelector(`.adv-tab[onclick*="${tab}"]`).classList.add('active');
+  document.getElementById('adv-'+tab+'-tab').classList.add('active');
 }
-async function submitTask() {
-  const title=(document.getElementById('taskName')?.value||'').trim();
-  const type=document.getElementById('taskType')?.value||'visit';
-  const url=(document.getElementById('taskUrl')?.value||'').trim();
-  if(!title){ showToast('error','❌','Enter a task name'); return; }
-  if(!url)   { showToast('error','❌','Enter a URL'); return; }
-  if(!url.startsWith('http')){ showToast('error','❌','URL must start with http'); return; }
-  const btn=document.querySelector('#addTaskForm .stbtn');
-  if(btn){ btn.disabled=true; btn.textContent='⏳ Publishing...'; }
-  const r=await api('POST','/create-task',{title,type,url,description:url,total_limit:S.selComp});
-  if(btn){ btn.disabled=false; btn.textContent='🚀 Publish Task'; }
-  if(r.error){ showToast('error','❌',r.error); return; }
-  document.getElementById('taskName').value=''; document.getElementById('taskUrl').value='';
-  S.adBalance=Math.max(0,S.adBalance-S.selComp*.001);
-  const el=document.getElementById('adBal'); if(el) el.textContent=S.adBalance.toFixed(2);
-  showToast('success','🚀','Task published!'); switchAdTab('my');
+function updateCostPreview(){
+  const limit=parseInt(document.getElementById('adv-task-limit').value)||500;
+  const cost=(limit*0.001).toFixed(3);
+  document.getElementById('adv-cost-val').textContent=cost+' TON';
 }
-async function loadMyTasks() {
-  const list=document.getElementById('myTasksList'); if(!list) return;
-  list.innerHTML=`<div class="empty"><div class="sp" style="margin:0 auto 10px"></div></div>`;
-  const data=await api('GET','/my-tasks');
-  if(!Array.isArray(data)||!data.length){ list.innerHTML=`<div class="empty"><div class="empty-ico">📋</div><div class="empty-txt">No tasks yet.</div></div>`; return; }
-  list.innerHTML=data.map(t=>`<div class="mti">
-    <div class="mti-hd"><div class="mti-n">${H(t.title)}</div><div class="mti-s ${t.status==='active'?'active':''}">${H(t.status||'active')}</div></div>
-    <div class="mti-st">
-      <div class="mti-d">Done: <span>${t.completed_count||0}/${t.total_limit}</span></div>
-      <div class="mti-d">Type: <span>${H(t.type)}</span></div>
-      <div class="mti-d">Cost: <span>${((t.total_limit||0)*.001).toFixed(2)} TON</span></div>
-    </div>
-  </div>`).join('');
+async function publishTask(){
+  const name=document.getElementById('adv-task-name').value.trim();
+  const type=document.getElementById('adv-task-type').value;
+  const url=document.getElementById('adv-task-url').value.trim();
+  const limit=parseInt(document.getElementById('adv-task-limit').value);
+  if(!name||!url){toast('Fill all fields','error');return;}
+  const cost=limit*0.001;
+  if(state.advBalance<cost){toast('Insufficient ad balance','error');return;}
+  try{
+    await api('/create-task','POST',{name,type,url,limit});
+    toast('Task published!','success');
+    loadAdvData();
+    switchAdvTab('my');
+  }catch(e){toast(e.message,'error');}
 }
-
-// ═══════════════════════════════════════════════════
-// OVERLAYS
-// ═══════════════════════════════════════════════════
-function openOverlay(id) {
-  document.getElementById(id)?.classList.add('open');
-  if (id==='addTaskOverlay') { switchAdTab(adTab); renderAdDash(); }
-  if (id==='topupOverlay')   renderTopup();
+function renderMyAdvTasks(){
+  const list=document.getElementById('adv-my-tasks-list');
+  if(!state.myAdvTasks.length){list.innerHTML=`<div class="empty-state">${t('no-tasks-yet')}</div>`;return;}
+  list.innerHTML=state.myAdvTasks.map(task=>{
+    const pct=Math.min(100,((task.completions||0)/task.limit)*100);
+    return `
+    <div class="my-task-item">
+      <div class="my-task-name">${escHtml(task.name)}</div>
+      <div class="my-task-progress"><div class="my-task-prog-fill" style="width:${pct}%"></div></div>
+      <div class="my-task-stats">
+        <div class="my-task-count">${task.completions||0} / ${task.limit} completions</div>
+        <div class="task-status ${task.status||'active'}">${task.status||'active'}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
-function closeOverlay(id) { document.getElementById(id)?.classList.remove('open'); }
-if (TG) { TG.onEvent('backButtonClicked',()=>{ const ol=document.querySelectorAll('.ov.open'); if(ol.length) ol[ol.length-1].classList.remove('open'); }); }
-
-// ═══════════════════════════════════════════════════
-// LANG
-// ═══════════════════════════════════════════════════
-const NL={en:['Home','Tasks','Friends','Wallet'],ru:['Главная','Задачи','Друзья','Кошелек']};
-function setLang(l) {
-  S.lang=l; set('langFlag',l.toUpperCase());
-  document.querySelectorAll('.lo').forEach(e=>e.classList.remove('active'));
-  document.getElementById('lang'+l[0].toUpperCase()+l.slice(1))?.classList.add('active');
-  document.querySelectorAll('.nl').forEach((e,i)=>{ if(NL[l]) e.textContent=NL[l][i]; });
-  closeLang();
-}
-function toggleLangMenu(){ document.getElementById('langMenu')?.classList.toggle('open'); }
-function closeLang(){ document.getElementById('langMenu')?.classList.remove('open'); }
-document.addEventListener('click',e=>{ if(!e.target.closest('#langMenu')&&!e.target.closest('#langBtn')) closeLang(); });
-
-// ═══════════════════════════════════════════════════
-// TOAST
-// ═══════════════════════════════════════════════════
-function showToast(type,icon,msg) {
-  const c=document.getElementById('tc'); if(!c) return;
-  const last=c.lastElementChild;
-  if(last&&last.querySelector('.toast-txt')?.textContent===msg) return;
-  const t=document.createElement('div');
-  t.className=`toast ${type}`;
-  t.innerHTML=`<span class="toast-ico">${icon}</span><span class="toast-txt">${H(msg)}</span>`;
-  c.appendChild(t);
-  setTimeout(()=>{ t.classList.add('removing'); setTimeout(()=>{ if(t.parentNode) t.remove(); },250); },2800);
+function openTopup(){
+  document.getElementById('adv-topup-section').style.display='block';
 }
 
-// ═══════════════════════════════════════════════════
-// START
-// ═══════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', initApp);
+// ═══════════════════════════════════════════
+// OVERLAY HELPERS
+// ═══════════════════════════════════════════
+function openOverlay(id){document.getElementById(id).classList.add('open');}
+function closeOverlay(id){document.getElementById(id).classList.remove('open');}
+
+// Close overlay on backdrop tap
+document.querySelectorAll('.overlay').forEach(ov=>{
+  ov.addEventListener('click',e=>{
+    if(e.target===ov) ov.classList.remove('open');
+  });
+});
+
+// ═══════════════════════════════════════════
+// INIT / LOAD USER DATA
+// ═══════════════════════════════════════════
+async function initApp(){
+  try{
+    const r=await api('/me');
+    state.balance=r.balance||0;
+    state.spins=r.spins||0;
+    state.streak=r.streak||0;
+    state.dailyTasksDone=r.dailyTasksDone||{checkin:false,updates:false,share:false};
+    updateBalanceDisplay();
+    renderStreak();
+    document.getElementById('referral-link-display').textContent=`https://t.me/trewards_ton_bot?start=${userId}`;
+  }catch(e){
+    // Dev/offline fallback
+    updateBalanceDisplay();
+    renderStreak();
+  }
+}
+
+applyTranslations();
+initApp();
 </script>
 </body>
 </html>
