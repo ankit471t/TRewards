@@ -5,13 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "npm rebuild better-sqlite3",
-    "dev": "nodemon server.js",
-    "setup-db": "node scripts/init-db.js",
-    "bot": "node bot.js"
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "better-sqlite3": "^9.6.0",
+    "pg": "^8.11.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -23,8 +20,7 @@
     "nodemon": "^3.1.0"
   },
   "engines": {
-    "node": "20.x",
-    "npm": ">=9.0.0"
+    "node": "20.x"
   },
   "license": "MIT"
 }
