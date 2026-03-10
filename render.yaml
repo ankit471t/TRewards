@@ -1,0 +1,34 @@
+services:
+  # ===== BACKEND =====
+  - type: web
+    name: trewards-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATA_CHANNEL_ID
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: ADMIN_KEY
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+    autoDeploy: true
+
+  # ===== FRONTEND (static) =====
+  - type: web
+    name: trewards-frontend
+    env: static
+    rootDir: frontend
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    autoDeploy: true
