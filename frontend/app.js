@@ -5,15 +5,16 @@
 
 'use strict';
 
-// ── CONFIG ─────────────────────────────────────────────────────
+// ── CONFIG ─────────────────────────────────────────────────────────
 const CONFIG = {
-  API_BASE: 'https://trewards-backend.onrender.com/api', // Replace with your backend URL
+  // ⚠️ Replace with your actual Render backend URL after deploying
+  API_BASE: 'https://trewards-backend.onrender.com/api',
   BOT_USERNAME: 'trewards_ton_bot',
   CHANNEL_URL: 'https://t.me/trewards_tonfirst',
-  TON_RATE: 0.0000004, // TR per TON
+  TON_RATE: 0.0000004,
 };
 
-// ── STATE ───────────────────────────────────────────────────────
+// ── STATE ───────────────────────────────────────────────────────────
 let state = {
   user: null,
   lang: 'en',
@@ -31,7 +32,7 @@ let state = {
   spinning: false,
 };
 
-// ── I18N ────────────────────────────────────────────────────────
+// ── I18N ────────────────────────────────────────────────────────────
 const i18n = {
   en: {
     home: 'Home', tasks: 'Tasks', friends: 'Friends', wallet: 'Wallet',
@@ -118,8 +119,13 @@ function getTgUser() {
   if (tg?.initDataUnsafe?.user) {
     return tg.initDataUnsafe.user;
   }
-  // Dev fallback
+  // Dev fallback — safe BigInt-compatible ID
   return { id: 123456789, first_name: 'Test', last_name: 'User', username: 'testuser' };
+}
+
+// Extract referral start param from Telegram
+function getStartParam() {
+  return tg?.initDataUnsafe?.start_param || null;
 }
 
 // ── API HELPERS ─────────────────────────────────────────────────
@@ -134,20 +140,21 @@ async function apiPost(endpoint, body = {}) {
       init_data: tg?.initData || '',
     }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `HTTP ${res.status}`);
-  }
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+  return data;
 }
 
 async function apiGet(endpoint) {
   const user = getTgUser();
-  const res = await fetch(`${CONFIG.API_BASE}${endpoint}?telegram_id=${user.id}&init_data=${encodeURIComponent(tg?.initData || '')}`, {
-    headers: { 'Content-Type': 'application/json' }
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const sep = endpoint.includes('?') ? '&' : '?';
+  const res = await fetch(
+    `${CONFIG.API_BASE}${endpoint}${sep}telegram_id=${user.id}&init_data=${encodeURIComponent(tg?.initData || '')}`,
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+  return data;
 }
 
 // ── TOAST ────────────────────────────────────────────────────────
@@ -219,11 +226,12 @@ function renderStreakDots() {
   const container = document.getElementById('streakDots');
   container.innerHTML = '';
   const streak = state.user?.streak_count || 0;
+  const day = streak % 7; // current position in 7-day cycle
   for (let i = 1; i <= 7; i++) {
     const dot = document.createElement('div');
     dot.className = 'streak-dot';
-    if (i < streak % 7 + 1) dot.classList.add('active');
-    if (i === (streak % 7) + 1 || (streak % 7 === 0 && i === 1 && streak > 0)) dot.classList.add('today');
+    if (i <= day) dot.classList.add('active');
+    if (i === day + 1 || (day === 0 && i === 1)) dot.classList.add('today');
     dot.textContent = i;
     container.appendChild(dot);
   }
@@ -235,12 +243,13 @@ document.getElementById('claimStreakBtn').addEventListener('click', async () => 
     const res = await apiPost('/claim-streak');
     state.user.coins += res.reward || 10;
     state.user.spins = (state.user.spins || 0) + 1;
-    state.user.streak_count = (state.user.streak_count || 0) + 1;
+    state.user.streak_count = res.streak || (state.user.streak_count || 0) + 1;
     updateBalanceDisplay();
     renderStreakDots();
     showToast(`+${res.reward || 10} TR +1 🎰`, 'success');
-    document.getElementById('claimStreakBtn').disabled = true;
-    document.getElementById('claimStreakBtn').textContent = '✓ Claimed';
+    const btn = document.getElementById('claimStreakBtn');
+    btn.disabled = true;
+    btn.textContent = '✓ Claimed';
   } catch (e) {
     showToast(e.message || 'Already claimed today', 'error');
   }
@@ -258,7 +267,6 @@ const WHEEL_SEGMENTS = [
 
 const SEGMENT_COUNT = WHEEL_SEGMENTS.length;
 const ARC = (Math.PI * 2) / SEGMENT_COUNT;
-
 let currentAngle = 0;
 
 function drawWheel(angle = 0) {
@@ -284,7 +292,6 @@ function drawWheel(angle = 0) {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Label
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(start + ARC / 2);
@@ -313,20 +320,16 @@ function spinToResult(resultValue) {
     const spinRevolutions = 5 + Math.random() * 3;
     const targetAngle = -(targetIdx * ARC + ARC / 2) + Math.PI / 2;
     const totalRotation = spinRevolutions * Math.PI * 2 + targetAngle - currentAngle;
-
     const duration = 4000;
     const startTime = performance.now();
     const startAngle = currentAngle;
 
-    function easeOut(t) {
-      return 1 - Math.pow(1 - t, 4);
-    }
+    function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
 
     function animate(now) {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = easeOut(progress);
-      currentAngle = startAngle + totalRotation * eased;
+      currentAngle = startAngle + totalRotation * easeOut(progress);
       drawWheel(currentAngle);
       if (progress < 1) {
         requestAnimationFrame(animate);
@@ -335,27 +338,26 @@ function spinToResult(resultValue) {
         resolve();
       }
     }
-
     requestAnimationFrame(animate);
   });
 }
 
 document.getElementById('spinBtn').addEventListener('click', async () => {
   if (state.spinning) return;
-  const spins = state.user?.spins || 0;
-  if (spins <= 0) { showToast('No spins left!', 'error'); return; }
+  if ((state.user?.spins || 0) <= 0) { showToast('No spins left!', 'error'); return; }
 
   state.spinning = true;
-  document.getElementById('spinBtn').disabled = true;
+  const spinBtn = document.getElementById('spinBtn');
+  spinBtn.disabled = true;
 
   try {
     const res = await apiPost('/spin');
-    state.user.spins = Math.max(0, spins - 1);
+    state.user.spins = Math.max(0, (state.user.spins || 0) - 1);
     updateBalanceDisplay();
 
     await spinToResult(res.result);
 
-    state.user.coins += res.result;
+    state.user.coins = (state.user.coins || 0) + res.result;
     updateBalanceDisplay();
     document.getElementById('spinResultAmount').textContent = res.result.toLocaleString();
     document.getElementById('spinResultOverlay').classList.remove('hidden');
@@ -363,7 +365,7 @@ document.getElementById('spinBtn').addEventListener('click', async () => {
     showToast(e.message || 'Spin failed', 'error');
   } finally {
     state.spinning = false;
-    document.getElementById('spinBtn').disabled = false;
+    spinBtn.disabled = false;
   }
 });
 
@@ -379,12 +381,11 @@ document.getElementById('redeemBtn').addEventListener('click', async () => {
   try {
     const res = await apiPost('/redeem-promo', { code });
     if (res.reward_type === 'ton') {
-      showToast(`+${res.reward} TON added to your balance! 💎`, 'success');
-      state.user.ton_balance = (state.user.ton_balance || 0) + res.reward;
+      showToast(`+${res.reward} TON added! 💎`, 'success');
     } else {
-      state.user.coins += res.reward;
-      showToast(`+${res.reward} TR coins added! 🎉`, 'success');
+      state.user.coins = (state.user.coins || 0) + res.reward;
       updateBalanceDisplay();
+      showToast(`+${res.reward} TR coins! 🎉`, 'success');
     }
     document.getElementById('promoInput').value = '';
   } catch (e) {
@@ -395,12 +396,11 @@ document.getElementById('redeemBtn').addEventListener('click', async () => {
 // ── DAILY TASKS ──────────────────────────────────────────────────
 function setupDailyTasks() {
   // Check-in
-  const checkinBtn = document.querySelector('[data-task="checkin"]');
-  checkinBtn.addEventListener('click', async () => {
+  document.querySelector('[data-task="checkin"]').addEventListener('click', async () => {
     try {
       const res = await apiPost('/claim-daily-task', { task: 'checkin' });
-      state.user.coins += res.reward || 10;
-      state.user.spins = (state.user.spins || 0) + 1;
+      state.user.coins = (state.user.coins || 0) + (res.reward || 10);
+      state.user.spins = (state.user.spins || 0) + (res.spins || 0);
       updateBalanceDisplay();
       markDailyTask('checkin');
       showToast(`+${res.reward || 10} TR`, 'success');
@@ -409,18 +409,19 @@ function setupDailyTasks() {
     }
   });
 
-  // Updates - first click opens channel, second claims
+  // Updates — first click opens channel, second claims reward
   const updatesBtn = document.querySelector('[data-task="updates"]');
   updatesBtn.addEventListener('click', async () => {
     if (!state.updatesTaskClicked) {
       state.updatesTaskClicked = true;
-      tg?.openLink(CONFIG.CHANNEL_URL);
+      if (tg) tg.openLink(CONFIG.CHANNEL_URL);
+      else window.open(CONFIG.CHANNEL_URL, '_blank');
       updatesBtn.textContent = t('claim');
       return;
     }
     try {
       const res = await apiPost('/claim-daily-task', { task: 'updates' });
-      state.user.coins += res.reward || 50;
+      state.user.coins = (state.user.coins || 0) + (res.reward || 50);
       updateBalanceDisplay();
       markDailyTask('updates');
       showToast(`+${res.reward || 50} TR`, 'success');
@@ -430,20 +431,19 @@ function setupDailyTasks() {
   });
 
   // Share
-  const shareBtn = document.querySelector('[data-task="share"]');
-  shareBtn.addEventListener('click', async () => {
+  document.querySelector('[data-task="share"]').addEventListener('click', async () => {
     const user = getTgUser();
     const link = `https://t.me/${CONFIG.BOT_USERNAME}?start=${user.id}`;
     const text = `Join TRewards and earn TR coins! Use my referral link:`;
-    tg?.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+    if (tg) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
     setTimeout(async () => {
       try {
         const res = await apiPost('/claim-daily-task', { task: 'share' });
-        state.user.coins += res.reward || 100;
+        state.user.coins = (state.user.coins || 0) + (res.reward || 100);
         updateBalanceDisplay();
         markDailyTask('share');
         showToast(`+${res.reward || 100} TR`, 'success');
-      } catch (e) { /* Already claimed is ok */ }
+      } catch { /* already claimed is fine */ }
     }, 1500);
   });
 }
@@ -459,6 +459,11 @@ function markDailyTask(task) {
 
 // ── TASKS PAGE ───────────────────────────────────────────────────
 async function loadTasks() {
+  document.getElementById('tasksList').innerHTML = `
+    <div class="tasks-loading">
+      <div class="spinner"></div>
+      <span>${t('loadingTasks')}</span>
+    </div>`;
   try {
     const res = await apiGet('/tasks');
     state.tasks = res.tasks || [];
@@ -491,7 +496,7 @@ function renderTasks() {
     if (!cat.tasks.length) continue;
     html += `<div class="tasks-category"><div class="category-label">${cat.label}</div></div>`;
     cat.tasks.forEach(task => {
-      const reward = task.task_type === 'visit' ? 500 : 1000;
+      const reward = Number(task.reward) || (task.task_type === 'visit' ? 500 : 1000);
       const done = task.user_completed;
       html += `
         <div class="task-card">
@@ -521,7 +526,6 @@ function renderTasks() {
   }
   list.innerHTML = html;
 
-  // Attach listeners
   list.querySelectorAll('.task-start-btn:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => openTask({
       id: btn.dataset.taskId,
@@ -538,7 +542,6 @@ function openTask(task) {
   document.getElementById('overlayTaskName').textContent = task.task_name;
   document.getElementById('overlayTaskReward').textContent = `+${task.reward.toLocaleString()} TR`;
 
-  // Reset overlay state
   document.getElementById('taskTimerSection').classList.add('hidden');
   document.getElementById('taskVerifySection').classList.add('hidden');
   document.getElementById('taskClaimBtn').classList.add('hidden');
@@ -546,15 +549,16 @@ function openTask(task) {
   document.getElementById('taskOverlay').classList.remove('hidden');
 
   if (task.task_type === 'visit' || task.task_type === 'game') {
-    // Open URL then start timer
-    tg?.openLink(task.target_url) || window.open(task.target_url, '_blank');
+    if (tg) tg.openLink(task.target_url);
+    else window.open(task.target_url, '_blank');
     const duration = task.task_type === 'game' ? 10 : 15;
-    startTaskTimer(duration, task);
+    startTaskTimer(duration);
   } else {
-    // Channel / Group - show verify section
+    // Channel / Group
     document.getElementById('taskVerifySection').classList.remove('hidden');
     document.getElementById('overlayOpenLink').onclick = () => {
-      tg?.openLink(task.target_url) || window.open(task.target_url, '_blank');
+      if (tg) tg.openLink(task.target_url);
+      else window.open(task.target_url, '_blank');
       setTimeout(() => {
         document.getElementById('taskVerifyBtn').classList.remove('hidden');
       }, 1500);
@@ -562,7 +566,8 @@ function openTask(task) {
   }
 }
 
-function startTaskTimer(duration, task) {
+function startTaskTimer(duration) {
+  clearInterval(state.currentTaskTimer);
   document.getElementById('taskTimerSection').classList.remove('hidden');
   let remaining = duration;
   const circumference = 226;
@@ -580,7 +585,6 @@ function startTaskTimer(duration, task) {
     const progress = remaining / duration;
     progressEl.style.strokeDashoffset = circumference * (1 - progress);
     barEl.style.width = `${progress * 100}%`;
-
     if (remaining <= 0) {
       clearInterval(state.currentTaskTimer);
       document.getElementById('taskClaimBtn').classList.remove('hidden');
@@ -590,16 +594,18 @@ function startTaskTimer(duration, task) {
 
 document.getElementById('taskClaimBtn').addEventListener('click', async () => {
   if (!state.currentTask) return;
+  document.getElementById('taskClaimBtn').disabled = true;
   try {
     const res = await apiPost('/claim-task', { task_id: state.currentTask.id });
-    state.user.coins += res.reward;
+    state.user.coins = (state.user.coins || 0) + res.reward;
     state.user.spins = (state.user.spins || 0) + 1;
     updateBalanceDisplay();
     closeTaskOverlay();
     showToast(`+${res.reward} TR +1 🎰`, 'success');
-    loadTasks(); // refresh
+    loadTasks();
   } catch (e) {
     showToast(e.message || 'Failed to claim', 'error');
+    document.getElementById('taskClaimBtn').disabled = false;
   }
 });
 
@@ -609,7 +615,7 @@ document.getElementById('taskVerifyBtn').addEventListener('click', async () => {
   document.getElementById('taskVerifyBtn').textContent = 'Verifying...';
   try {
     const res = await apiPost('/verify-join', { task_id: state.currentTask.id });
-    state.user.coins += res.reward;
+    state.user.coins = (state.user.coins || 0) + res.reward;
     state.user.spins = (state.user.spins || 0) + 1;
     updateBalanceDisplay();
     closeTaskOverlay();
@@ -644,7 +650,7 @@ async function loadFriends() {
     document.getElementById('totalEarnedRef').textContent = (res.total_earned || 0).toLocaleString();
     renderFriends();
   } catch (e) {
-    // ignore
+    // Silently ignore network errors here
   }
 }
 
@@ -668,8 +674,7 @@ function renderFriends() {
 document.getElementById('copyReferral').addEventListener('click', () => {
   const user = getTgUser();
   const link = `https://t.me/${CONFIG.BOT_USERNAME}?start=${user.id}`;
-  navigator.clipboard.writeText(link).then(() => showToast('Link copied!', 'success')).catch(() => {
-    // Fallback
+  navigator.clipboard?.writeText(link).then(() => showToast('Link copied!', 'success')).catch(() => {
     const el = document.createElement('textarea');
     el.value = link;
     document.body.appendChild(el);
@@ -684,18 +689,18 @@ document.getElementById('inviteBtn').addEventListener('click', () => {
   const user = getTgUser();
   const link = `https://t.me/${CONFIG.BOT_USERNAME}?start=${user.id}`;
   const text = `🚀 Join TRewards and earn TR coins! Complete tasks, spin the wheel, and withdraw TON!`;
-  tg?.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+  if (tg) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
 });
 
 document.getElementById('claimReferralBtn').addEventListener('click', async () => {
   try {
     const res = await apiPost('/claim-referral');
-    state.user.coins += res.reward;
+    state.user.coins = (state.user.coins || 0) + res.reward;
     updateBalanceDisplay();
     document.getElementById('pendingReferral').textContent = '0';
     showToast(`+${res.reward} TR`, 'success');
   } catch (e) {
-    showToast(e.message || 'Nothing to claim', 'error');
+    showToast(e.message || 'Commissions are credited automatically', 'error');
   }
 });
 
@@ -720,12 +725,12 @@ function renderTransactions() {
     return `
       <div class="tx-item">
         <div class="tx-left">
-          <div class="tx-type">${escapeHtml(tx.type)}</div>
+          <div class="tx-type">${escapeHtml(tx.type.replace(/_/g, ' '))}</div>
           <div class="tx-desc">${escapeHtml(tx.description || '')}</div>
           <div class="tx-date">${date}</div>
         </div>
         <div class="tx-amount ${isCredit ? 'credit' : 'debit'}">
-          ${isCredit ? '+' : ''}${tx.amount.toLocaleString()} TR
+          ${isCredit ? '+' : ''}${Number(tx.amount).toLocaleString()} TR
         </div>
       </div>`;
   }).join('');
@@ -759,18 +764,19 @@ document.getElementById('withdrawClose').addEventListener('click', () => {
 document.getElementById('confirmWithdrawBtn').addEventListener('click', async () => {
   if (!state.pendingWithdraw) return;
   const { coins, ton, net } = state.pendingWithdraw;
-  document.getElementById('confirmWithdrawBtn').disabled = true;
+  const btn = document.getElementById('confirmWithdrawBtn');
+  btn.disabled = true;
   try {
     await apiPost('/withdraw', { coins_amount: coins, ton_amount: ton, net_amount: net });
-    state.user.coins -= coins;
+    state.user.coins = Math.max(0, (state.user.coins || 0) - coins);
     updateBalanceDisplay();
     document.getElementById('withdrawOverlay').classList.add('hidden');
-    showToast(`Withdrawal of ${net} TON queued!`, 'success');
+    showToast(`Withdrawal of ${net} TON queued! ✅`, 'success');
     loadTransactions();
   } catch (e) {
     showToast(e.message || 'Withdrawal failed', 'error');
   } finally {
-    document.getElementById('confirmWithdrawBtn').disabled = false;
+    btn.disabled = false;
     state.pendingWithdraw = null;
   }
 });
@@ -800,23 +806,23 @@ document.getElementById('topupClose').addEventListener('click', () => {
 
 async function createTopup(method) {
   if (!state.pendingTopup) return;
-  document.getElementById('xrocketBtn').disabled = true;
-  document.getElementById('cryptoPayBtn').disabled = true;
+  const xBtn = document.getElementById('xrocketBtn');
+  const cBtn = document.getElementById('cryptoPayBtn');
+  xBtn.disabled = true;
+  cBtn.disabled = true;
   try {
-    const res = await apiPost('/create-topup', {
-      amount: state.pendingTopup,
-      method,
-    });
+    const res = await apiPost('/create-topup', { amount: state.pendingTopup, method });
     document.getElementById('topupOverlay').classList.add('hidden');
     if (res.payment_url) {
-      tg?.openLink(res.payment_url) || window.open(res.payment_url, '_blank');
+      if (tg) tg.openLink(res.payment_url);
+      else window.open(res.payment_url, '_blank');
       showToast('Payment page opened', 'success');
     }
   } catch (e) {
     showToast(e.message || 'Failed to create invoice', 'error');
   } finally {
-    document.getElementById('xrocketBtn').disabled = false;
-    document.getElementById('cryptoPayBtn').disabled = false;
+    xBtn.disabled = false;
+    cBtn.disabled = false;
     state.pendingTopup = null;
   }
 }
@@ -837,7 +843,10 @@ document.getElementById('advertiserClose').addEventListener('click', () => {
 document.querySelectorAll('.tab-switch-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-switch-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.ad-tab').forEach(t => { t.classList.remove('active'); t.classList.add('hidden'); });
+    document.querySelectorAll('.ad-tab').forEach(tab => {
+      tab.classList.remove('active');
+      tab.classList.add('hidden');
+    });
     btn.classList.add('active');
     const tab = document.getElementById(`adTab-${btn.dataset.adtab}`);
     if (tab) { tab.classList.remove('hidden'); tab.classList.add('active'); }
@@ -854,9 +863,9 @@ async function loadAdvertiserData() {
   } catch (e) { /* ignore */ }
 }
 
-// Cost preview
 const targetSelect = document.getElementById('adTaskTarget');
 targetSelect.addEventListener('change', updateCostPreview);
+
 function updateCostPreview() {
   const target = parseInt(targetSelect.value) || 500;
   const cost = (target * 0.001).toFixed(1);
@@ -874,25 +883,26 @@ document.getElementById('publishTaskBtn').addEventListener('click', async () => 
   const name = document.getElementById('adTaskName').value.trim();
   const type = document.getElementById('adTaskType').value;
   const url = document.getElementById('adTaskUrl').value.trim();
-  const target = parseInt(document.getElementById('adTaskTarget').value);
+  const target = parseInt(targetSelect.value);
 
   if (!name || !url) { showToast('Fill in all fields', 'error'); return; }
 
   const cost = target * 0.001;
-  if (state.adBalance < cost) { showToast(`Insufficient ad balance. Need ${cost} TON`, 'error'); return; }
+  if (state.adBalance < cost) { showToast(`Need ${cost} TON ad balance`, 'error'); return; }
 
-  document.getElementById('publishTaskBtn').disabled = true;
+  const btn = document.getElementById('publishTaskBtn');
+  btn.disabled = true;
   try {
     await apiPost('/create-task', { task_name: name, task_type: type, target_url: url, completion_target: target });
     state.adBalance -= cost;
     document.getElementById('adBalance').textContent = state.adBalance.toFixed(3);
     document.getElementById('adTaskName').value = '';
     document.getElementById('adTaskUrl').value = '';
-    showToast('Task published!', 'success');
+    showToast('Task published! ✅', 'success');
   } catch (e) {
     showToast(e.message || 'Failed to publish task', 'error');
   } finally {
-    document.getElementById('publishTaskBtn').disabled = false;
+    btn.disabled = false;
   }
 });
 
@@ -904,7 +914,6 @@ function renderAdTasks() {
   }
   list.innerHTML = state.adTasks.map(task => {
     const pct = Math.min(100, Math.round((task.completed_count / task.completion_target) * 100));
-    const statusClass = `status-${task.status}`;
     return `
       <div class="ad-task-item">
         <div class="ad-task-name">${escapeHtml(task.task_name)}</div>
@@ -912,8 +921,8 @@ function renderAdTasks() {
           <div class="ad-task-progress-fill" style="width:${pct}%"></div>
         </div>
         <div class="ad-task-meta">
-          <span>${task.completed_count} / ${task.completion_target} completions</span>
-          <span class="ad-task-status ${statusClass}">${task.status}</span>
+          <span>${task.completed_count} / ${task.completion_target}</span>
+          <span class="ad-task-status status-${task.status}">${task.status}</span>
         </div>
       </div>`;
   }).join('');
@@ -921,31 +930,35 @@ function renderAdTasks() {
 
 // ── INIT ─────────────────────────────────────────────────────────
 async function init() {
-  tg?.ready();
-  tg?.expand();
+  if (tg) {
+    tg.ready();
+    tg.expand();
+  }
 
   applyI18n();
   drawWheel(0);
   setupDailyTasks();
   updateCostPreview();
-
-  // Build streak dots (placeholder)
   renderStreakDots();
 
-  // Load user data
   try {
     const tgUser = getTgUser();
-    const res = await apiPost('/user', {
-      telegram_id: tgUser.id,
-      first_name: tgUser.first_name,
-      last_name: tgUser.last_name,
-      username: tgUser.username,
-    });
+    const startParam = getStartParam();
+    const body = {
+      first_name: tgUser.first_name || '',
+      last_name: tgUser.last_name || '',
+      username: tgUser.username || '',
+    };
+    // Pass referral ID if present in start param
+    if (startParam && /^\d+$/.test(startParam)) {
+      body.referred_by = startParam;
+    }
+
+    const res = await apiPost('/user', body);
     state.user = res.user;
     updateBalanceDisplay();
     renderStreakDots();
 
-    // Mark daily tasks if claimed today
     if (res.user.daily_checkin_claimed) markDailyTask('checkin');
     if (res.user.daily_updates_claimed) {
       markDailyTask('updates');
@@ -953,12 +966,13 @@ async function init() {
     }
     if (res.user.daily_share_claimed) markDailyTask('share');
     if (res.user.streak_claimed_today) {
-      document.getElementById('claimStreakBtn').disabled = true;
-      document.getElementById('claimStreakBtn').textContent = '✓ Claimed';
+      const btn = document.getElementById('claimStreakBtn');
+      btn.disabled = true;
+      btn.textContent = '✓ Claimed';
     }
   } catch (e) {
-    // Use default state for dev
-    state.user = { id: 0, coins: 0, spins: 0, streak_count: 0 };
+    // Use safe default for dev/offline
+    state.user = { id: 0, coins: 0, spins: 3, streak_count: 0 };
     updateBalanceDisplay();
     console.warn('User load failed:', e.message);
   }
@@ -966,8 +980,11 @@ async function init() {
 
 // ── UTILS ────────────────────────────────────────────────────────
 function escapeHtml(str) {
-  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
-// Start app
 init();
