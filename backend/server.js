@@ -1,764 +1,872 @@
-/* ═══════════════════════════════════════
-   TREWARDS — SERVER.JS
-   Production Backend API
-═══════════════════════════════════════ */
-
-'use strict';
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const { Pool } = require('pg');
-const axios = require('axios');
 const TelegramBot = require('node-telegram-bot-api');
+const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+app.use(cors());
+app.use(express.json());
 
-// ── DATABASE ──────────────────────────────────────────────────────
+// ─── Database ────────────────────────────────────────────────────────────────
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false }
 });
 
-// ── BOT ───────────────────────────────────────────────────────────
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  webHook: process.env.NODE_ENV === 'production',
-});
+// ─── Telegram Bot ─────────────────────────────────────────────────────────────
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim())).filter(Boolean);
+const CHANNEL_USERNAME = process.env.CHANNEL_USERNAME || '@trewards_tonfirst';
 
-if (process.env.NODE_ENV === 'production') {
-  bot.setWebHook(`${process.env.WEBHOOK_URL}/bot${process.env.BOT_TOKEN}`);
-}
-
-// ── MIDDLEWARE ────────────────────────────────────────────────────
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-}));
-app.use(express.json({ limit: '10kb' }));
-app.use(express.static('frontend'));
-
-// Rate limiting
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests' },
-});
-app.use('/api/', apiLimiter);
-
-// Webhook path must NOT be rate limited
-app.use('/payment-webhook', express.raw({ type: 'application/json' }));
-
-// ── TELEGRAM INIT DATA VALIDATION ────────────────────────────────
-function validateTgInitData(initData) {
-  if (!initData || process.env.NODE_ENV !== 'production') return true;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function validateTelegramInitData(initData) {
   try {
     const params = new URLSearchParams(initData);
     const hash = params.get('hash');
     params.delete('hash');
-    const dataCheckString = [...params.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n');
-    const secretKey = crypto.createHmac('sha256', 'WebAppData')
-      .update(process.env.BOT_TOKEN)
-      .digest();
-    const expectedHash = crypto.createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex');
-    return expectedHash === hash;
-  } catch {
-    return false;
-  }
+    const entries = [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join('\n');
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(process.env.BOT_TOKEN).digest();
+    const expectedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    return hash === expectedHash;
+  } catch { return false; }
 }
 
-// Auth middleware
 function authMiddleware(req, res, next) {
-  const { telegram_id, init_data } = req.body || req.query;
-  if (!telegram_id) return res.status(401).json({ error: 'Unauthorized' });
-  if (process.env.NODE_ENV === 'production' && !validateTgInitData(init_data)) {
-    return res.status(401).json({ error: 'Invalid init data' });
+  const initData = req.headers['x-telegram-init-data'];
+  if (!initData) return res.status(401).json({ error: 'Missing auth' });
+  if (process.env.NODE_ENV !== 'development' && !validateTelegramInitData(initData)) {
+    return res.status(401).json({ error: 'Invalid auth' });
   }
-  req.telegram_id = parseInt(telegram_id);
+  const params = new URLSearchParams(initData);
+  const user = JSON.parse(params.get('user') || '{}');
+  req.userId = user.id;
+  req.user = user;
   next();
 }
 
-// ── DB HELPERS ────────────────────────────────────────────────────
-const db = {
-  async getUser(telegram_id) {
-    const { rows } = await pool.query('SELECT * FROM users WHERE telegram_id = $1', [telegram_id]);
-    return rows[0] || null;
-  },
+async function getUser(telegramId) {
+  const r = await pool.query('SELECT * FROM users WHERE telegram_id = $1', [telegramId]);
+  return r.rows[0] || null;
+}
 
-  async createUser(data) {
-    const { rows } = await pool.query(`
-      INSERT INTO users (telegram_id, first_name, last_name, username, referrer_id)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (telegram_id) DO UPDATE
-        SET first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, username = EXCLUDED.username
-      RETURNING *
-    `, [data.telegram_id, data.first_name, data.last_name, data.username, data.referrer_id || null]);
-    return rows[0];
-  },
-
-  async updateCoins(telegram_id, delta, type, description) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const { rows } = await client.query(
-        'UPDATE users SET coins = coins + $1 WHERE telegram_id = $2 RETURNING coins',
-        [delta, telegram_id]
-      );
-      await client.query(
-        'INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-        [telegram_id, type, description, delta]
-      );
-      await client.query('COMMIT');
-      return rows[0]?.coins;
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
-  },
-
-  async updateSpins(telegram_id, delta) {
-    await pool.query('UPDATE users SET spins = GREATEST(0, spins + $1) WHERE telegram_id = $2', [delta, telegram_id]);
-  },
-};
-
-// ── ROUTES ────────────────────────────────────────────────────────
-
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
-
-// ── USER ─────────────────────────────────────────────────────────
-app.post('/api/user', authMiddleware, async (req, res) => {
-  const { telegram_id, first_name, last_name, username } = req.body;
+async function addCoins(telegramId, amount, type, description) {
+  await pool.query('BEGIN');
   try {
-    let user = await db.getUser(telegram_id);
+    await pool.query('UPDATE users SET coins = coins + $1 WHERE telegram_id = $2', [amount, telegramId]);
+    await pool.query(
+      'INSERT INTO transactions (telegram_id, type, amount, description) VALUES ($1,$2,$3,$4)',
+      [telegramId, type, amount, description]
+    );
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    throw e;
+  }
+}
+
+// ─── INIT DB ──────────────────────────────────────────────────────────────────
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT UNIQUE NOT NULL,
+      username TEXT,
+      first_name TEXT,
+      coins BIGINT DEFAULT 0,
+      spins INT DEFAULT 0,
+      streak INT DEFAULT 0,
+      last_streak_claim DATE,
+      last_checkin DATE,
+      referrer_id BIGINT,
+      ton_balance NUMERIC(18,9) DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS transactions (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      type TEXT NOT NULL,
+      amount BIGINT NOT NULL,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id SERIAL PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      reward_coins BIGINT DEFAULT 0,
+      reward_ton NUMERIC(18,9) DEFAULT 0,
+      max_uses INT NOT NULL,
+      uses INT DEFAULT 0,
+      created_by BIGINT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS promo_uses (
+      id SERIAL PRIMARY KEY,
+      code_id INT NOT NULL,
+      telegram_id BIGINT NOT NULL,
+      claimed_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(code_id, telegram_id)
+    );
+    CREATE TABLE IF NOT EXISTS tasks (
+      id SERIAL PRIMARY KEY,
+      advertiser_id BIGINT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('visit','channel','group','game')),
+      url TEXT NOT NULL,
+      reward INT NOT NULL,
+      completion_limit INT NOT NULL,
+      completions INT DEFAULT 0,
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS task_completions (
+      id SERIAL PRIMARY KEY,
+      task_id INT NOT NULL,
+      telegram_id BIGINT NOT NULL,
+      completed_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(task_id, telegram_id)
+    );
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      coins BIGINT NOT NULL,
+      ton_amount NUMERIC(18,9) NOT NULL,
+      net_amount NUMERIC(18,9) NOT NULL,
+      status TEXT DEFAULT 'pending',
+      wallet_address TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS payments (
+      id SERIAL PRIMARY KEY,
+      invoice_id TEXT UNIQUE NOT NULL,
+      telegram_id BIGINT NOT NULL,
+      amount NUMERIC(18,9) NOT NULL,
+      asset TEXT DEFAULT 'TON',
+      provider TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS ad_balances (
+      telegram_id BIGINT PRIMARY KEY,
+      ton_balance NUMERIC(18,9) DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS spin_results (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      reward INT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS daily_tasks (
+      id SERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      task_key TEXT NOT NULL,
+      claimed_date DATE NOT NULL,
+      UNIQUE(telegram_id, task_key, claimed_date)
+    );
+  `);
+  console.log('✅ DB initialized');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOT HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════════
+bot.onText(/\/start(.*)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const param = (match[1] || '').trim();
+  const referrerId = param && param !== '' ? parseInt(param) : null;
+
+  let user = await getUser(userId);
+  if (!user) {
+    const ref = (referrerId && referrerId !== userId) ? referrerId : null;
+    await pool.query(
+      'INSERT INTO users (telegram_id, username, first_name, spins, referrer_id) VALUES ($1,$2,$3,3,$4) ON CONFLICT DO NOTHING',
+      [userId, msg.from.username || '', msg.from.first_name || '', ref]
+    );
+    user = await getUser(userId);
+  }
+
+  const webAppUrl = `${process.env.WEBAPP_URL}`;
+  bot.sendMessage(chatId, 
+    `🪙 *Welcome to TRewards!*\n\nEarn TR coins by completing tasks, spinning the wheel, and referring friends!\n\nConvert your coins to TON cryptocurrency! 🚀`, 
+    {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🎮 Open TRewards', web_app: { url: webAppUrl } }]]
+      }
+    }
+  );
+});
+
+// Admin panel
+const adminSessions = {};
+
+bot.onText(/\/amiadminyes/, async (msg) => {
+  const userId = msg.from.id;
+  if (!ADMIN_IDS.includes(userId)) return;
+  showAdminPanel(msg.chat.id, userId);
+});
+
+async function showAdminPanel(chatId, userId, messageId) {
+  const totalUsers = await pool.query('SELECT COUNT(*) FROM users');
+  const pendingWithdrawals = await pool.query("SELECT COUNT(*) FROM withdrawals WHERE status='pending'");
+  
+  const text = `🔐 *Admin Panel*\n\n👥 Total Users: ${totalUsers.rows[0].count}\n⏳ Pending Withdrawals: ${pendingWithdrawals.rows[0].count}`;
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '🎟 Create Promo Code', callback_data: 'admin_create_promo' }],
+      [{ text: '📋 List Promo Codes', callback_data: 'admin_list_promos' }],
+      [{ text: '🗑 Delete Promo Code', callback_data: 'admin_delete_promo' }],
+      [{ text: '📊 Activation History', callback_data: 'admin_activations' }],
+      [{ text: '💳 Payment History', callback_data: 'admin_payments' }],
+      [{ text: '👥 Total Users', callback_data: 'admin_users' }],
+      [{ text: '💸 Pending Withdrawals', callback_data: 'admin_withdrawals' }],
+    ]
+  };
+  
+  if (messageId) {
+    bot.editMessageText(text, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', reply_markup: keyboard });
+  } else {
+    bot.sendMessage(chatId, text, { parse_mode: 'Markdown', reply_markup: keyboard });
+  }
+}
+
+bot.on('callback_query', async (query) => {
+  const userId = query.from.id;
+  const chatId = query.message.chat.id;
+  const msgId = query.message.message_id;
+  const data = query.data;
+
+  if (!ADMIN_IDS.includes(userId)) { bot.answerCallbackQuery(query.id, { text: 'Unauthorized' }); return; }
+  bot.answerCallbackQuery(query.id);
+
+  if (data === 'admin_create_promo') {
+    adminSessions[userId] = { step: 'promo_name' };
+    bot.sendMessage(chatId, '📝 Enter promo code name:');
+  } else if (data === 'admin_list_promos') {
+    const promos = await pool.query('SELECT * FROM promo_codes ORDER BY created_at DESC LIMIT 20');
+    const text = promos.rows.length === 0 ? 'No promo codes.' :
+      promos.rows.map(p => `*${p.code}*\n💰 ${p.reward_coins > 0 ? p.reward_coins + ' TR' : ''} ${p.reward_ton > 0 ? p.reward_ton + ' TON' : ''} | Uses: ${p.uses}/${p.max_uses}`).join('\n\n');
+    bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  } else if (data === 'admin_delete_promo') {
+    adminSessions[userId] = { step: 'delete_promo' };
+    bot.sendMessage(chatId, '🗑 Enter promo code to delete:');
+  } else if (data === 'admin_activations') {
+    const acts = await pool.query('SELECT pu.*, pc.code FROM promo_uses pu JOIN promo_codes pc ON pu.code_id=pc.id ORDER BY pu.claimed_at DESC LIMIT 20');
+    const text = acts.rows.length === 0 ? 'No activations.' :
+      acts.rows.map(a => `Code: *${a.code}* | User: ${a.telegram_id} | ${new Date(a.claimed_at).toLocaleDateString()}`).join('\n');
+    bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  } else if (data === 'admin_payments') {
+    const pays = await pool.query('SELECT * FROM payments ORDER BY created_at DESC LIMIT 20');
+    const text = pays.rows.length === 0 ? 'No payments.' :
+      pays.rows.map(p => `${p.provider} | ${p.amount} TON | User: ${p.telegram_id} | *${p.status}*`).join('\n');
+    bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  } else if (data === 'admin_users') {
+    const users = await pool.query('SELECT COUNT(*) as total, COUNT(referrer_id) as referred FROM users');
+    bot.sendMessage(chatId, `👥 Total: ${users.rows[0].total}\n🔗 Referred: ${users.rows[0].referred}`);
+  } else if (data === 'admin_withdrawals') {
+    const w = await pool.query("SELECT * FROM withdrawals WHERE status='pending' ORDER BY created_at DESC LIMIT 10");
+    const text = w.rows.length === 0 ? 'No pending withdrawals.' :
+      w.rows.map(x => `ID: ${x.id} | User: ${x.telegram_id} | ${x.net_amount} TON`).join('\n');
+    bot.sendMessage(chatId, text);
+  } else if (data === 'admin_back') {
+    showAdminPanel(chatId, userId, msgId);
+  }
+});
+
+// Multi-step promo creation via bot messages
+bot.on('message', async (msg) => {
+  const userId = msg.from.id;
+  const chatId = msg.chat.id;
+  if (!ADMIN_IDS.includes(userId)) return;
+  const session = adminSessions[userId];
+  if (!session) return;
+  const text = msg.text;
+
+  if (session.step === 'promo_name') {
+    session.code = text.toUpperCase().trim();
+    session.step = 'promo_type';
+    adminSessions[userId] = session;
+    bot.sendMessage(chatId, '💰 Reward type?\n1 - TR Coins\n2 - TON');
+  } else if (session.step === 'promo_type') {
+    session.rewardType = text.trim() === '2' ? 'ton' : 'coins';
+    session.step = 'promo_amount';
+    bot.sendMessage(chatId, `Enter reward amount (${session.rewardType === 'ton' ? 'TON' : 'TR Coins'}):`);
+  } else if (session.step === 'promo_amount') {
+    const amount = parseFloat(text.trim());
+    if (isNaN(amount) || amount <= 0) { bot.sendMessage(chatId, '❌ Invalid amount'); return; }
+    session.amount = amount;
+    session.step = 'promo_maxuses';
+    bot.sendMessage(chatId, '🔢 Max uses:');
+  } else if (session.step === 'promo_maxuses') {
+    const maxUses = parseInt(text.trim());
+    if (isNaN(maxUses) || maxUses <= 0) { bot.sendMessage(chatId, '❌ Invalid number'); return; }
+    const rewardCoins = session.rewardType === 'coins' ? Math.floor(session.amount) : 0;
+    const rewardTon = session.rewardType === 'ton' ? session.amount : 0;
+    await pool.query(
+      'INSERT INTO promo_codes (code, reward_coins, reward_ton, max_uses, created_by) VALUES ($1,$2,$3,$4,$5)',
+      [session.code, rewardCoins, rewardTon, maxUses, userId]
+    );
+    delete adminSessions[userId];
+    bot.sendMessage(chatId, `✅ Promo *${session.code}* created!\n💰 ${rewardCoins > 0 ? rewardCoins + ' TR Coins' : rewardTon + ' TON'} | Max uses: ${maxUses}`, { parse_mode: 'Markdown' });
+  } else if (session.step === 'delete_promo') {
+    const code = text.toUpperCase().trim();
+    const r = await pool.query('DELETE FROM promo_codes WHERE code=$1 RETURNING *', [code]);
+    delete adminSessions[userId];
+    if (r.rowCount > 0) bot.sendMessage(chatId, `✅ Deleted promo: *${code}*`, { parse_mode: 'Markdown' });
+    else bot.sendMessage(chatId, `❌ Promo not found: ${code}`);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// API ROUTES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Get User ─────────────────────────────────────────────────────────────────
+app.get('/user', authMiddleware, async (req, res) => {
+  try {
+    let user = await getUser(req.userId);
     if (!user) {
-      user = await db.createUser({ telegram_id, first_name, last_name, username });
+      await pool.query(
+        'INSERT INTO users (telegram_id, username, first_name, spins) VALUES ($1,$2,$3,3) ON CONFLICT DO NOTHING',
+        [req.userId, req.user.username || '', req.user.first_name || '']
+      );
+      user = await getUser(req.userId);
     }
+    res.json(user);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-    // Check daily reset
-    const now = new Date();
-    const lastReset = user.last_daily_reset ? new Date(user.last_daily_reset) : null;
-    const sameDay = lastReset &&
-      lastReset.getFullYear() === now.getFullYear() &&
-      lastReset.getMonth() === now.getMonth() &&
-      lastReset.getDate() === now.getDate();
+// ─── Daily Streak ─────────────────────────────────────────────────────────────
+app.post('/claim-streak', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUser(req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const today = new Date().toISOString().split('T')[0];
+    if (user.last_streak_claim === today) return res.status(400).json({ error: 'Already claimed today' });
 
-    if (!sameDay) {
-      await pool.query(`
-        UPDATE users SET
-          daily_checkin_claimed = false,
-          daily_updates_claimed = false,
-          daily_share_claimed = false,
-          streak_claimed_today = false,
-          last_daily_reset = NOW()
-        WHERE telegram_id = $1
-      `, [telegram_id]);
-      user = await db.getUser(telegram_id);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const newStreak = user.last_streak_claim === yesterday ? Math.min((user.streak || 0) + 1, 7) : 1;
+    const reset = newStreak === 7 ? 0 : newStreak;
+    const finalStreak = newStreak >= 7 ? 0 : newStreak;
+
+    await pool.query(
+      'UPDATE users SET coins=coins+10, spins=spins+1, streak=$1, last_streak_claim=$2 WHERE telegram_id=$3',
+      [finalStreak, today, req.userId]
+    );
+    await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'streak', 10, `Day ${newStreak} streak bonus`]);
+    
+    res.json({ success: true, streak: newStreak, coins: 10, spins: 1 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Spin Wheel ───────────────────────────────────────────────────────────────
+const SPIN_REWARDS = [10, 50, 80, 100, 300, 500];
+const SPIN_WEIGHTS = [40, 25, 15, 10, 7, 3]; // % chance
+
+app.post('/spin', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUser(req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if ((user.spins || 0) < 1) return res.status(400).json({ error: 'No spins available' });
+
+    // Weighted random
+    const total = SPIN_WEIGHTS.reduce((a, b) => a + b, 0);
+    let rand = Math.random() * total;
+    let segmentIndex = 0;
+    for (let i = 0; i < SPIN_WEIGHTS.length; i++) {
+      rand -= SPIN_WEIGHTS[i];
+      if (rand <= 0) { segmentIndex = i; break; }
     }
+    const reward = SPIN_REWARDS[segmentIndex];
 
-    res.json({ user });
-  } catch (e) {
-    console.error('User error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
+    await pool.query('UPDATE users SET coins=coins+$1, spins=spins-1 WHERE telegram_id=$2', [reward, req.userId]);
+    await pool.query('INSERT INTO spin_results (telegram_id,reward) VALUES ($1,$2)', [req.userId, reward]);
+    await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'spin', reward, 'Spin wheel reward']);
+
+    res.json({ success: true, reward, segmentIndex });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── STREAK ───────────────────────────────────────────────────────
-app.post('/api/claim-streak', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
+// ─── Daily Tasks ──────────────────────────────────────────────────────────────
+app.post('/claim-daily-task', authMiddleware, async (req, res) => {
   try {
-    const user = await db.getUser(telegram_id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.streak_claimed_today) return res.status(400).json({ error: 'Already claimed today' });
+    const { task_key } = req.body; // 'checkin', 'updates', 'share'
+    const today = new Date().toISOString().split('T')[0];
+    
+    const existing = await pool.query(
+      'SELECT * FROM daily_tasks WHERE telegram_id=$1 AND task_key=$2 AND claimed_date=$3',
+      [req.userId, task_key, today]
+    );
+    if (existing.rows.length > 0) return res.status(400).json({ error: 'Already claimed today' });
 
-    const reward = 10;
-    await pool.query(`
-      UPDATE users SET
-        streak_claimed_today = true,
-        streak_count = streak_count + 1,
-        coins = coins + $1,
-        spins = spins + 1
-      WHERE telegram_id = $2
-    `, [reward, telegram_id]);
-
-    await pool.query('INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-      [telegram_id, 'streak', 'Daily streak reward', reward]);
-
-    res.json({ success: true, reward });
-  } catch (e) {
-    console.error('Streak error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// ── SPIN ─────────────────────────────────────────────────────────
-const SPIN_VALUES = [10, 50, 80, 100, 300, 500];
-const SPIN_WEIGHTS = [40, 25, 15, 12, 6, 2]; // percentages
-
-function weightedRandom() {
-  const total = SPIN_WEIGHTS.reduce((a, b) => a + b, 0);
-  let rand = Math.random() * total;
-  for (let i = 0; i < SPIN_WEIGHTS.length; i++) {
-    rand -= SPIN_WEIGHTS[i];
-    if (rand <= 0) return SPIN_VALUES[i];
-  }
-  return SPIN_VALUES[0];
-}
-
-app.post('/api/spin', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  try {
-    const user = await db.getUser(telegram_id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.spins <= 0) return res.status(400).json({ error: 'No spins left' });
-
-    const result = weightedRandom();
-
-    await pool.query('UPDATE users SET spins = spins - 1, coins = coins + $1 WHERE telegram_id = $2', [result, telegram_id]);
-    await pool.query('INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-      [telegram_id, 'spin', `Spin reward`, result]);
-
-    res.json({ success: true, result });
-  } catch (e) {
-    console.error('Spin error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// ── PROMO CODE ───────────────────────────────────────────────────
-app.post('/api/redeem-promo', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const { code } = req.body;
-  if (!code) return res.status(400).json({ error: 'Code required' });
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const { rows: [promo] } = await client.query(
-      'SELECT * FROM promo_codes WHERE code = $1 AND is_active = true FOR UPDATE',
-      [code.toUpperCase()]
+    await pool.query(
+      'INSERT INTO daily_tasks (telegram_id, task_key, claimed_date) VALUES ($1,$2,$3)',
+      [req.userId, task_key, today]
     );
 
-    if (!promo) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Invalid or expired promo code' });
+    const rewards = { checkin: { coins: 10, spins: 1 }, updates: { coins: 10, spins: 1 }, share: { coins: 10, spins: 0 } };
+    const r = rewards[task_key] || { coins: 10, spins: 0 };
+
+    await pool.query('UPDATE users SET coins=coins+$1, spins=spins+$2 WHERE telegram_id=$3',
+      [r.coins, r.spins, req.userId]);
+    await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'daily_task', r.coins, `Daily task: ${task_key}`]);
+
+    // Handle last_checkin for daily check-in task
+    if (task_key === 'checkin') {
+      await pool.query('UPDATE users SET last_checkin=$1 WHERE telegram_id=$2', [today, req.userId]);
     }
 
-    if (promo.max_activations !== null && promo.activation_count >= promo.max_activations) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Promo code fully used' });
-    }
+    res.json({ success: true, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-    // Check if already used
-    const { rows: [used] } = await client.query(
-      'SELECT id FROM promo_activations WHERE promo_code_id = $1 AND telegram_id = $2',
-      [promo.id, telegram_id]
+app.get('/daily-task-status', authMiddleware, async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const r = await pool.query(
+      'SELECT task_key FROM daily_tasks WHERE telegram_id=$1 AND claimed_date=$2',
+      [req.userId, today]
     );
-    if (used) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Already used this code' });
-    }
-
-    // Apply reward
-    if (promo.reward_type === 'ton') {
-      await client.query('UPDATE users SET ton_balance = ton_balance + $1 WHERE telegram_id = $2', [promo.reward_amount, telegram_id]);
-      await client.query('INSERT INTO transactions (telegram_id, type, description, amount, is_ton) VALUES ($1, $2, $3, $4, true)',
-        [telegram_id, 'promo', `Promo: ${code}`, promo.reward_amount]);
-    } else {
-      await client.query('UPDATE users SET coins = coins + $1 WHERE telegram_id = $2', [promo.reward_amount, telegram_id]);
-      await client.query('INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-        [telegram_id, 'promo', `Promo: ${code}`, promo.reward_amount]);
-    }
-
-    await client.query('UPDATE promo_codes SET activation_count = activation_count + 1 WHERE id = $1', [promo.id]);
-    await client.query('INSERT INTO promo_activations (promo_code_id, telegram_id) VALUES ($1, $2)', [promo.id, telegram_id]);
-
-    if (promo.max_activations !== null && promo.activation_count + 1 >= promo.max_activations) {
-      await client.query('UPDATE promo_codes SET is_active = false WHERE id = $1', [promo.id]);
-    }
-
-    await client.query('COMMIT');
-    res.json({ success: true, reward: promo.reward_amount, reward_type: promo.reward_type });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('Promo error:', e);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    client.release();
-  }
+    const claimed = r.rows.map(x => x.task_key);
+    res.json({ claimed });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── DAILY TASKS ──────────────────────────────────────────────────
-const DAILY_TASK_REWARDS = { checkin: 10, updates: 50, share: 100 };
-
-app.post('/api/claim-daily-task', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const { task } = req.body;
-
-  if (!DAILY_TASK_REWARDS[task]) return res.status(400).json({ error: 'Invalid task' });
-
+// ─── Promo Codes ──────────────────────────────────────────────────────────────
+app.post('/redeem-promo', authMiddleware, async (req, res) => {
   try {
-    const user = await db.getUser(telegram_id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    const { code } = req.body;
+    const promo = await pool.query('SELECT * FROM promo_codes WHERE code=$1', [code.toUpperCase().trim()]);
+    if (promo.rows.length === 0) return res.status(404).json({ error: 'Invalid promo code' });
+    const p = promo.rows[0];
+    if (p.uses >= p.max_uses) return res.status(400).json({ error: 'Promo code expired' });
 
-    const field = `daily_${task}_claimed`;
-    if (user[field]) return res.status(400).json({ error: 'Already claimed today' });
+    const used = await pool.query('SELECT * FROM promo_uses WHERE code_id=$1 AND telegram_id=$2', [p.id, req.userId]);
+    if (used.rows.length > 0) return res.status(400).json({ error: 'Already used this promo' });
 
-    const reward = DAILY_TASK_REWARDS[task];
-    await pool.query(`UPDATE users SET ${field} = true, coins = coins + $1 WHERE telegram_id = $2`, [reward, telegram_id]);
-    await pool.query('INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-      [telegram_id, 'daily_task', `Daily task: ${task}`, reward]);
+    await pool.query('BEGIN');
+    await pool.query('INSERT INTO promo_uses (code_id, telegram_id) VALUES ($1,$2)', [p.id, req.userId]);
+    await pool.query('UPDATE promo_codes SET uses=uses+1 WHERE id=$1', [p.id]);
+    if (p.reward_coins > 0) {
+      await pool.query('UPDATE users SET coins=coins+$1 WHERE telegram_id=$2', [p.reward_coins, req.userId]);
+      await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+        [req.userId, 'promo', p.reward_coins, `Promo code: ${p.code}`]);
+    }
+    if (p.reward_ton > 0) {
+      await pool.query('UPDATE users SET ton_balance=ton_balance+$1 WHERE telegram_id=$2', [p.reward_ton, req.userId]);
+      await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+        [req.userId, 'promo_ton', Math.floor(p.reward_ton * 1000000), `Promo TON reward: ${p.code}`]);
+    }
+    await pool.query('COMMIT');
 
-    res.json({ success: true, reward });
-  } catch (e) {
-    console.error('Daily task error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
+    res.json({ success: true, reward_coins: p.reward_coins, reward_ton: p.reward_ton });
+  } catch (e) { await pool.query('ROLLBACK'); res.status(500).json({ error: e.message }); }
 });
 
-// ── ADVERTISER TASKS ─────────────────────────────────────────────
-app.get('/api/tasks', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+app.get('/tasks', authMiddleware, async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      SELECT t.*,
-        EXISTS(
-          SELECT 1 FROM task_completions tc
-          WHERE tc.task_id = t.id AND tc.telegram_id = $1
-        ) as user_completed
+    const tasks = await pool.query(`
+      SELECT t.*, 
+        CASE WHEN tc.telegram_id IS NOT NULL THEN true ELSE false END as completed
       FROM tasks t
-      WHERE t.status = 'active' AND t.completed_count < t.completion_target
+      LEFT JOIN task_completions tc ON t.id=tc.task_id AND tc.telegram_id=$1
+      WHERE t.status='active' AND t.completions < t.completion_limit
       ORDER BY t.created_at DESC
-      LIMIT 50
-    `, [telegram_id]);
-    res.json({ tasks: rows });
-  } catch (e) {
-    console.error('Tasks error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
+    `, [req.userId]);
+    res.json(tasks.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/claim-task', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const { task_id } = req.body;
-
-  const client = await pool.connect();
+app.post('/claim-task', authMiddleware, async (req, res) => {
   try {
-    await client.query('BEGIN');
+    const { task_id } = req.body;
+    const task = await pool.query('SELECT * FROM tasks WHERE id=$1', [task_id]);
+    if (task.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
+    const t = task.rows[0];
+    if (t.status !== 'active') return res.status(400).json({ error: 'Task not active' });
+    if (t.completions >= t.completion_limit) return res.status(400).json({ error: 'Task limit reached' });
 
-    const { rows: [task] } = await client.query('SELECT * FROM tasks WHERE id = $1 FOR UPDATE', [task_id]);
-    if (!task || task.status !== 'active') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Task not available' });
+    const done = await pool.query('SELECT * FROM task_completions WHERE task_id=$1 AND telegram_id=$2', [task_id, req.userId]);
+    if (done.rows.length > 0) return res.status(400).json({ error: 'Already completed' });
+
+    if (t.type === 'visit' || t.type === 'game') {
+      // Timer-based: trust client (timer shown on frontend)
+    } else if (t.type === 'channel' || t.type === 'group') {
+      return res.status(400).json({ error: 'Use /verify-join for channel/group tasks' });
     }
 
-    const { rows: [existing] } = await client.query(
-      'SELECT id FROM task_completions WHERE task_id = $1 AND telegram_id = $2',
-      [task_id, telegram_id]
+    await pool.query('BEGIN');
+    await pool.query('INSERT INTO task_completions (task_id, telegram_id) VALUES ($1,$2)', [task_id, req.userId]);
+    await pool.query('UPDATE tasks SET completions=completions+1 WHERE id=$1', [task_id]);
+    if (t.completions + 1 >= t.completion_limit) {
+      await pool.query("UPDATE tasks SET status='completed' WHERE id=$1", [task_id]);
+    }
+    await pool.query('UPDATE users SET coins=coins+$1, spins=spins+1 WHERE telegram_id=$2', [t.reward, req.userId]);
+    await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'task', t.reward, `Task: ${t.name}`]);
+    
+    // Referral commission
+    const user = await pool.query('SELECT referrer_id FROM users WHERE telegram_id=$1', [req.userId]);
+    if (user.rows[0]?.referrer_id) {
+      const commission = Math.floor(t.reward * 0.30);
+      await pool.query('UPDATE users SET coins=coins+$1 WHERE telegram_id=$2', [commission, user.rows[0].referrer_id]);
+      await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+        [user.rows[0].referrer_id, 'referral_commission', commission, `Commission from ${req.userId}`]);
+    }
+    
+    await pool.query('COMMIT');
+    res.json({ success: true, reward: t.reward, spins: 1 });
+  } catch (e) { await pool.query('ROLLBACK'); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/verify-join', authMiddleware, async (req, res) => {
+  try {
+    const { task_id } = req.body;
+    const task = await pool.query('SELECT * FROM tasks WHERE id=$1', [task_id]);
+    if (task.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
+    const t = task.rows[0];
+
+    const done = await pool.query('SELECT * FROM task_completions WHERE task_id=$1 AND telegram_id=$2', [task_id, req.userId]);
+    if (done.rows.length > 0) return res.status(400).json({ error: 'Already completed' });
+
+    // Extract channel username from URL
+    const urlParts = t.url.split('/');
+    const channelUsername = urlParts[urlParts.length - 1];
+    
+    try {
+      const member = await bot.getChatMember('@' + channelUsername, req.userId);
+      const validStatuses = ['member', 'administrator', 'creator'];
+      if (!validStatuses.includes(member.status)) {
+        return res.status(400).json({ error: 'Not a member yet. Please join first.' });
+      }
+    } catch (botErr) {
+      return res.status(400).json({ error: 'Could not verify membership. Please try again.' });
+    }
+
+    await pool.query('BEGIN');
+    await pool.query('INSERT INTO task_completions (task_id, telegram_id) VALUES ($1,$2)', [task_id, req.userId]);
+    await pool.query('UPDATE tasks SET completions=completions+1 WHERE id=$1', [task_id]);
+    if (t.completions + 1 >= t.completion_limit) {
+      await pool.query("UPDATE tasks SET status='completed' WHERE id=$1", [task_id]);
+    }
+    await pool.query('UPDATE users SET coins=coins+$1, spins=spins+1 WHERE telegram_id=$2', [t.reward, req.userId]);
+    await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'task', t.reward, `Task: ${t.name}`]);
+    
+    const user = await pool.query('SELECT referrer_id FROM users WHERE telegram_id=$1', [req.userId]);
+    if (user.rows[0]?.referrer_id) {
+      const commission = Math.floor(t.reward * 0.30);
+      await pool.query('UPDATE users SET coins=coins+$1 WHERE telegram_id=$2', [commission, user.rows[0].referrer_id]);
+    }
+    
+    await pool.query('COMMIT');
+    res.json({ success: true, reward: t.reward });
+  } catch (e) { await pool.query('ROLLBACK'); res.status(500).json({ error: e.message }); }
+});
+
+// ─── Friends / Referrals ──────────────────────────────────────────────────────
+app.get('/friends', authMiddleware, async (req, res) => {
+  try {
+    const friends = await pool.query(`
+      SELECT u.telegram_id, u.first_name, u.username, u.coins,
+        COALESCE((SELECT SUM(t.amount) FROM transactions t 
+          WHERE t.telegram_id=$1 AND t.description LIKE $2 AND t.type='referral_commission'), 0) as my_share
+      FROM users u WHERE u.referrer_id=$1
+    `, [req.userId, `%${req.userId}%`]);
+
+    const pending = await pool.query(
+      "SELECT COALESCE(SUM(amount),0) as pending FROM transactions WHERE telegram_id=$1 AND type='referral_commission' AND created_at > COALESCE((SELECT MAX(created_at) FROM transactions WHERE telegram_id=$1 AND type='referral_claim'),NOW()-INTERVAL '100 years')",
+      [req.userId]
     );
-    if (existing) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Already completed' });
-    }
 
-    const reward = task.task_type === 'visit' ? 500 : 1000;
-
-    await client.query('INSERT INTO task_completions (task_id, telegram_id) VALUES ($1, $2)', [task_id, telegram_id]);
-    await client.query('UPDATE tasks SET completed_count = completed_count + 1 WHERE id = $1', [task_id]);
-    await client.query('UPDATE users SET coins = coins + $1, spins = spins + 1 WHERE telegram_id = $2', [reward, telegram_id]);
-    await client.query('INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-      [telegram_id, 'task', `Task: ${task.task_name}`, reward]);
-
-    // Check if task should be marked completed
-    if (task.completed_count + 1 >= task.completion_target) {
-      await client.query('UPDATE tasks SET status = $1 WHERE id = $2', ['completed', task_id]);
-    }
-
-    // Referral bonus
-    await processReferralBonus(client, telegram_id, reward);
-
-    await client.query('COMMIT');
-    res.json({ success: true, reward });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('Claim task error:', e);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    client.release();
-  }
+    res.json({ friends: friends.rows, pendingEarnings: pending.rows[0].pending });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/verify-join', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const { task_id } = req.body;
-
+app.post('/claim-referral', authMiddleware, async (req, res) => {
   try {
-    const { rows: [task] } = await pool.query('SELECT * FROM tasks WHERE id = $1', [task_id]);
-    if (!task) return res.status(404).json({ error: 'Task not found' });
-
-    // Extract chat username from URL
-    const urlMatch = task.target_url.match(/t\.me\/([^/?]+)/);
-    if (!urlMatch) return res.status(400).json({ error: 'Invalid channel URL' });
-
-    const chatId = '@' + urlMatch[1];
-
-    // Check membership via Telegram API
-    const isMember = await checkTelegramMembership(telegram_id, chatId);
-    if (!isMember) return res.status(400).json({ error: 'Not a member yet. Please join first.' });
-
-    // Forward to claim endpoint
-    req.body.task_id = task_id;
-    return require('./handlers').claimTask(req, res, pool, processReferralBonus);
-  } catch (e) {
-    console.error('Verify join error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-async function checkTelegramMembership(userId, chatId) {
-  try {
-    const response = await axios.get(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/getChatMember`, {
-      params: { chat_id: chatId, user_id: userId }
-    });
-    const status = response.data?.result?.status;
-    return ['member', 'administrator', 'creator'].includes(status);
-  } catch {
-    return false;
-  }
-}
-
-// ── REFERRAL ─────────────────────────────────────────────────────
-async function processReferralBonus(client, telegram_id, coins_earned) {
-  const { rows: [user] } = await client.query('SELECT referrer_id FROM users WHERE telegram_id = $1', [telegram_id]);
-  if (!user?.referrer_id) return;
-
-  const bonus = Math.floor(coins_earned * 0.3);
-  await client.query('UPDATE users SET pending_referral = pending_referral + $1 WHERE telegram_id = $2', [bonus, user.referrer_id]);
-}
-
-app.get('/api/friends', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  try {
-    const { rows: friends } = await pool.query(`
-      SELECT
-        u.telegram_id,
-        CONCAT(u.first_name, ' ', COALESCE(u.last_name, '')) as name,
-        u.coins,
-        FLOOR(u.coins * 0.3) as your_share
-      FROM users u
-      WHERE u.referrer_id = $1
-      ORDER BY u.coins DESC
-      LIMIT 50
-    `, [telegram_id]);
-
-    const { rows: [stats] } = await pool.query(`
-      SELECT
-        COUNT(*) as total_friends,
-        COALESCE(SUM(total_earned_from_referrals), 0) as total_earned
-      FROM users
-      WHERE referrer_id = $1
-    `, [telegram_id]);
-
-    const { rows: [user] } = await pool.query('SELECT pending_referral FROM users WHERE telegram_id = $1', [telegram_id]);
-
-    res.json({
-      friends,
-      total_friends: parseInt(stats.total_friends),
-      total_earned: parseInt(stats.total_earned),
-      pending_earnings: user?.pending_referral || 0,
-    });
-  } catch (e) {
-    console.error('Friends error:', e);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-app.post('/api/claim-referral', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { rows: [user] } = await client.query('SELECT pending_referral FROM users WHERE telegram_id = $1 FOR UPDATE', [telegram_id]);
-
-    if (!user || user.pending_referral <= 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'No pending earnings' });
-    }
-
-    const reward = user.pending_referral;
-    await client.query(
-      'UPDATE users SET coins = coins + $1, pending_referral = 0, total_earned_from_referrals = total_earned_from_referrals + $1 WHERE telegram_id = $2',
-      [reward, telegram_id]
+    const pending = await pool.query(
+      "SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE telegram_id=$1 AND type='referral_commission' AND created_at > COALESCE((SELECT MAX(created_at) FROM transactions WHERE telegram_id=$1 AND type='referral_claim'),NOW()-INTERVAL '100 years')",
+      [req.userId]
     );
-    await client.query('INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-      [telegram_id, 'referral', 'Referral bonus', reward]);
+    const amount = parseInt(pending.rows[0].total);
+    if (amount <= 0) return res.status(400).json({ error: 'Nothing to claim' });
 
-    await client.query('COMMIT');
-    res.json({ success: true, reward });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('Claim referral error:', e);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    client.release();
-  }
+    await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'referral_claim', amount, 'Referral earnings claimed']);
+    
+    res.json({ success: true, amount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── WITHDRAW ─────────────────────────────────────────────────────
-const VALID_TIERS = [
+// ─── Withdrawals ──────────────────────────────────────────────────────────────
+const WITHDRAWAL_TIERS = [
   { coins: 250000, ton: 0.10, net: 0.05 },
   { coins: 500000, ton: 0.20, net: 0.15 },
   { coins: 750000, ton: 0.30, net: 0.25 },
   { coins: 1000000, ton: 0.40, net: 0.35 },
 ];
 
-app.post('/api/withdraw', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const { coins_amount, ton_amount, net_amount } = req.body;
-
-  // Validate tier
-  const tier = VALID_TIERS.find(t => t.coins === coins_amount && t.ton === ton_amount && t.net === net_amount);
-  if (!tier) return res.status(400).json({ error: 'Invalid withdrawal tier' });
-
-  const client = await pool.connect();
+app.post('/withdraw', authMiddleware, async (req, res) => {
   try {
-    await client.query('BEGIN');
-    const { rows: [user] } = await client.query('SELECT coins FROM users WHERE telegram_id = $1 FOR UPDATE', [telegram_id]);
+    const { tier_index, wallet_address } = req.body;
+    if (!wallet_address) return res.status(400).json({ error: 'Wallet address required' });
+    const tier = WITHDRAWAL_TIERS[tier_index];
+    if (!tier) return res.status(400).json({ error: 'Invalid tier' });
 
-    if (!user || user.coins < coins_amount) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Insufficient coins' });
+    const user = await getUser(req.userId);
+    if (!user || user.coins < tier.coins) return res.status(400).json({ error: 'Insufficient coins' });
+
+    await pool.query('BEGIN');
+    await pool.query('UPDATE users SET coins=coins-$1 WHERE telegram_id=$2', [tier.coins, req.userId]);
+    await pool.query(
+      'INSERT INTO withdrawals (telegram_id, coins, ton_amount, net_amount, wallet_address) VALUES ($1,$2,$3,$4,$5)',
+      [req.userId, tier.coins, tier.ton, tier.net, wallet_address]
+    );
+    await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'withdrawal', -tier.coins, `Withdrawal: ${tier.net} TON`]);
+    await pool.query('COMMIT');
+
+    res.json({ success: true, net_ton: tier.net, status: 'pending' });
+  } catch (e) { await pool.query('ROLLBACK'); res.status(500).json({ error: e.message }); }
+});
+
+app.get('/transactions', authMiddleware, async (req, res) => {
+  try {
+    const txs = await pool.query(
+      'SELECT * FROM transactions WHERE telegram_id=$1 ORDER BY created_at DESC LIMIT 50',
+      [req.userId]
+    );
+    res.json(txs.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Advertiser Dashboard ─────────────────────────────────────────────────────
+app.get('/ad-balance', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT ton_balance FROM ad_balances WHERE telegram_id=$1', [req.userId]);
+    res.json({ balance: r.rows[0]?.ton_balance || 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/create-task', authMiddleware, async (req, res) => {
+  try {
+    const { name, type, url, completion_limit } = req.body;
+    const validLimits = [500, 1000, 2000, 5000, 10000];
+    if (!validLimits.includes(completion_limit)) return res.status(400).json({ error: 'Invalid completion limit' });
+    const cost = completion_limit * 0.001;
+    const reward = type === 'visit' ? 500 : 1000;
+
+    const bal = await pool.query('SELECT ton_balance FROM ad_balances WHERE telegram_id=$1', [req.userId]);
+    const balance = parseFloat(bal.rows[0]?.ton_balance || 0);
+    if (balance < cost) return res.status(400).json({ error: `Insufficient ad balance. Need ${cost} TON` });
+
+    await pool.query('BEGIN');
+    await pool.query('UPDATE ad_balances SET ton_balance=ton_balance-$1 WHERE telegram_id=$2', [cost, req.userId]);
+    await pool.query(
+      'INSERT INTO tasks (advertiser_id, name, type, url, reward, completion_limit) VALUES ($1,$2,$3,$4,$5,$6)',
+      [req.userId, name, type, url, reward, completion_limit]
+    );
+    await pool.query('COMMIT');
+    res.json({ success: true, cost });
+  } catch (e) { await pool.query('ROLLBACK'); res.status(500).json({ error: e.message }); }
+});
+
+app.get('/my-tasks', authMiddleware, async (req, res) => {
+  try {
+    const tasks = await pool.query(
+      'SELECT * FROM tasks WHERE advertiser_id=$1 ORDER BY created_at DESC',
+      [req.userId]
+    );
+    res.json(tasks.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TON TOP-UP SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── xRocket Invoice ──────────────────────────────────────────────────────────
+async function createXRocketInvoice(userId, amount) {
+  const res = await axios.post(
+    'https://pay.xrocket.tg/tg-invoices',
+    {
+      currency: 'TON',
+      amount,
+      description: `TRewards top-up for user ${userId}`,
+      payload: JSON.stringify({ userId, provider: 'xrocket' }),
+      callbackUrl: `${process.env.WEBHOOK_URL}/payment-webhook`,
+      expiredIn: 3600,
+    },
+    { headers: { 'Rocket-Pay-Key': process.env.XROCKET_API_KEY, 'Content-Type': 'application/json' } }
+  );
+  return { invoice_id: res.data.data.id, pay_url: res.data.data.link };
+}
+
+// ─── CryptoPay Invoice ────────────────────────────────────────────────────────
+async function createCryptoPayInvoice(userId, amount) {
+  const res = await axios.post(
+    `${process.env.CRYPTOPAY_API_URL || 'https://pay.crypt.bot'}/api/createInvoice`,
+    {
+      asset: 'TON',
+      amount: amount.toString(),
+      description: `TRewards top-up`,
+      payload: JSON.stringify({ userId, provider: 'cryptopay' }),
+      allow_comments: false,
+      allow_anonymous: false,
+      expires_in: 3600,
+    },
+    { headers: { 'Crypto-Pay-API-Token': process.env.CRYPTOPAY_API_KEY, 'Content-Type': 'application/json' } }
+  );
+  return { invoice_id: res.data.result.invoice_id, pay_url: res.data.result.pay_url };
+}
+
+app.post('/create-topup', authMiddleware, async (req, res) => {
+  try {
+    const { amount, method, for_ads } = req.body; // for_ads=true tops up ad balance
+    if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+    if (!['xrocket', 'cryptopay'].includes(method)) return res.status(400).json({ error: 'Invalid method' });
+
+    let invoice;
+    try {
+      if (method === 'xrocket') {
+        invoice = await createXRocketInvoice(req.userId, amount);
+      } else {
+        invoice = await createCryptoPayInvoice(req.userId, amount);
+      }
+    } catch (apiErr) {
+      console.error('Payment API error:', apiErr.response?.data || apiErr.message);
+      return res.status(502).json({ error: 'Payment provider error. Please try again.' });
     }
 
-    await client.query('UPDATE users SET coins = coins - $1 WHERE telegram_id = $2', [coins_amount, telegram_id]);
-    await client.query(`
-      INSERT INTO withdrawals (telegram_id, coins_amount, ton_amount, net_ton_amount, status)
-      VALUES ($1, $2, $3, $4, 'pending')
-    `, [telegram_id, coins_amount, ton_amount, net_amount]);
-    await client.query('INSERT INTO transactions (telegram_id, type, description, amount) VALUES ($1, $2, $3, $4)',
-      [telegram_id, 'withdrawal', `Withdrawal ${net_amount} TON`, -coins_amount]);
-
-    await client.query('COMMIT');
-    res.json({ success: true, message: 'Withdrawal queued. Processed within 24h.' });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('Withdraw error:', e);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    client.release();
-  }
-});
-
-// ── TRANSACTIONS ─────────────────────────────────────────────────
-app.get('/api/transactions', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  try {
-    const { rows } = await pool.query(
-      'SELECT * FROM transactions WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 50',
-      [telegram_id]
+    await pool.query(
+      'INSERT INTO payments (invoice_id, telegram_id, amount, provider, status) VALUES ($1,$2,$3,$4,$5)',
+      [invoice.invoice_id.toString(), req.userId, amount, method, 'pending']
     );
-    res.json({ transactions: rows });
-  } catch (e) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
 
-// ── ADVERTISER ────────────────────────────────────────────────────
-app.get('/api/advertiser', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  try {
-    const { rows: [user] } = await pool.query('SELECT ad_balance FROM users WHERE telegram_id = $1', [telegram_id]);
-    const { rows: tasks } = await pool.query(
-      'SELECT * FROM tasks WHERE advertiser_id = $1 ORDER BY created_at DESC',
-      [telegram_id]
-    );
-    res.json({ ad_balance: user?.ad_balance || 0, tasks });
-  } catch (e) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-app.post('/api/create-task', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const { task_name, task_type, target_url, completion_target } = req.body;
-
-  if (!task_name || !task_type || !target_url || !completion_target) {
-    return res.status(400).json({ error: 'All fields required' });
-  }
-
-  const validTypes = ['channel', 'group', 'game', 'visit'];
-  if (!validTypes.includes(task_type)) return res.status(400).json({ error: 'Invalid task type' });
-
-  const validTargets = [500, 1000, 2000, 5000, 10000];
-  const target = parseInt(completion_target);
-  if (!validTargets.includes(target)) return res.status(400).json({ error: 'Invalid target' });
-
-  const cost = target * 0.001;
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { rows: [user] } = await client.query('SELECT ad_balance FROM users WHERE telegram_id = $1 FOR UPDATE', [telegram_id]);
-
-    if (!user || user.ad_balance < cost) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: `Insufficient ad balance. Need ${cost} TON` });
+    // Store extra meta for webhook to know if it's ad balance
+    if (for_ads) {
+      await pool.query(
+        "UPDATE payments SET asset=$1 WHERE invoice_id=$2",
+        [for_ads ? 'TON_AD' : 'TON', invoice.invoice_id.toString()]
+      );
     }
 
-    await client.query('UPDATE users SET ad_balance = ad_balance - $1 WHERE telegram_id = $2', [cost, telegram_id]);
-    await client.query(`
-      INSERT INTO tasks (advertiser_id, task_name, task_type, target_url, completion_target, status)
-      VALUES ($1, $2, $3, $4, $5, 'active')
-    `, [telegram_id, task_name, task_type, target_url, target]);
-
-    await client.query('COMMIT');
-    res.json({ success: true });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('Create task error:', e);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    client.release();
-  }
+    res.json({ pay_url: invoice.pay_url, invoice_id: invoice.invoice_id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── TOP UP / PAYMENT ─────────────────────────────────────────────
-const { createXRocketInvoice, createCryptoPayInvoice, verifyXRocketWebhook, verifyCryptoPayWebhook } = require('./payments');
+// ─── xRocket Webhook ──────────────────────────────────────────────────────────
+function verifyXRocketSignature(body, signature) {
+  const secret = process.env.XROCKET_WEBHOOK_SECRET;
+  if (!secret) return true; // skip if not configured
+  const hash = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');
+  return hash === signature;
+}
 
-app.post('/api/create-topup', authMiddleware, async (req, res) => {
-  const { telegram_id } = req;
-  const { amount, method } = req.body;
+// ─── CryptoPay Webhook verification ──────────────────────────────────────────
+function verifyCryptoPaySignature(body, signature) {
+  const token = process.env.CRYPTOPAY_API_KEY;
+  const secret = crypto.createHash('sha256').update(token).digest();
+  const hash = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');
+  return hash === signature;
+}
 
-  if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
-  if (!['xrocket', 'cryptopay'].includes(method)) return res.status(400).json({ error: 'Invalid method' });
-
+app.post('/payment-webhook', express.json(), async (req, res) => {
   try {
-    let payment_url, invoice_id;
+    const body = req.body;
+    const signature = req.headers['rocket-pay-signature'] || req.headers['crypto-pay-api-token-signature'];
+    
+    // Determine provider
+    let provider, invoice_id, amount, asset, status, userId;
 
-    if (method === 'xrocket') {
-      const result = await createXRocketInvoice(telegram_id, amount);
-      payment_url = result.payment_url;
-      invoice_id = result.invoice_id;
+    if (req.headers['rocket-pay-signature']) {
+      // xRocket
+      if (!verifyXRocketSignature(body, req.headers['rocket-pay-signature'])) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+      if (body.type !== 'invoice.paid') return res.json({ ok: true });
+      const inv = body.data;
+      provider = 'xrocket';
+      invoice_id = inv.id.toString();
+      amount = parseFloat(inv.amount);
+      asset = inv.currency;
+      status = 'paid';
+      const payload = JSON.parse(inv.payload || '{}');
+      userId = payload.userId;
+    } else if (req.headers['crypto-pay-api-token-signature']) {
+      // CryptoPay
+      if (!verifyCryptoPaySignature(body, req.headers['crypto-pay-api-token-signature'])) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+      if (body.update_type !== 'invoice_paid') return res.json({ ok: true });
+      const inv = body.payload;
+      provider = 'cryptopay';
+      invoice_id = inv.invoice_id.toString();
+      amount = parseFloat(inv.amount);
+      asset = inv.asset;
+      status = 'paid';
+      const payload = JSON.parse(inv.payload || '{}');
+      userId = payload.userId;
     } else {
-      const result = await createCryptoPayInvoice(telegram_id, amount);
-      payment_url = result.payment_url;
-      invoice_id = result.invoice_id;
+      return res.status(400).json({ error: 'Unknown provider' });
     }
 
-    await pool.query(`
-      INSERT INTO payments (invoice_id, telegram_id, amount, asset, provider, status)
-      VALUES ($1, $2, $3, 'TON', $4, 'pending')
-    `, [invoice_id, telegram_id, amount, method]);
+    if (asset !== 'TON') return res.json({ ok: true }); // Only TON
 
-    res.json({ success: true, payment_url, invoice_id });
-  } catch (e) {
-    console.error('Create topup error:', e);
-    res.status(500).json({ error: 'Failed to create invoice: ' + e.message });
-  }
-});
+    // Duplicate check
+    const existing = await pool.query("SELECT * FROM payments WHERE invoice_id=$1 AND status='paid'", [invoice_id]);
+    if (existing.rows.length > 0) return res.json({ ok: true }); // Already processed
 
-// ── WEBHOOKS ─────────────────────────────────────────────────────
-app.post('/payment-webhook/xrocket', express.json(), async (req, res) => {
-  try {
-    const isValid = verifyXRocketWebhook(req.body, req.headers['x-rocket-sign']);
-    if (!isValid) return res.status(400).json({ error: 'Invalid signature' });
+    const payment = await pool.query('SELECT * FROM payments WHERE invoice_id=$1', [invoice_id]);
+    if (payment.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
 
-    const { invoice } = req.body;
-    if (invoice?.status !== 'paid') return res.json({ ok: true });
-    if (invoice?.payload?.asset !== 'TONCOIN' && invoice?.asset !== 'TONCOIN') return res.json({ ok: true });
+    const p = payment.rows[0];
+    const isAd = p.asset === 'TON_AD';
 
-    await processPayment(invoice.id, invoice.amount, 'xrocket');
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('xRocket webhook error:', e);
-    res.status(500).json({ error: 'Webhook error' });
-  }
-});
-
-app.post('/payment-webhook/cryptopay', express.json(), async (req, res) => {
-  try {
-    const isValid = verifyCryptoPayWebhook(req.body, req.headers['crypto-pay-api-signature']);
-    if (!isValid) return res.status(400).json({ error: 'Invalid signature' });
-
-    const { update_type, payload } = req.body;
-    if (update_type !== 'invoice_paid') return res.json({ ok: true });
-    if (payload?.asset !== 'TON') return res.json({ ok: true });
-
-    await processPayment(String(payload.invoice_id), parseFloat(payload.amount), 'cryptopay');
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('CryptoPay webhook error:', e);
-    res.status(500).json({ error: 'Webhook error' });
-  }
-});
-
-async function processPayment(invoice_id, amount, provider) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const { rows: [payment] } = await client.query(
-      'SELECT * FROM payments WHERE invoice_id = $1 AND provider = $2 FOR UPDATE',
-      [invoice_id, provider]
-    );
-
-    if (!payment) throw new Error('Payment not found');
-    if (payment.status === 'paid') {
-      await client.query('ROLLBACK');
-      return; // Prevent double credit
+    await pool.query('BEGIN');
+    await pool.query("UPDATE payments SET status='paid' WHERE invoice_id=$1", [invoice_id]);
+    
+    if (isAd) {
+      await pool.query(
+        'INSERT INTO ad_balances (telegram_id, ton_balance) VALUES ($1,$2) ON CONFLICT (telegram_id) DO UPDATE SET ton_balance=ad_balances.ton_balance+$2',
+        [p.telegram_id, amount]
+      );
+    } else {
+      await pool.query('UPDATE users SET ton_balance=ton_balance+$1 WHERE telegram_id=$2', [amount, p.telegram_id]);
+      await pool.query('INSERT INTO transactions (telegram_id,type,amount,description) VALUES ($1,$2,$3,$4)',
+        [p.telegram_id, 'topup', Math.floor(amount * 1000000), `TON top-up: ${amount} TON`]);
     }
+    await pool.query('COMMIT');
 
-    await client.query('UPDATE payments SET status = $1, paid_at = NOW() WHERE invoice_id = $2', ['paid', invoice_id]);
-    await client.query('UPDATE users SET ton_balance = ton_balance + $1 WHERE telegram_id = $2', [amount, payment.telegram_id]);
-    await client.query('INSERT INTO transactions (telegram_id, type, description, amount, is_ton) VALUES ($1, $2, $3, $4, true)',
-      [payment.telegram_id, 'topup', `Top-up via ${provider}`, amount]);
-
-    await client.query('COMMIT');
-    console.log(`✅ Payment ${invoice_id} processed: +${amount} TON for user ${payment.telegram_id}`);
+    console.log(`✅ Payment credited: ${amount} TON → user ${p.telegram_id} (${isAd ? 'ad balance' : 'user balance'})`);
+    res.json({ ok: true });
   } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('Process payment error:', e);
-    throw e;
-  } finally {
-    client.release();
+    await pool.query('ROLLBACK').catch(() => {});
+    console.error('Webhook error:', e.message);
+    res.status(500).json({ error: e.message });
   }
-}
-
-// ── TELEGRAM BOT ─────────────────────────────────────────────────
-require('./bot')(bot, pool, db);
-
-// ── BOT WEBHOOK ──────────────────────────────────────────────────
-if (process.env.NODE_ENV === 'production') {
-  app.post(`/bot${process.env.BOT_TOKEN}`, (req, res) => {
-    bot.processUpdate(req.body);
-    res.sendStatus(200);
-  });
-}
-
-// ── ERROR HANDLING ────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
 });
 
-// ── START ─────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🚀 TRewards server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-module.exports = app;
+// ═══════════════════════════════════════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════════════════════════════════════
+const PORT = process.env.PORT || 3000;
+
+initDB().then(() => {
+  app.listen(PORT, () => console.log(`🚀 TRewards backend running on port ${PORT}`));
+}).catch(err => {
+  console.error('Failed to init DB:', err);
+  process.exit(1);
+});
