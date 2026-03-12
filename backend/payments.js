@@ -1,137 +1,119 @@
-// payments.js — xRocket & CryptoPay Integration
+/* ═══════════════════════════════════════
+   TREWARDS — PAYMENTS.JS
+   xRocket & Crypto Pay Integration
+═══════════════════════════════════════ */
+
+'use strict';
+
 const axios = require('axios');
 const crypto = require('crypto');
 
-// ─────────────────────────────────────────────
-// xRocket Pay
-// ─────────────────────────────────────────────
-const XROCKET_BASE = 'https://pay.xrocket.tg';
+// ── xRocket Pay ───────────────────────────────────────────────────
+// Docs: https://pay.xrocket.tg/
 
-async function createXRocketInvoice(userId, amount) {
+async function createXRocketInvoice(telegram_id, amount) {
+  const apiToken = process.env.XROCKET_API_TOKEN;
+  if (!apiToken) throw new Error('xRocket API token not configured');
+
   const payload = {
-    currency: 'TON',
-    amount: amount.toString(),
-    description: `TRewards Top-Up for user ${userId}`,
-    payload: JSON.stringify({ user_id: userId, provider: 'xrocket' }),
+    currency: 'TONCOIN',
+    amount: String(amount),
+    description: `TRewards top-up for user ${telegram_id}`,
+    payload: JSON.stringify({ telegram_id, app: 'trewards' }),
+    callbackUrl: `${process.env.WEBHOOK_URL}/payment-webhook/xrocket`,
     expiredIn: 3600, // 1 hour
   };
 
-  const res = await axios.post(`${XROCKET_BASE}/tg-invoices`, payload, {
-    headers: {
-      'Rocket-Pay-Key': process.env.XROCKET_API_KEY,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!res.data?.success) {
-    throw new Error(`xRocket error: ${JSON.stringify(res.data)}`);
-  }
-
-  return {
-    invoice_id: res.data.data.id,
-    payment_url: res.data.data.link,
-    amount,
-    provider: 'xrocket',
-  };
-}
-
-function verifyXRocketWebhook(rawBody, signature) {
-  const secret = process.env.XROCKET_WEBHOOK_SECRET;
-  if (!secret) return true; // Skip if not configured
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(rawBody)
-    .digest('hex');
-  return expected === signature;
-}
-
-function parseXRocketWebhook(body) {
-  // xRocket sends status in body.status
-  const { status, id, amount, currency, payload: pl } = body;
-  let userPayload = {};
-  try { userPayload = JSON.parse(pl || '{}'); } catch {}
-
-  return {
-    invoice_id: String(id),
-    status: status === 'paid' ? 'paid' : status,
-    amount: parseFloat(amount),
-    currency,
-    user_id: userPayload.user_id,
-    provider: 'xrocket',
-  };
-}
-
-// ─────────────────────────────────────────────
-// Crypto Pay (TON-based)
-// ─────────────────────────────────────────────
-const CRYPTOPAY_BASE = 'https://pay.crypt.bot/api'; // mainnet
-// Testnet: https://testnet-pay.crypt.bot/api
-
-async function createCryptoPayInvoice(userId, amount) {
-  const res = await axios.post(
-    `${CRYPTOPAY_BASE}/createInvoice`,
-    {
-      asset: 'TON',
-      amount: amount.toFixed(9),
-      description: `TRewards Top-Up`,
-      payload: JSON.stringify({ user_id: userId, provider: 'cryptopay' }),
-      expires_in: 3600,
-    },
+  const response = await axios.post(
+    'https://pay.xrocket.tg/tg-invoices',
+    payload,
     {
       headers: {
-        'Crypto-Pay-API-Token': process.env.CRYPTOPAY_API_TOKEN,
+        'Rocket-Pay-Key': apiToken,
         'Content-Type': 'application/json',
       },
+      timeout: 10000,
     }
   );
 
-  if (!res.data?.ok) {
-    throw new Error(`CryptoPay error: ${JSON.stringify(res.data)}`);
+  if (!response.data?.success) {
+    throw new Error(response.data?.message || 'xRocket invoice creation failed');
   }
 
-  const inv = res.data.result;
   return {
-    invoice_id: String(inv.invoice_id),
-    payment_url: inv.bot_invoice_url,
-    amount,
-    provider: 'cryptopay',
+    invoice_id: String(response.data.data.id),
+    payment_url: response.data.data.link,
   };
 }
 
-function verifyCryptoPayWebhook(rawBody, signature) {
-  const secret = crypto
-    .createHash('sha256')
-    .update(process.env.CRYPTOPAY_API_TOKEN)
-    .digest('hex');
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(rawBody)
-    .digest('hex');
+function verifyXRocketWebhook(body, signature) {
+  if (!signature) return false;
+  const secret = process.env.XROCKET_API_TOKEN;
+  if (!secret) return false;
+  const data = JSON.stringify(body);
+  const expected = crypto.createHmac('sha256', secret).update(data).digest('hex');
   return expected === signature;
 }
 
-function parseCryptoPayWebhook(body) {
-  const { update_type, payload: inv } = body;
-  if (update_type !== 'invoice_paid') return null;
+// ── Crypto Pay (CryptoBot) ────────────────────────────────────────
+// Docs: https://help.crypt.bot/crypto-pay-api
 
-  let userPayload = {};
-  try { userPayload = JSON.parse(inv.payload || '{}'); } catch {}
+async function createCryptoPayInvoice(telegram_id, amount) {
+  const apiToken = process.env.CRYPTOPAY_API_TOKEN;
+  if (!apiToken) throw new Error('Crypto Pay API token not configured');
+
+  // Use mainnet or testnet
+  const baseUrl = process.env.NODE_ENV === 'production'
+    ? 'https://pay.crypt.bot/api'
+    : 'https://testnet-pay.crypt.bot/api';
+
+  const params = new URLSearchParams({
+    asset: 'TON',
+    amount: String(amount),
+    description: `TRewards top-up for user ${telegram_id}`,
+    payload: JSON.stringify({ telegram_id, app: 'trewards' }),
+    paid_btn_name: 'openBot',
+    paid_btn_url: `https://t.me/${process.env.BOT_USERNAME}`,
+    allow_comments: false,
+    allow_anonymous: false,
+    expires_in: 3600,
+  });
+
+  const response = await axios.get(
+    `${baseUrl}/createInvoice?${params.toString()}`,
+    {
+      headers: {
+        'Crypto-Pay-API-Token': apiToken,
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000,
+    }
+  );
+
+  if (!response.data?.ok) {
+    throw new Error(response.data?.error?.name || 'Crypto Pay invoice creation failed');
+  }
 
   return {
-    invoice_id: String(inv.invoice_id),
-    status: 'paid',
-    amount: parseFloat(inv.amount),
-    currency: inv.asset,
-    user_id: userPayload.user_id,
-    provider: 'cryptopay',
+    invoice_id: String(response.data.result.invoice_id),
+    payment_url: response.data.result.mini_app_invoice_url || response.data.result.bot_invoice_url,
   };
+}
+
+function verifyCryptoPayWebhook(body, signature) {
+  if (!signature) return false;
+  const token = process.env.CRYPTOPAY_API_TOKEN;
+  if (!token) return false;
+
+  const secret = crypto.createHash('sha256').update(token).digest();
+  const data = JSON.stringify(body);
+  const expected = crypto.createHmac('sha256', secret).update(data).digest('hex');
+  return expected === signature;
 }
 
 module.exports = {
   createXRocketInvoice,
-  verifyXRocketWebhook,
-  parseXRocketWebhook,
   createCryptoPayInvoice,
+  verifyXRocketWebhook,
   verifyCryptoPayWebhook,
-  parseCryptoPayWebhook,
 };
