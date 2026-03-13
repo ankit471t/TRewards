@@ -32,7 +32,7 @@ WITHDRAW_TIERS = [
 ]
 
 # ─── APP ───────────────────────────────────────────────────────────────────
-app = FastAPI(title="TRewards API")
+app = FastAPI(title="TRewards API", docs_url="/docs", redoc_url="/redoc")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 db: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
