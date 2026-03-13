@@ -2,7 +2,7 @@
 // TREWARDS - Main Application JS
 // ============================================================
 
-const API = '/api'; // relative path — served from same domain
+const API = 'https://trewards-backend.onrender.com/api'; // relative path — served from same domain
 
 // i18n translations
 const TRANSLATIONS = {

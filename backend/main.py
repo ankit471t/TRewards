@@ -1,12 +1,11 @@
 """
 TRewards Backend — FastAPI + PostgreSQL (Supabase)
 """
-import os, hashlib, hmac, time, json, random, httpx
+import os, hashlib, hmac, json, random, httpx
 from datetime import datetime, date, timedelta
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from supabase import create_client, Client
 
@@ -38,9 +37,9 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 db: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Serve frontend from /frontend directory if present
-if os.path.exists("frontend"):
-    app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
+# Admin routes
+from admin_routes import router as admin_router
+app.include_router(admin_router)
 
 # ─── PYDANTIC MODELS ───────────────────────────────────────────────────────
 class UserIn(BaseModel):
