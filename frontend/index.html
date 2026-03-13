@@ -1,481 +1,283 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>TRewards</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="styles.css" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>TRewards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <div id="app">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="header-left">
-        <div class="logo">
-          <span class="logo-t">T</span><span class="logo-rewards">Rewards</span>
+<div id="app">
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <span class="logo-text">T<span class="gold">R</span>ewards</span>
+    </div>
+    <div class="header-right">
+      <button class="lang-btn" id="langBtn">🇺🇸 EN</button>
+      <button class="icon-btn" id="advertiserBtn" title="Advertiser Panel">📢</button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main id="mainContent">
+    <!-- HOME TAB -->
+    <section id="tabHome" class="tab-section active">
+      <!-- Balance Card -->
+      <div class="balance-card">
+        <div class="balance-badges">
+          <span class="badge streak-badge" id="streakBadge">🔥 0 days</span>
+          <span class="badge spin-badge" id="spinBadge">🎰 0 spins</span>
+        </div>
+        <div class="balance-main">
+          <div class="balance-icon">🪙</div>
+          <div class="balance-amount" id="balanceAmount">0</div>
+          <div class="balance-label" data-i18n="trCoins">TR Coins</div>
+        </div>
+        <div class="balance-ton">
+          <span data-i18n="tonEquiv">≈</span> <span id="tonEquiv">0.00000000</span> TON
         </div>
       </div>
-      <div class="header-right">
-        <button class="lang-toggle" id="langToggle">EN</button>
-        <button class="add-task-btn" id="addTaskBtn">+ <span data-i18n="task">TASK</span></button>
+
+      <!-- Daily Streak -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="dailyStreak">Daily Streak</h3>
+        <div class="streak-dots" id="streakDots"></div>
+        <div class="streak-reward">+10 TR &amp; +1 Spin per day</div>
+        <button class="btn btn-gold" id="claimStreakBtn" data-i18n="claimStreak">Claim Streak</button>
       </div>
-    </header>
 
-    <!-- Pages -->
-    <main class="pages-container">
-      <!-- HOME PAGE -->
-      <div class="page active" id="page-home">
-        <!-- Balance Card -->
-        <div class="balance-card">
-          <div class="balance-glow"></div>
-          <div class="balance-content">
-            <div class="balance-label" data-i18n="totalBalance">Total Balance</div>
-            <div class="balance-amount">
-              <span class="balance-coins" id="balanceCoins">0</span>
-              <span class="balance-unit">TR</span>
-            </div>
-            <div class="balance-ton">≈ <span id="balanceTon">0.000000</span> TON</div>
-            <div class="balance-badges">
-              <div class="badge streak-badge">
-                <span class="badge-icon">🔥</span>
-                <span class="badge-val" id="streakBadge">0</span>
-                <span class="badge-label" data-i18n="streak">Streak</span>
-              </div>
-              <div class="badge spin-badge">
-                <span class="badge-icon">🎰</span>
-                <span class="badge-val" id="spinsBadge">0</span>
-                <span class="badge-label" data-i18n="spins">Spins</span>
-              </div>
-            </div>
-          </div>
+      <!-- Spin Wheel -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="spinWheel">Spin Wheel</h3>
+        <div class="wheel-wrap">
+          <canvas id="wheelCanvas" width="280" height="280"></canvas>
+          <div class="wheel-pointer">▼</div>
         </div>
+        <div class="spin-result" id="spinResult"></div>
+        <button class="btn btn-gold" id="spinBtn">
+          <span data-i18n="spin">Spin</span> <span class="spin-cost">(1 🎰)</span>
+        </button>
+      </div>
 
-        <!-- Daily Streak -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-title" data-i18n="dailyStreak">Daily Streak</span>
-            <span class="section-reward">+10 TR +1 🎰</span>
-          </div>
-          <div class="streak-dots" id="streakDots"></div>
-          <button class="primary-btn" id="claimStreakBtn" data-i18n="claimStreak">Claim Daily Reward</button>
-        </div>
-
-        <!-- Spin Wheel -->
-        <div class="section-card spin-section">
-          <div class="section-header">
-            <span class="section-title" data-i18n="spinWheel">Spin Wheel</span>
-            <span class="section-reward" data-i18n="usesSpin">Uses 1 spin</span>
-          </div>
-          <div class="wheel-container">
-            <div class="wheel-pointer">▼</div>
-            <canvas id="spinCanvas" width="280" height="280"></canvas>
-          </div>
-          <button class="spin-btn" id="spinBtn">
-            <span class="spin-btn-text" data-i18n="spin">SPIN</span>
-            <span class="spin-count">(<span id="spinCount">0</span>)</span>
+      <!-- Quick Actions -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="quickActions">Quick Actions</h3>
+        <div class="actions-grid">
+          <button class="action-btn" onclick="switchTab('tabFriends')">
+            <span class="action-icon">👥</span>
+            <span data-i18n="inviteFriend">Invite Friend</span>
+          </button>
+          <button class="action-btn" onclick="switchTab('tabWallet')">
+            <span class="action-icon">💸</span>
+            <span data-i18n="withdraw">Withdraw</span>
+          </button>
+          <button class="action-btn" onclick="switchTab('tabTasks')">
+            <span class="action-icon">✅</span>
+            <span data-i18n="earnMore">Earn More</span>
+          </button>
+          <button class="action-btn" onclick="switchTab('tabFriends')">
+            <span class="action-icon">🔗</span>
+            <span data-i18n="referral">Referral</span>
           </button>
         </div>
+      </div>
 
-        <!-- Quick Actions -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="quickActions">Quick Actions</div>
-          <div class="actions-grid">
-            <button class="action-btn" data-tab="friends">
-              <span class="action-icon">👥</span>
-              <span data-i18n="inviteFriend">Invite Friend</span>
-            </button>
-            <button class="action-btn" data-tab="wallet">
-              <span class="action-icon">💎</span>
-              <span data-i18n="withdraw">Withdraw</span>
-            </button>
-            <button class="action-btn" data-tab="tasks">
-              <span class="action-icon">⚡</span>
-              <span data-i18n="earnMore">Earn More</span>
-            </button>
-            <button class="action-btn" data-tab="friends">
-              <span class="action-icon">🔗</span>
-              <span data-i18n="referral">Referral</span>
-            </button>
-          </div>
+      <!-- Promo Code -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="promoCode">Promo Code</h3>
+        <div class="promo-row">
+          <input type="text" class="input" id="promoInput" data-i18n-placeholder="enterPromo" placeholder="Enter promo code"/>
+          <button class="btn btn-gold" id="redeemBtn" data-i18n="redeem">Redeem</button>
         </div>
+      </div>
+    </section>
 
-        <!-- Promo Code -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="promoCode">Promo Code</div>
-          <div class="promo-row">
-            <input type="text" class="promo-input" id="promoInput" data-i18n-placeholder="enterPromo" placeholder="Enter promo code" />
-            <button class="promo-btn" id="redeemBtn" data-i18n="redeem">Redeem</button>
-          </div>
+    <!-- TASKS TAB -->
+    <section id="tabTasks" class="tab-section">
+      <!-- Daily Tasks -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="dailyTasks">Daily Tasks</h3>
+        <div id="dailyTasksList"></div>
+      </div>
+      <!-- Advertiser Tasks -->
+      <div class="task-filter">
+        <button class="filter-btn active" data-cat="all" data-i18n="all">All</button>
+        <button class="filter-btn" data-cat="channel" data-i18n="channel">Channel</button>
+        <button class="filter-btn" data-cat="group" data-i18n="group">Group</button>
+        <button class="filter-btn" data-cat="game" data-i18n="game">Game</button>
+        <button class="filter-btn" data-cat="website" data-i18n="website">Website</button>
+      </div>
+      <div id="advertiserTasksList"></div>
+    </section>
+
+    <!-- FRIENDS TAB -->
+    <section id="tabFriends" class="tab-section">
+      <div class="card">
+        <h3 class="card-title" data-i18n="yourReferral">Your Referral Link</h3>
+        <div class="referral-link-box">
+          <span id="referralLink" class="referral-link-text">Loading...</span>
+          <button class="icon-btn" id="copyReferralBtn">📋</button>
         </div>
+        <button class="btn btn-gold btn-full" id="inviteViaBtn" data-i18n="inviteViaTelegram">Invite via Telegram</button>
+      </div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-num" id="totalFriendsCount">0</div>
+          <div class="stat-label" data-i18n="totalFriends">Total Friends</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="totalEarnedReferral">0</div>
+          <div class="stat-label" data-i18n="totalEarned">Total Earned</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="card-title" data-i18n="pendingReferral">Pending Referral Earnings</h3>
+        <div class="pending-earn">
+          <span id="pendingReferralAmt">0</span> TR
+          <button class="btn btn-gold" id="claimReferralBtn" data-i18n="claim">Claim</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="card-title" data-i18n="friendsList">Friends List</h3>
+        <div id="friendsList"></div>
+      </div>
+    </section>
 
-        <!-- Daily Tasks -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="dailyTasks">Daily Tasks</div>
-          <div class="daily-tasks" id="dailyTasks">
-            <div class="daily-task" id="task-checkin">
-              <div class="task-left">
-                <span class="task-icon">✅</span>
-                <div class="task-info">
-                  <div class="task-name" data-i18n="dailyCheckin">Daily Check-In</div>
-                  <div class="task-reward">+10 TR +1 🎰</div>
-                </div>
-              </div>
-              <button class="task-claim-btn" data-task="checkin" data-i18n="claim">Claim</button>
-            </div>
-            <div class="daily-task" id="task-updates">
-              <div class="task-left">
-                <span class="task-icon">📢</span>
-                <div class="task-info">
-                  <div class="task-name" data-i18n="checkUpdates">Check for Updates</div>
-                  <div class="task-reward">+50 TR</div>
-                </div>
-              </div>
-              <button class="task-claim-btn" data-task="updates" data-i18n="start">Start</button>
-            </div>
-            <div class="daily-task" id="task-share">
-              <div class="task-left">
-                <span class="task-icon">📤</span>
-                <div class="task-info">
-                  <div class="task-name" data-i18n="shareWithFriends">Share with Friends</div>
-                  <div class="task-reward">+100 TR</div>
-                </div>
-              </div>
-              <button class="task-claim-btn" data-task="share" data-i18n="share">Share</button>
-            </div>
-          </div>
+    <!-- WALLET TAB -->
+    <section id="tabWallet" class="tab-section">
+      <div class="balance-card small">
+        <div class="balance-main">
+          <div class="balance-icon">🪙</div>
+          <div class="balance-amount" id="walletBalance">0</div>
+          <div class="balance-label" data-i18n="trCoins">TR Coins</div>
+        </div>
+        <div class="balance-ton">≈ <span id="walletTon">0.00000000</span> TON</div>
+      </div>
+
+      <!-- Top Up -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="topUpTon">Top Up TON</h3>
+        <div class="preset-amounts">
+          <button class="preset-btn" data-amount="1">1 TON</button>
+          <button class="preset-btn" data-amount="2">2 TON</button>
+          <button class="preset-btn" data-amount="5">5 TON</button>
+          <button class="preset-btn" data-amount="10">10 TON</button>
+        </div>
+        <input type="number" class="input" id="customTopup" data-i18n-placeholder="customAmount" placeholder="Custom amount (TON)" min="0.1" step="0.1"/>
+        <div class="payment-methods">
+          <button class="pay-btn" data-method="xrocket">🚀 xRocket</button>
+          <button class="pay-btn" data-method="cryptopay">💳 Crypto Pay</button>
         </div>
       </div>
 
-      <!-- TASKS PAGE -->
-      <div class="page" id="page-tasks">
-        <div class="page-header">
-          <h2 class="page-title" data-i18n="earnTR">Earn TR Coins</h2>
-          <p class="page-subtitle" data-i18n="completeTasks">Complete tasks to earn rewards</p>
-        </div>
-        <div class="tasks-list" id="tasksList">
-          <div class="tasks-loading">
-            <div class="spinner"></div>
-            <span data-i18n="loadingTasks">Loading tasks...</span>
-          </div>
-        </div>
+      <!-- Withdrawal -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="withdraw">Withdraw</h3>
+        <div class="withdraw-tiers" id="withdrawTiers"></div>
+        <p class="note" data-i18n="withdrawNote">Network fee: 0.05 TON. Processed within 24h.</p>
       </div>
 
-      <!-- FRIENDS PAGE -->
-      <div class="page" id="page-friends">
-        <div class="page-header">
-          <h2 class="page-title" data-i18n="friends">Friends</h2>
-          <p class="page-subtitle" data-i18n="earn30">Earn 30% from friends' coins</p>
-        </div>
-
-        <!-- Referral Link -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="yourReferralLink">Your Referral Link</div>
-          <div class="referral-link-box">
-            <span class="referral-link-text" id="referralLink">Loading...</span>
-            <button class="copy-btn" id="copyReferral">📋</button>
-          </div>
-          <button class="primary-btn invite-btn" id="inviteBtn" data-i18n="inviteViaTelegram">📨 Invite via Telegram</button>
-        </div>
-
-        <!-- Claimable Earnings -->
-        <div class="section-card earnings-card">
-          <div class="earnings-header">
-            <div>
-              <div class="section-title" data-i18n="referralEarnings">Referral Earnings</div>
-              <div class="earnings-amount"><span id="pendingReferral">0</span> TR pending</div>
-            </div>
-            <button class="claim-earnings-btn" id="claimReferralBtn" data-i18n="claim">Claim</button>
-          </div>
-        </div>
-
-        <!-- Stats -->
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-val" id="totalFriends">0</div>
-            <div class="stat-label" data-i18n="totalFriends">Total Friends</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-val" id="totalEarnedRef">0</div>
-            <div class="stat-label" data-i18n="totalEarned">Total Earned</div>
-          </div>
-        </div>
-
-        <!-- Friends List -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="friendsList">Friends List</div>
-          <div class="friends-list" id="friendsList">
-            <div class="empty-state" data-i18n="noFriendsYet">No friends yet. Start inviting!</div>
-          </div>
-        </div>
+      <!-- Transaction History -->
+      <div class="card">
+        <h3 class="card-title" data-i18n="transactions">Transaction History</h3>
+        <div id="txList"></div>
       </div>
+    </section>
+  </main>
 
-      <!-- WALLET PAGE -->
-      <div class="page" id="page-wallet">
-        <div class="page-header">
-          <h2 class="page-title" data-i18n="wallet">Wallet</h2>
-          <p class="page-subtitle" data-i18n="withdrawEarnings">Withdraw your earnings</p>
-        </div>
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-tab="tabHome">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label" data-i18n="home">Home</span>
+    </button>
+    <button class="nav-btn" data-tab="tabTasks">
+      <span class="nav-icon">✅</span>
+      <span class="nav-label" data-i18n="tasks">Tasks</span>
+    </button>
+    <button class="nav-btn" data-tab="tabFriends">
+      <span class="nav-icon">👥</span>
+      <span class="nav-label" data-i18n="friends">Friends</span>
+    </button>
+    <button class="nav-btn" data-tab="tabWallet">
+      <span class="nav-icon">💰</span>
+      <span class="nav-label" data-i18n="wallet">Wallet</span>
+    </button>
+  </nav>
+</div>
 
-        <!-- Wallet Balance -->
-        <div class="balance-card wallet-balance-card">
-          <div class="balance-glow"></div>
-          <div class="balance-content">
-            <div class="balance-label" data-i18n="totalBalance">Total Balance</div>
-            <div class="balance-amount">
-              <span class="balance-coins" id="walletCoins">0</span>
-              <span class="balance-unit">TR</span>
-            </div>
-            <div class="balance-ton">≈ <span id="walletTon">0.000000</span> TON</div>
-          </div>
-        </div>
-
-        <!-- Top Up -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="topUp">Top Up TON</div>
-          <div class="topup-amounts">
-            <button class="topup-amount-btn" data-amount="1">1 TON</button>
-            <button class="topup-amount-btn" data-amount="2">2 TON</button>
-            <button class="topup-amount-btn" data-amount="5">5 TON</button>
-            <button class="topup-amount-btn" data-amount="10">10 TON</button>
-          </div>
-          <div class="topup-custom-row">
-            <input type="number" class="promo-input" id="customTopupAmount" placeholder="Custom amount (TON)" min="0.1" step="0.1" />
-          </div>
-          <button class="primary-btn" id="topUpBtn" data-i18n="topUp">💎 Top Up TON</button>
-        </div>
-
-        <!-- Withdrawal Tiers -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="withdrawOptions">Withdrawal Options</div>
-          <div class="fee-note" data-i18n="networkFeeNote">⚠️ 0.05 TON network fee deducted from all withdrawals</div>
-          <div class="withdraw-tiers" id="withdrawTiers">
-            <div class="withdraw-tier" data-coins="250000" data-ton="0.10" data-net="0.05">
-              <div class="tier-left">
-                <div class="tier-coins">250,000 TR</div>
-                <div class="tier-ton">0.10 TON → <span class="tier-net">net 0.05 TON</span></div>
-              </div>
-              <button class="tier-btn" data-i18n="withdraw">Withdraw</button>
-            </div>
-            <div class="withdraw-tier" data-coins="500000" data-ton="0.20" data-net="0.15">
-              <div class="tier-left">
-                <div class="tier-coins">500,000 TR</div>
-                <div class="tier-ton">0.20 TON → <span class="tier-net">net 0.15 TON</span></div>
-              </div>
-              <button class="tier-btn" data-i18n="withdraw">Withdraw</button>
-            </div>
-            <div class="withdraw-tier" data-coins="750000" data-ton="0.30" data-net="0.25">
-              <div class="tier-left">
-                <div class="tier-coins">750,000 TR</div>
-                <div class="tier-ton">0.30 TON → <span class="tier-net">net 0.25 TON</span></div>
-              </div>
-              <button class="tier-btn" data-i18n="withdraw">Withdraw</button>
-            </div>
-            <div class="withdraw-tier" data-coins="1000000" data-ton="0.40" data-net="0.35">
-              <div class="tier-left">
-                <div class="tier-coins">1,000,000 TR</div>
-                <div class="tier-ton">0.40 TON → <span class="tier-net">net 0.35 TON</span></div>
-              </div>
-              <button class="tier-btn" data-i18n="withdraw">Withdraw</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Transaction History -->
-        <div class="section-card">
-          <div class="section-title" data-i18n="transactionHistory">Transaction History</div>
-          <div class="tx-list" id="txList">
-            <div class="empty-state" data-i18n="noTransactions">No transactions yet</div>
-          </div>
-        </div>
-      </div>
-    </main>
-
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-      <button class="nav-btn active" data-tab="home">
-        <span class="nav-icon">🏠</span>
-        <span class="nav-label" data-i18n="home">Home</span>
-      </button>
-      <button class="nav-btn" data-tab="tasks">
-        <span class="nav-icon">⚡</span>
-        <span class="nav-label" data-i18n="tasks">Tasks</span>
-      </button>
-      <button class="nav-btn" data-tab="friends">
-        <span class="nav-icon">👥</span>
-        <span class="nav-label" data-i18n="friends">Friends</span>
-      </button>
-      <button class="nav-btn" data-tab="wallet">
-        <span class="nav-icon">💎</span>
-        <span class="nav-label" data-i18n="wallet">Wallet</span>
-      </button>
-    </nav>
-  </div>
-
-  <!-- OVERLAYS -->
-
-  <!-- Spin Result Overlay -->
-  <div class="overlay hidden" id="spinResultOverlay">
-    <div class="overlay-card result-card">
-      <div class="result-emoji">🎉</div>
-      <div class="result-title" data-i18n="youWon">You Won!</div>
-      <div class="result-amount"><span id="spinResultAmount">0</span> TR</div>
-      <button class="primary-btn" id="spinResultClose" data-i18n="awesome">Awesome!</button>
+<!-- ADVERTISER PANEL OVERLAY -->
+<div class="overlay" id="advertiserOverlay">
+  <div class="overlay-box large">
+    <div class="overlay-header">
+      <h2 data-i18n="advertiserPanel">Advertiser Panel</h2>
+      <button class="close-btn" onclick="closeOverlay('advertiserOverlay')">✕</button>
+    </div>
+    <div class="ad-balance-bar">
+      <span data-i18n="adBalance">Ad Balance:</span> <strong id="adBalance">0.00</strong> TON
+      <button class="btn btn-sm btn-gold" id="adTopupBtn" data-i18n="topUp">Top Up</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-bar-btn active" data-atab="addTask" data-i18n="addTask">+ Add Task</button>
+      <button class="tab-bar-btn" data-atab="myTasks" data-i18n="myTasks">My Tasks</button>
+    </div>
+    <div id="addTaskPanel" class="ad-panel">
+      <input type="text" class="input" id="adTaskName" data-i18n-placeholder="taskName" placeholder="Task Name"/>
+      <select class="input" id="adTaskType">
+        <option value="channel" data-i18n="joinChannel">Join Channel</option>
+        <option value="group" data-i18n="joinGroup">Join Group</option>
+        <option value="game" data-i18n="playGame">Play Game Bot</option>
+        <option value="website" data-i18n="visitWebsite">Visit Website</option>
+      </select>
+      <input type="url" class="input" id="adTaskUrl" placeholder="Target URL"/>
+      <select class="input" id="adTaskLimit">
+        <option value="500">500 completions — 0.5 TON</option>
+        <option value="1000">1,000 completions — 1 TON</option>
+        <option value="2000">2,000 completions — 2 TON</option>
+        <option value="5000">5,000 completions — 5 TON</option>
+        <option value="10000">10,000 completions — 10 TON</option>
+      </select>
+      <div class="cost-preview" id="costPreview">Cost: <strong>0.5 TON</strong></div>
+      <button class="btn btn-gold btn-full" id="publishTaskBtn" data-i18n="publishTask">Publish Task</button>
+    </div>
+    <div id="myTasksPanel" class="ad-panel hidden">
+      <div id="myTasksList"></div>
     </div>
   </div>
+</div>
 
-  <!-- Task Overlay (timer/verify) -->
-  <div class="overlay hidden" id="taskOverlay">
-    <div class="overlay-card">
-      <button class="overlay-close" id="taskOverlayClose">✕</button>
-      <div class="overlay-task-name" id="overlayTaskName">Task Name</div>
-      <div class="overlay-task-reward" id="overlayTaskReward">+1000 TR</div>
-      <div id="taskTimerSection" class="hidden">
-        <div class="timer-circle">
-          <svg viewBox="0 0 80 80">
-            <circle cx="40" cy="40" r="36" class="timer-bg"/>
-            <circle cx="40" cy="40" r="36" class="timer-progress" id="timerProgress"/>
-          </svg>
-          <div class="timer-text" id="timerText">15</div>
-        </div>
-        <div class="progress-bar-container">
-          <div class="progress-bar-fill" id="progressBarFill"></div>
-        </div>
-      </div>
-      <div id="taskVerifySection" class="hidden">
-        <p class="verify-instruction" data-i18n="joinChannelInstruction">Please join the channel/group to claim your reward</p>
-        <button class="secondary-btn" id="overlayOpenLink" data-i18n="openLink">Open Link</button>
-      </div>
-      <button class="primary-btn hidden" id="taskClaimBtn" data-i18n="claimReward">Claim Reward</button>
-      <button class="primary-btn hidden" id="taskVerifyBtn" data-i18n="iJoined">✓ I've Joined</button>
+<!-- VERIFY JOIN OVERLAY -->
+<div class="overlay" id="verifyOverlay">
+  <div class="overlay-box">
+    <div class="overlay-header">
+      <h2 data-i18n="verifyJoin">Verify Join</h2>
+      <button class="close-btn" onclick="closeOverlay('verifyOverlay')">✕</button>
     </div>
+    <p data-i18n="joinPrompt">Please join the channel/group first, then verify.</p>
+    <button class="btn btn-gold btn-full" id="verifyOpenLink" data-i18n="openLink">Open Link</button>
+    <button class="btn btn-outline btn-full" id="verifyJoinedBtn" data-i18n="iJoined">I've Joined</button>
   </div>
+</div>
 
-  <!-- Withdraw Confirm Overlay -->
-  <div class="overlay hidden" id="withdrawOverlay">
-    <div class="overlay-card">
-      <button class="overlay-close" id="withdrawClose">✕</button>
-      <div class="overlay-title" data-i18n="confirmWithdrawal">Confirm Withdrawal</div>
-      <div class="withdraw-breakdown">
-        <div class="breakdown-row">
-          <span data-i18n="coinsSpent">Coins Spent</span>
-          <span id="wCoins" class="breakdown-val">0 TR</span>
-        </div>
-        <div class="breakdown-row">
-          <span data-i18n="grossAmount">Gross Amount</span>
-          <span id="wGross" class="breakdown-val">0.00 TON</span>
-        </div>
-        <div class="breakdown-row fee-row">
-          <span data-i18n="networkFee">Network Fee</span>
-          <span class="breakdown-val error-color">-0.05 TON</span>
-        </div>
-        <div class="breakdown-row total-row">
-          <span data-i18n="youReceive">You Receive</span>
-          <span id="wNet" class="breakdown-val gold-color">0.00 TON</span>
-        </div>
-      </div>
-      <p class="withdraw-note" data-i18n="withdrawNote">Processed within 24 hours manually</p>
-      <button class="primary-btn" id="confirmWithdrawBtn" data-i18n="confirmWithdraw">Confirm Withdrawal</button>
+<!-- WITHDRAW CONFIRM OVERLAY -->
+<div class="overlay" id="withdrawOverlay">
+  <div class="overlay-box">
+    <div class="overlay-header">
+      <h2 data-i18n="confirmWithdraw">Confirm Withdrawal</h2>
+      <button class="close-btn" onclick="closeOverlay('withdrawOverlay')">✕</button>
     </div>
+    <div id="withdrawSummary"></div>
+    <button class="btn btn-gold btn-full" id="confirmWithdrawBtn" data-i18n="confirm">Confirm</button>
   </div>
+</div>
 
-  <!-- Top Up Method Overlay -->
-  <div class="overlay hidden" id="topupOverlay">
-    <div class="overlay-card">
-      <button class="overlay-close" id="topupClose">✕</button>
-      <div class="overlay-title" data-i18n="selectPaymentMethod">Select Payment Method</div>
-      <div class="topup-amount-display">
-        <span data-i18n="amount">Amount</span>: <span id="topupAmountDisplay">0</span> TON
-      </div>
-      <div class="payment-methods">
-        <button class="payment-method-btn" id="xrocketBtn">
-          <img src="https://xrocket.tg/favicon.ico" onerror="this.style.display='none'" alt="" />
-          <div class="payment-method-info">
-            <div class="payment-method-name">xRocket</div>
-            <div class="payment-method-sub">Pay with xRocket wallet</div>
-          </div>
-          <span class="method-arrow">→</span>
-        </button>
-        <button class="payment-method-btn" id="cryptoPayBtn">
-          <div class="payment-method-icon">💳</div>
-          <div class="payment-method-info">
-            <div class="payment-method-name">Crypto Pay</div>
-            <div class="payment-method-sub">Pay with @CryptoBot</div>
-          </div>
-          <span class="method-arrow">→</span>
-        </button>
-      </div>
-    </div>
-  </div>
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
-  <!-- Advertiser Dashboard Overlay -->
-  <div class="overlay hidden" id="advertiserOverlay">
-    <div class="overlay-card overlay-card-tall">
-      <button class="overlay-close" id="advertiserClose">✕</button>
-      <div class="overlay-title" data-i18n="advertiserDashboard">Advertiser Dashboard</div>
-
-      <!-- Ad Balance -->
-      <div class="ad-balance-box">
-        <div class="ad-balance-label" data-i18n="adBalance">Ad Balance</div>
-        <div class="ad-balance-amount"><span id="adBalance">0.000</span> TON</div>
-        <button class="secondary-btn small-btn" id="adTopUpBtn" data-i18n="topUp">Top Up</button>
-      </div>
-
-      <!-- Tabs -->
-      <div class="tab-switcher">
-        <button class="tab-switch-btn active" data-adtab="add" data-i18n="addTask">Add Task</button>
-        <button class="tab-switch-btn" data-adtab="my" data-i18n="myTasks">My Tasks</button>
-      </div>
-
-      <!-- Add Task Form -->
-      <div class="ad-tab active" id="adTab-add">
-        <div class="form-group">
-          <label data-i18n="taskName">Task Name</label>
-          <input type="text" class="form-input" id="adTaskName" placeholder="e.g. Join our channel" />
-        </div>
-        <div class="form-group">
-          <label data-i18n="taskType">Task Type</label>
-          <select class="form-input" id="adTaskType">
-            <option value="channel">Join Channel (+1000 TR)</option>
-            <option value="group">Join Group (+1000 TR)</option>
-            <option value="game">Play Game Bot (+1000 TR)</option>
-            <option value="visit">Visit Website (+500 TR)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label data-i18n="targetUrl">Target URL</label>
-          <input type="url" class="form-input" id="adTaskUrl" placeholder="https://" />
-        </div>
-        <div class="form-group">
-          <label data-i18n="completionTarget">Completion Target</label>
-          <select class="form-input" id="adTaskTarget">
-            <option value="500">500 completions — 0.5 TON</option>
-            <option value="1000">1,000 completions — 1.0 TON</option>
-            <option value="2000">2,000 completions — 2.0 TON</option>
-            <option value="5000">5,000 completions — 5.0 TON</option>
-            <option value="10000">10,000 completions — 10.0 TON</option>
-          </select>
-        </div>
-        <div class="cost-preview">
-          <span data-i18n="estimatedCost">Estimated Cost</span>: <span id="taskCostPreview">0.5 TON</span>
-        </div>
-        <button class="primary-btn" id="publishTaskBtn" data-i18n="publishTask">Publish Task</button>
-      </div>
-
-      <!-- My Tasks -->
-      <div class="ad-tab hidden" id="adTab-my">
-        <div class="ad-tasks-list" id="adTasksList">
-          <div class="empty-state" data-i18n="noTasksPublished">No tasks published yet</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast -->
-  <div class="toast hidden" id="toast"></div>
-
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

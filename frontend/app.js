@@ -1,286 +1,345 @@
-/* ═══════════════════════════════════════
-   TREWARDS — APP.JS
-   Complete Frontend Application Logic
-═══════════════════════════════════════ */
+// ============================================================
+// TREWARDS - Main Application JS
+// ============================================================
 
-'use strict';
+const API = '/api'; // relative path — served from same domain
 
-// ── CONFIG ─────────────────────────────────────────────────────────
-const CONFIG = {
-  // ⚠️ Replace with your actual Render backend URL after deploying
-  API_BASE: 'https://trewards-backend.onrender.com/api',
-  BOT_USERNAME: 'trewards_ton_bot',
-  CHANNEL_URL: 'https://t.me/trewards_tonfirst',
-  TON_RATE: 0.0000004,
-};
-
-// ── STATE ───────────────────────────────────────────────────────────
-let state = {
-  user: null,
-  lang: 'en',
-  tasks: [],
-  friends: [],
-  transactions: [],
-  adTasks: [],
-  adBalance: 0,
-  currentTask: null,
-  currentTaskTimer: null,
-  pendingWithdraw: null,
-  pendingTopup: null,
-  selectedTopupAmount: 0,
-  updatesTaskClicked: false,
-  spinning: false,
-};
-
-// ── I18N ────────────────────────────────────────────────────────────
-const i18n = {
+// i18n translations
+const TRANSLATIONS = {
   en: {
     home: 'Home', tasks: 'Tasks', friends: 'Friends', wallet: 'Wallet',
-    totalBalance: 'Total Balance', streak: 'Streak', spins: 'Spins',
-    dailyStreak: 'Daily Streak', spinWheel: 'Spin Wheel', usesSpin: 'Uses 1 spin',
-    spin: 'SPIN', quickActions: 'Quick Actions',
+    trCoins: 'TR Coins', dailyStreak: 'Daily Streak', claimStreak: 'Claim Streak',
+    spinWheel: 'Spin Wheel', spin: 'Spin', quickActions: 'Quick Actions',
     inviteFriend: 'Invite Friend', withdraw: 'Withdraw', earnMore: 'Earn More',
     referral: 'Referral', promoCode: 'Promo Code', enterPromo: 'Enter promo code',
-    redeem: 'Redeem', dailyTasks: 'Daily Tasks', dailyCheckin: 'Daily Check-In',
-    checkUpdates: 'Check for Updates', shareWithFriends: 'Share with Friends',
-    claim: 'Claim', start: 'Start', share: 'Share',
-    earnTR: 'Earn TR Coins', completeTasks: 'Complete tasks to earn rewards',
-    loadingTasks: 'Loading tasks...', claimStreak: 'Claim Daily Reward',
-    friends: 'Friends', earn30: "Earn 30% from friends' coins",
-    yourReferralLink: 'Your Referral Link', inviteViaTelegram: '📨 Invite via Telegram',
-    referralEarnings: 'Referral Earnings', totalFriends: 'Total Friends',
-    totalEarned: 'Total Earned', friendsList: 'Friends List',
-    noFriendsYet: 'No friends yet. Start inviting!',
-    wallet: 'Wallet', withdrawEarnings: 'Withdraw your earnings',
-    topUp: 'Top Up TON', withdrawOptions: 'Withdrawal Options',
-    networkFeeNote: '⚠️ 0.05 TON network fee deducted from all withdrawals',
-    transactionHistory: 'Transaction History', noTransactions: 'No transactions yet',
-    confirmWithdrawal: 'Confirm Withdrawal', coinsSpent: 'Coins Spent',
-    grossAmount: 'Gross Amount', networkFee: 'Network Fee',
-    youReceive: 'You Receive', withdrawNote: 'Processed within 24 hours manually',
-    confirmWithdraw: 'Confirm Withdrawal',
-    selectPaymentMethod: 'Select Payment Method', amount: 'Amount',
-    advertiserDashboard: 'Advertiser Dashboard', adBalance: 'Ad Balance',
-    addTask: 'Add Task', myTasks: 'My Tasks', taskName: 'Task Name',
-    taskType: 'Task Type', targetUrl: 'Target URL',
-    completionTarget: 'Completion Target', estimatedCost: 'Estimated Cost',
-    publishTask: 'Publish Task', noTasksPublished: 'No tasks published yet',
-    youWon: 'You Won!', awesome: 'Awesome!',
-    joinChannelInstruction: 'Please join the channel/group to claim your reward',
-    openLink: 'Open Link', claimReward: 'Claim Reward', iJoined: "✓ I've Joined",
-    task: 'TASK',
+    redeem: 'Redeem', dailyTasks: 'Daily Tasks', all: 'All', channel: 'Channel',
+    group: 'Group', game: 'Game', website: 'Website', yourReferral: 'Your Referral Link',
+    inviteViaTelegram: 'Invite via Telegram', totalFriends: 'Total Friends',
+    totalEarned: 'Total Earned', pendingReferral: 'Pending Referral Earnings',
+    claim: 'Claim', friendsList: 'Friends List', topUpTon: 'Top Up TON',
+    customAmount: 'Custom amount (TON)', transactions: 'Transaction History',
+    withdrawNote: 'Network fee: 0.05 TON. Processed within 24h.',
+    advertiserPanel: 'Advertiser Panel', adBalance: 'Ad Balance:',
+    topUp: 'Top Up', addTask: '+ Add Task', myTasks: 'My Tasks',
+    taskName: 'Task Name', joinChannel: 'Join Channel', joinGroup: 'Join Group',
+    playGame: 'Play Game Bot', visitWebsite: 'Visit Website', publishTask: 'Publish Task',
+    verifyJoin: 'Verify Join', joinPrompt: 'Please join the channel/group, then verify.',
+    openLink: 'Open Link', iJoined: "I've Joined", confirmWithdraw: 'Confirm Withdrawal',
+    confirm: 'Confirm', tonEquiv: '≈', start: 'Start', checkIn: 'Check-In',
+    updates: 'Check for Updates', share: 'Share with Friends', done: '✓ Done',
+    claimed: 'Claimed', claimNow: 'Claim', pending: 'Pending',
   },
   ru: {
     home: 'Главная', tasks: 'Задания', friends: 'Друзья', wallet: 'Кошелёк',
-    totalBalance: 'Баланс', streak: 'Серия', spins: 'Спины',
-    dailyStreak: 'Ежедневная серия', spinWheel: 'Колесо', usesSpin: 'Тратит 1 спин',
-    spin: 'КРУТИТЬ', quickActions: 'Действия',
-    inviteFriend: 'Пригласить', withdraw: 'Вывод', earnMore: 'Заработать', referral: 'Реферал',
-    promoCode: 'Промо-код', enterPromo: 'Введите промо-код',
-    redeem: 'Активировать', dailyTasks: 'Задания дня', dailyCheckin: 'Ежедневный вход',
-    checkUpdates: 'Проверить обновления', shareWithFriends: 'Поделиться',
-    claim: 'Получить', start: 'Начать', share: 'Поделиться',
-    earnTR: 'Зарабатывать TR', completeTasks: 'Выполняйте задания для наград',
-    loadingTasks: 'Загрузка...', claimStreak: 'Получить награду',
-    friends: 'Друзья', earn30: 'Получайте 30% от монет друзей',
-    yourReferralLink: 'Ваша ссылка', inviteViaTelegram: '📨 Пригласить в Telegram',
-    referralEarnings: 'Реферальный доход', totalFriends: 'Всего друзей',
-    totalEarned: 'Заработано', friendsList: 'Список друзей',
-    noFriendsYet: 'Нет друзей. Начните приглашать!',
-    wallet: 'Кошелёк', withdrawEarnings: 'Вывод средств',
-    topUp: 'Пополнить TON', withdrawOptions: 'Варианты вывода',
-    networkFeeNote: '⚠️ Комиссия сети 0.05 TON вычитается из всех выводов',
-    transactionHistory: 'История', noTransactions: 'Нет транзакций',
-    confirmWithdrawal: 'Подтвердить вывод', coinsSpent: 'Монет потрачено',
-    grossAmount: 'Сумма', networkFee: 'Комиссия сети',
-    youReceive: 'Вы получите', withdrawNote: 'Обрабатывается вручную в течение 24 часов',
-    confirmWithdraw: 'Подтвердить',
-    selectPaymentMethod: 'Способ оплаты', amount: 'Сумма',
-    advertiserDashboard: 'Панель рекламодателя', adBalance: 'Баланс рекламы',
-    addTask: 'Добавить', myTasks: 'Мои задания', taskName: 'Название',
-    taskType: 'Тип задания', targetUrl: 'URL цели',
-    completionTarget: 'Цель выполнений', estimatedCost: 'Стоимость',
-    publishTask: 'Опубликовать', noTasksPublished: 'Заданий нет',
-    youWon: 'Вы выиграли!', awesome: 'Отлично!',
-    joinChannelInstruction: 'Вступите в канал/группу для получения награды',
-    openLink: 'Открыть ссылку', claimReward: 'Получить награду', iJoined: '✓ Я вступил(а)',
-    task: 'ЗАДАНИЕ',
+    trCoins: 'TR Монеты', dailyStreak: 'Ежедневная серия', claimStreak: 'Получить',
+    spinWheel: 'Колесо удачи', spin: 'Крутить', quickActions: 'Быстрые действия',
+    inviteFriend: 'Пригласить', withdraw: 'Вывести', earnMore: 'Заработать',
+    referral: 'Реферал', promoCode: 'Промо-код', enterPromo: 'Введите промо-код',
+    redeem: 'Активировать', dailyTasks: 'Ежедневные задания', all: 'Все', channel: 'Канал',
+    group: 'Группа', game: 'Игра', website: 'Сайт', yourReferral: 'Ваша реферальная ссылка',
+    inviteViaTelegram: 'Пригласить в Telegram', totalFriends: 'Всего друзей',
+    totalEarned: 'Всего заработано', pendingReferral: 'Реферальный доход',
+    claim: 'Получить', friendsList: 'Список друзей', topUpTon: 'Пополнить TON',
+    customAmount: 'Произвольная сумма (TON)', transactions: 'История транзакций',
+    withdrawNote: 'Сетевая комиссия: 0.05 TON. Обрабатывается в течение 24ч.',
+    advertiserPanel: 'Панель рекламодателя', adBalance: 'Рекламный баланс:',
+    topUp: 'Пополнить', addTask: '+ Добавить задание', myTasks: 'Мои задания',
+    taskName: 'Название задания', joinChannel: 'Подписаться на канал', joinGroup: 'Вступить в группу',
+    playGame: 'Запустить игру', visitWebsite: 'Посетить сайт', publishTask: 'Опубликовать',
+    verifyJoin: 'Подтвердить вступление', joinPrompt: 'Вступите в канал/группу, затем подтвердите.',
+    openLink: 'Открыть ссылку', iJoined: 'Я вступил(а)', confirmWithdraw: 'Подтвердить вывод',
+    confirm: 'Подтвердить', tonEquiv: '≈', start: 'Старт', checkIn: 'Отметиться',
+    updates: 'Проверить обновления', share: 'Поделиться', done: '✓ Выполнено',
+    claimed: 'Получено', claimNow: 'Получить', pending: 'Ожидание',
   }
 };
 
-function t(key) {
-  return (i18n[state.lang] || i18n.en)[key] || key;
-}
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  lang: localStorage.getItem('lang') || 'en',
+  user: null,
+  tasks: [],
+  friends: [],
+  transactions: [],
+  advertiserData: null,
+  selectedTopupAmount: null,
+  selectedWithdrawTier: null,
+  pendingTaskId: null,
+  pendingTaskUrl: null,
+  taskTimers: {},
+};
 
-// ── TELEGRAM WEB APP ────────────────────────────────────────────
+// ============================================================
+// TELEGRAM WEBAPP INIT
+// ============================================================
 const tg = window.Telegram?.WebApp;
+let tgUser = null;
 
-function getTgUser() {
-  if (tg?.initDataUnsafe?.user) {
-    return tg.initDataUnsafe.user;
-  }
-  // Dev fallback — safe BigInt-compatible ID
-  return { id: 123456789, first_name: 'Test', last_name: 'User', username: 'testuser' };
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor('#0A0800');
+  tg.setBackgroundColor('#0A0800');
+  tgUser = tg.initDataUnsafe?.user || null;
 }
 
-// Extract referral start param from Telegram
-function getStartParam() {
-  return tg?.initDataUnsafe?.start_param || null;
-}
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  applyLang();
+  setupEventListeners();
+  drawWheel();
+  renderStreakDots(0, 0);
+  renderWithdrawTiers();
 
-// ── API HELPERS ─────────────────────────────────────────────────
-async function apiPost(endpoint, body = {}) {
-  const user = getTgUser();
-  const res = await fetch(`${CONFIG.API_BASE}${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...body,
-      telegram_id: user.id,
-      init_data: tg?.initData || '',
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-  return data;
-}
-
-async function apiGet(endpoint) {
-  const user = getTgUser();
-  const sep = endpoint.includes('?') ? '&' : '?';
-  const res = await fetch(
-    `${CONFIG.API_BASE}${endpoint}${sep}telegram_id=${user.id}&init_data=${encodeURIComponent(tg?.initData || '')}`,
-    { headers: { 'Content-Type': 'application/json' } }
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-  return data;
-}
-
-// ── TOAST ────────────────────────────────────────────────────────
-let toastTimeout;
-function showToast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = `toast${type ? ' ' + type : ''}`;
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => el.classList.add('hidden'), 3000);
-}
-
-// ── NAVIGATION ───────────────────────────────────────────────────
-function switchTab(tab) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const page = document.getElementById(`page-${tab}`);
-  if (page) page.classList.add('active');
-  const navBtn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
-  if (navBtn) navBtn.classList.add('active');
-  if (tab === 'tasks') loadTasks();
-  if (tab === 'friends') loadFriends();
-  if (tab === 'wallet') loadTransactions();
-}
-
-document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-});
-
-document.querySelectorAll('[data-tab]').forEach(btn => {
-  if (!btn.classList.contains('nav-btn')) {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  if (tgUser || true) { // allow testing without tg
+    await initUser();
   }
 });
 
-// ── LANGUAGE TOGGLE ──────────────────────────────────────────────
-document.getElementById('langToggle').addEventListener('click', () => {
-  state.lang = state.lang === 'en' ? 'ru' : 'en';
-  document.getElementById('langToggle').textContent = state.lang.toUpperCase();
-  applyI18n();
-});
+async function initUser() {
+  const payload = {
+    telegram_id: tgUser?.id || 0,
+    username: tgUser?.username || 'demo_user',
+    first_name: tgUser?.first_name || 'Demo',
+    last_name: tgUser?.last_name || '',
+    init_data: tg?.initData || '',
+  };
 
-function applyI18n() {
+  try {
+    const data = await apiPost('/user', payload);
+    state.user = data;
+    updateUI();
+    loadTasks();
+    loadFriends();
+    loadTransactions();
+  } catch (e) {
+    showToast('Failed to connect to server', 'error');
+    console.error(e);
+  }
+}
+
+// ============================================================
+// UI UPDATE
+// ============================================================
+function updateUI() {
+  const u = state.user;
+  if (!u) return;
+
+  const coins = u.coins || 0;
+  const ton = (coins * 0.0000004).toFixed(8);
+
+  document.getElementById('balanceAmount').textContent = coins.toLocaleString();
+  document.getElementById('tonEquiv').textContent = ton;
+  document.getElementById('walletBalance').textContent = coins.toLocaleString();
+  document.getElementById('walletTon').textContent = ton;
+  document.getElementById('streakBadge').textContent = `🔥 ${u.streak_days || 0} days`;
+  document.getElementById('spinBadge').textContent = `🎰 ${u.spins || 0} spins`;
+
+  const refLink = `https://t.me/trewards_ton_bot?start=${u.telegram_id}`;
+  document.getElementById('referralLink').textContent = refLink;
+
+  renderStreakDots(u.streak_days || 0, u.streak_claimed_today ? 1 : 0);
+  renderDailyTasks(u.daily_tasks_claimed || []);
+
+  // Streak claim button
+  const streakBtn = document.getElementById('claimStreakBtn');
+  if (u.streak_claimed_today) {
+    streakBtn.disabled = true;
+    streakBtn.textContent = t('claimed');
+  } else {
+    streakBtn.disabled = false;
+    streakBtn.textContent = t('claimStreak');
+  }
+}
+
+// ============================================================
+// I18N
+// ============================================================
+function t(key) {
+  return TRANSLATIONS[state.lang]?.[key] || TRANSLATIONS.en[key] || key;
+}
+
+function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.dataset.i18n;
+    const key = el.getAttribute('data-i18n');
     el.textContent = t(key);
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-    el.placeholder = t(el.dataset.i18nPlaceholder);
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
   });
+  document.getElementById('langBtn').textContent = state.lang === 'en' ? '🇺🇸 EN' : '🇷🇺 RU';
 }
 
-// ── BALANCE DISPLAY ──────────────────────────────────────────────
-function updateBalanceDisplay() {
-  if (!state.user) return;
-  const coins = state.user.coins || 0;
-  const ton = (coins * CONFIG.TON_RATE).toFixed(6);
-  document.getElementById('balanceCoins').textContent = coins.toLocaleString();
-  document.getElementById('balanceTon').textContent = ton;
-  document.getElementById('streakBadge').textContent = state.user.streak_count || 0;
-  document.getElementById('spinsBadge').textContent = state.user.spins || 0;
-  document.getElementById('spinCount').textContent = state.user.spins || 0;
-  document.getElementById('walletCoins').textContent = coins.toLocaleString();
-  document.getElementById('walletTon').textContent = ton;
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+function setupEventListeners() {
+  // Language toggle
+  document.getElementById('langBtn').addEventListener('click', () => {
+    state.lang = state.lang === 'en' ? 'ru' : 'en';
+    localStorage.setItem('lang', state.lang);
+    applyLang();
+    updateUI();
+    renderDailyTasks(state.user?.daily_tasks_claimed || []);
+    renderWithdrawTiers();
+  });
+
+  // Nav buttons
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Claim streak
+  document.getElementById('claimStreakBtn').addEventListener('click', claimStreak);
+
+  // Spin
+  document.getElementById('spinBtn').addEventListener('click', doSpin);
+
+  // Promo
+  document.getElementById('redeemBtn').addEventListener('click', redeemPromo);
+
+  // Task filters
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAdvertiserTasks(btn.dataset.cat);
+    });
+  });
+
+  // Copy referral
+  document.getElementById('copyReferralBtn').addEventListener('click', () => {
+    const link = document.getElementById('referralLink').textContent;
+    navigator.clipboard?.writeText(link) || copyFallback(link);
+    showToast('Link copied!', 'success');
+  });
+
+  // Invite via Telegram
+  document.getElementById('inviteViaBtn').addEventListener('click', () => {
+    const link = document.getElementById('referralLink').textContent;
+    const text = encodeURIComponent(`Join TRewards and earn TR coins! ${link}`);
+    openUrl(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${text}`);
+  });
+
+  // Claim referral
+  document.getElementById('claimReferralBtn').addEventListener('click', claimReferral);
+
+  // Preset topup amounts
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.selectedTopupAmount = parseFloat(btn.dataset.amount);
+      document.getElementById('customTopup').value = '';
+    });
+  });
+
+  // Payment methods
+  document.querySelectorAll('.pay-btn').forEach(btn => {
+    btn.addEventListener('click', () => doTopup(btn.dataset.method));
+  });
+
+  // Advertiser panel
+  document.getElementById('advertiserBtn').addEventListener('click', openAdvertiserPanel);
+  document.getElementById('adTopupBtn').addEventListener('click', () => {
+    state.selectedTopupAmount = 1;
+    doTopup('xrocket');
+  });
+
+  // Advertiser tabs
+  document.querySelectorAll('.tab-bar-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-bar-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('addTaskPanel').classList.toggle('hidden', btn.dataset.atab !== 'addTask');
+      document.getElementById('myTasksPanel').classList.toggle('hidden', btn.dataset.atab !== 'myTasks');
+      if (btn.dataset.atab === 'myTasks') loadMyTasks();
+    });
+  });
+
+  // Task limit → cost preview
+  document.getElementById('adTaskLimit').addEventListener('change', updateCostPreview);
+  updateCostPreview();
+
+  // Publish task
+  document.getElementById('publishTaskBtn').addEventListener('click', publishTask);
+
+  // Verify overlay
+  document.getElementById('verifyJoinedBtn').addEventListener('click', verifyJoin);
+
+  // Confirm withdraw
+  document.getElementById('confirmWithdrawBtn').addEventListener('click', confirmWithdraw);
 }
 
-// ── STREAK DOTS ──────────────────────────────────────────────────
-function renderStreakDots() {
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId)?.classList.add('active');
+  document.querySelector(`[data-tab="${tabId}"]`)?.classList.add('active');
+}
+
+// ============================================================
+// STREAK
+// ============================================================
+function renderStreakDots(days, claimedToday) {
   const container = document.getElementById('streakDots');
   container.innerHTML = '';
-  const streak = state.user?.streak_count || 0;
-  const day = streak % 7; // current position in 7-day cycle
-  for (let i = 1; i <= 7; i++) {
+  const icons = ['☀️','🌙','⭐','💫','🌟','✨','🏆'];
+  for (let i = 0; i < 7; i++) {
     const dot = document.createElement('div');
     dot.className = 'streak-dot';
-    if (i <= day) dot.classList.add('active');
-    if (i === day + 1 || (day === 0 && i === 1)) dot.classList.add('today');
-    dot.textContent = i;
+    dot.textContent = icons[i];
+    if (i < days % 7) dot.classList.add('active');
+    if (i === days % 7 && !claimedToday) dot.classList.add('today');
     container.appendChild(dot);
   }
 }
 
-// ── DAILY STREAK CLAIM ───────────────────────────────────────────
-document.getElementById('claimStreakBtn').addEventListener('click', async () => {
+async function claimStreak() {
   try {
-    const res = await apiPost('/claim-streak');
-    state.user.coins += res.reward || 10;
-    state.user.spins = (state.user.spins || 0) + 1;
-    state.user.streak_count = res.streak || (state.user.streak_count || 0) + 1;
-    updateBalanceDisplay();
-    renderStreakDots();
-    showToast(`+${res.reward || 10} TR +1 🎰`, 'success');
-    const btn = document.getElementById('claimStreakBtn');
-    btn.disabled = true;
-    btn.textContent = '✓ Claimed';
+    const data = await apiPost('/claim-streak', { telegram_id: state.user.telegram_id });
+    state.user = { ...state.user, ...data };
+    updateUI();
+    showToast(`+${data.coins_earned} TR & +1 Spin!`, 'success');
   } catch (e) {
     showToast(e.message || 'Already claimed today', 'error');
   }
-});
+}
 
-// ── SPIN WHEEL ───────────────────────────────────────────────────
+// ============================================================
+// SPIN WHEEL
+// ============================================================
 const WHEEL_SEGMENTS = [
-  { label: '10', value: 10, color: '#1A1200' },
-  { label: '50', value: 50, color: '#221800' },
-  { label: '80', value: 80, color: '#1A1200' },
-  { label: '100', value: 100, color: '#2A2000' },
-  { label: '300', value: 300, color: '#221800' },
-  { label: '500', value: 500, color: '#FFB800' },
+  { value: 10, color: '#1A1600' },
+  { value: 50, color: '#2A2000' },
+  { value: 80, color: '#1A1600' },
+  { value: 100, color: '#2A2000' },
+  { value: 300, color: '#FFB800', textColor: '#0A0800' },
+  { value: 500, color: '#CC9200', textColor: '#0A0800' },
 ];
-
-const SEGMENT_COUNT = WHEEL_SEGMENTS.length;
-const ARC = (Math.PI * 2) / SEGMENT_COUNT;
-let currentAngle = 0;
+let wheelAngle = 0;
+let isSpinning = false;
 
 function drawWheel(angle = 0) {
-  const canvas = document.getElementById('spinCanvas');
+  const canvas = document.getElementById('wheelCanvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const r = cx - 4;
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const r = cx - 6;
+  const arc = (2 * Math.PI) / WHEEL_SEGMENTS.length;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < SEGMENT_COUNT; i++) {
-    const start = angle + i * ARC;
-    const end = start + ARC;
-    const seg = WHEEL_SEGMENTS[i];
+  WHEEL_SEGMENTS.forEach((seg, i) => {
+    const start = angle + i * arc;
+    const end = start + arc;
 
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -294,697 +353,617 @@ function drawWheel(angle = 0) {
 
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(start + ARC / 2);
+    ctx.rotate(start + arc / 2);
     ctx.textAlign = 'right';
-    ctx.fillStyle = seg.value === 500 ? '#0A0800' : '#FFB800';
-    ctx.font = `bold 15px Orbitron, monospace`;
-    ctx.fillText(seg.label, r - 12, 5);
+    ctx.fillStyle = seg.textColor || '#FFB800';
+    ctx.font = 'bold 14px Orbitron, sans-serif';
+    ctx.fillText(seg.value, r - 12, 5);
     ctx.restore();
-  }
+  });
 
   // Center circle
   ctx.beginPath();
-  ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 24, 0, 2 * Math.PI);
   ctx.fillStyle = '#0A0800';
   ctx.fill();
   ctx.strokeStyle = '#FFB800';
   ctx.lineWidth = 2;
   ctx.stroke();
+
+  ctx.fillStyle = '#FFB800';
+  ctx.font = 'bold 18px Orbitron, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🎰', cx, cy);
 }
 
-function spinToResult(resultValue) {
-  return new Promise((resolve) => {
-    const targetIdx = WHEEL_SEGMENTS.findIndex(s => s.value === resultValue);
-    if (targetIdx === -1) return resolve();
+async function doSpin() {
+  if (isSpinning) return;
+  if (!state.user) return;
+  if ((state.user.spins || 0) < 1) {
+    showToast('No spins available!', 'error');
+    return;
+  }
 
-    const spinRevolutions = 5 + Math.random() * 3;
-    const targetAngle = -(targetIdx * ARC + ARC / 2) + Math.PI / 2;
-    const totalRotation = spinRevolutions * Math.PI * 2 + targetAngle - currentAngle;
+  isSpinning = true;
+  const btn = document.getElementById('spinBtn');
+  btn.disabled = true;
+
+  try {
+    const data = await apiPost('/spin', { telegram_id: state.user.telegram_id });
+    const result = data.coins_won;
+    const segIndex = WHEEL_SEGMENTS.findIndex(s => s.value === result);
+    const arc = (2 * Math.PI) / WHEEL_SEGMENTS.length;
+    const targetAngle = -(segIndex * arc + arc / 2) + Math.PI / 2;
+    const spins = 5 + Math.random() * 3;
+    const totalAngle = spins * 2 * Math.PI + targetAngle - (wheelAngle % (2 * Math.PI));
+
     const duration = 4000;
-    const startTime = performance.now();
-    const startAngle = currentAngle;
-
-    function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
+    const start = performance.now();
+    const startAngle = wheelAngle;
 
     function animate(now) {
-      const elapsed = now - startTime;
+      const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
-      currentAngle = startAngle + totalRotation * easeOut(progress);
-      drawWheel(currentAngle);
+      const eased = 1 - Math.pow(1 - progress, 4);
+      wheelAngle = startAngle + totalAngle * eased;
+      drawWheel(wheelAngle);
+
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
-        currentAngle = targetAngle;
-        resolve();
+        isSpinning = false;
+        btn.disabled = false;
+        document.getElementById('spinResult').textContent = `+${result} TR 🎉`;
+        state.user.coins = (state.user.coins || 0) + result;
+        state.user.spins = Math.max(0, (state.user.spins || 1) - 1);
+        updateUI();
+        showToast(`You won ${result} TR!`, 'success');
       }
     }
     requestAnimationFrame(animate);
-  });
+  } catch (e) {
+    isSpinning = false;
+    btn.disabled = false;
+    showToast(e.message || 'Spin failed', 'error');
+  }
 }
 
-document.getElementById('spinBtn').addEventListener('click', async () => {
-  if (state.spinning) return;
-  if ((state.user?.spins || 0) <= 0) { showToast('No spins left!', 'error'); return; }
-
-  state.spinning = true;
-  const spinBtn = document.getElementById('spinBtn');
-  spinBtn.disabled = true;
-
-  try {
-    const res = await apiPost('/spin');
-    state.user.spins = Math.max(0, (state.user.spins || 0) - 1);
-    updateBalanceDisplay();
-
-    await spinToResult(res.result);
-
-    state.user.coins = (state.user.coins || 0) + res.result;
-    updateBalanceDisplay();
-    document.getElementById('spinResultAmount').textContent = res.result.toLocaleString();
-    document.getElementById('spinResultOverlay').classList.remove('hidden');
-  } catch (e) {
-    showToast(e.message || 'Spin failed', 'error');
-  } finally {
-    state.spinning = false;
-    spinBtn.disabled = false;
-  }
-});
-
-document.getElementById('spinResultClose').addEventListener('click', () => {
-  document.getElementById('spinResultOverlay').classList.add('hidden');
-});
-
-// ── PROMO CODE ───────────────────────────────────────────────────
-document.getElementById('redeemBtn').addEventListener('click', async () => {
+// ============================================================
+// PROMO CODE
+// ============================================================
+async function redeemPromo() {
   const code = document.getElementById('promoInput').value.trim();
   if (!code) { showToast('Enter a promo code', 'error'); return; }
 
   try {
-    const res = await apiPost('/redeem-promo', { code });
-    if (res.reward_type === 'ton') {
-      showToast(`+${res.reward} TON added! 💎`, 'success');
-    } else {
-      state.user.coins = (state.user.coins || 0) + res.reward;
-      updateBalanceDisplay();
-      showToast(`+${res.reward} TR coins! 🎉`, 'success');
-    }
-    document.getElementById('promoInput').value = '';
-  } catch (e) {
-    showToast(e.message || 'Invalid or expired code', 'error');
-  }
-});
-
-// ── DAILY TASKS ──────────────────────────────────────────────────
-function setupDailyTasks() {
-  // Check-in
-  document.querySelector('[data-task="checkin"]').addEventListener('click', async () => {
-    try {
-      const res = await apiPost('/claim-daily-task', { task: 'checkin' });
-      state.user.coins = (state.user.coins || 0) + (res.reward || 10);
-      state.user.spins = (state.user.spins || 0) + (res.spins || 0);
-      updateBalanceDisplay();
-      markDailyTask('checkin');
-      showToast(`+${res.reward || 10} TR`, 'success');
-    } catch (e) {
-      showToast(e.message || 'Already claimed', 'error');
-    }
-  });
-
-  // Updates — first click opens channel, second claims reward
-  const updatesBtn = document.querySelector('[data-task="updates"]');
-  updatesBtn.addEventListener('click', async () => {
-    if (!state.updatesTaskClicked) {
-      state.updatesTaskClicked = true;
-      if (tg) tg.openLink(CONFIG.CHANNEL_URL);
-      else window.open(CONFIG.CHANNEL_URL, '_blank');
-      updatesBtn.textContent = t('claim');
-      return;
-    }
-    try {
-      const res = await apiPost('/claim-daily-task', { task: 'updates' });
-      state.user.coins = (state.user.coins || 0) + (res.reward || 50);
-      updateBalanceDisplay();
-      markDailyTask('updates');
-      showToast(`+${res.reward || 50} TR`, 'success');
-    } catch (e) {
-      showToast(e.message || 'Already claimed', 'error');
-    }
-  });
-
-  // Share
-  document.querySelector('[data-task="share"]').addEventListener('click', async () => {
-    const user = getTgUser();
-    const link = `https://t.me/${CONFIG.BOT_USERNAME}?start=${user.id}`;
-    const text = `Join TRewards and earn TR coins! Use my referral link:`;
-    if (tg) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
-    setTimeout(async () => {
-      try {
-        const res = await apiPost('/claim-daily-task', { task: 'share' });
-        state.user.coins = (state.user.coins || 0) + (res.reward || 100);
-        updateBalanceDisplay();
-        markDailyTask('share');
-        showToast(`+${res.reward || 100} TR`, 'success');
-      } catch { /* already claimed is fine */ }
-    }, 1500);
-  });
-}
-
-function markDailyTask(task) {
-  const el = document.getElementById(`task-${task}`);
-  if (el) {
-    el.classList.add('completed');
-    const btn = el.querySelector('.task-claim-btn');
-    if (btn) btn.textContent = '✓';
-  }
-}
-
-// ── TASKS PAGE ───────────────────────────────────────────────────
-async function loadTasks() {
-  document.getElementById('tasksList').innerHTML = `
-    <div class="tasks-loading">
-      <div class="spinner"></div>
-      <span>${t('loadingTasks')}</span>
-    </div>`;
-  try {
-    const res = await apiGet('/tasks');
-    state.tasks = res.tasks || [];
-    renderTasks();
-  } catch (e) {
-    document.getElementById('tasksList').innerHTML = `<div class="empty-state">Failed to load tasks</div>`;
-  }
-}
-
-function renderTasks() {
-  const list = document.getElementById('tasksList');
-  if (!state.tasks.length) {
-    list.innerHTML = `<div class="empty-state">No tasks available right now</div>`;
-    return;
-  }
-
-  const categories = {
-    channel: { label: '📡 Join Channel', tasks: [] },
-    group: { label: '👥 Join Group', tasks: [] },
-    game: { label: '🎮 Play Game Bot', tasks: [] },
-    visit: { label: '🌐 Visit Website', tasks: [] },
-  };
-
-  state.tasks.forEach(task => {
-    if (categories[task.task_type]) categories[task.task_type].tasks.push(task);
-  });
-
-  let html = '';
-  for (const [type, cat] of Object.entries(categories)) {
-    if (!cat.tasks.length) continue;
-    html += `<div class="tasks-category"><div class="category-label">${cat.label}</div></div>`;
-    cat.tasks.forEach(task => {
-      const reward = Number(task.reward) || (task.task_type === 'visit' ? 500 : 1000);
-      const done = task.user_completed;
-      html += `
-        <div class="task-card">
-          <div class="task-card-header">
-            <div class="task-card-info">
-              <span class="task-card-type type-${type}">${type}</span>
-              <div class="task-card-name">${escapeHtml(task.task_name)}</div>
-            </div>
-            <div class="task-card-reward">
-              +${reward.toLocaleString()} TR
-              <small>+1 🎰</small>
-            </div>
-          </div>
-          <div class="task-card-footer">
-            <button class="task-start-btn ${done ? 'completed' : ''}"
-              data-task-id="${task.id}"
-              data-task-type="${type}"
-              data-task-url="${escapeHtml(task.target_url)}"
-              data-task-name="${escapeHtml(task.task_name)}"
-              data-task-reward="${reward}"
-              ${done ? 'disabled' : ''}>
-              ${done ? '✓ Done' : t('start')}
-            </button>
-          </div>
-        </div>`;
+    const data = await apiPost('/redeem-promo', {
+      telegram_id: state.user.telegram_id,
+      code
     });
-  }
-  list.innerHTML = html;
-
-  list.querySelectorAll('.task-start-btn:not([disabled])').forEach(btn => {
-    btn.addEventListener('click', () => openTask({
-      id: btn.dataset.taskId,
-      task_type: btn.dataset.taskType,
-      target_url: btn.dataset.taskUrl,
-      task_name: btn.dataset.taskName,
-      reward: parseInt(btn.dataset.taskReward),
-    }));
-  });
-}
-
-function openTask(task) {
-  state.currentTask = task;
-  document.getElementById('overlayTaskName').textContent = task.task_name;
-  document.getElementById('overlayTaskReward').textContent = `+${task.reward.toLocaleString()} TR`;
-
-  document.getElementById('taskTimerSection').classList.add('hidden');
-  document.getElementById('taskVerifySection').classList.add('hidden');
-  document.getElementById('taskClaimBtn').classList.add('hidden');
-  document.getElementById('taskVerifyBtn').classList.add('hidden');
-  document.getElementById('taskOverlay').classList.remove('hidden');
-
-  if (task.task_type === 'visit' || task.task_type === 'game') {
-    if (tg) tg.openLink(task.target_url);
-    else window.open(task.target_url, '_blank');
-    const duration = task.task_type === 'game' ? 10 : 15;
-    startTaskTimer(duration);
-  } else {
-    // Channel / Group
-    document.getElementById('taskVerifySection').classList.remove('hidden');
-    document.getElementById('overlayOpenLink').onclick = () => {
-      if (tg) tg.openLink(task.target_url);
-      else window.open(task.target_url, '_blank');
-      setTimeout(() => {
-        document.getElementById('taskVerifyBtn').classList.remove('hidden');
-      }, 1500);
-    };
-  }
-}
-
-function startTaskTimer(duration) {
-  clearInterval(state.currentTaskTimer);
-  document.getElementById('taskTimerSection').classList.remove('hidden');
-  let remaining = duration;
-  const circumference = 226;
-  const progressEl = document.getElementById('timerProgress');
-  const textEl = document.getElementById('timerText');
-  const barEl = document.getElementById('progressBarFill');
-
-  progressEl.style.strokeDashoffset = 0;
-  textEl.textContent = remaining;
-  barEl.style.width = '100%';
-
-  state.currentTaskTimer = setInterval(() => {
-    remaining--;
-    textEl.textContent = remaining;
-    const progress = remaining / duration;
-    progressEl.style.strokeDashoffset = circumference * (1 - progress);
-    barEl.style.width = `${progress * 100}%`;
-    if (remaining <= 0) {
-      clearInterval(state.currentTaskTimer);
-      document.getElementById('taskClaimBtn').classList.remove('hidden');
+    showToast(`Redeemed! +${data.reward_amount} ${data.reward_type === 'ton' ? 'TON' : 'TR'}`, 'success');
+    document.getElementById('promoInput').value = '';
+    if (data.reward_type === 'coins') {
+      state.user.coins = (state.user.coins || 0) + data.reward_amount;
+      updateUI();
     }
-  }, 1000);
-}
-
-document.getElementById('taskClaimBtn').addEventListener('click', async () => {
-  if (!state.currentTask) return;
-  document.getElementById('taskClaimBtn').disabled = true;
-  try {
-    const res = await apiPost('/claim-task', { task_id: state.currentTask.id });
-    state.user.coins = (state.user.coins || 0) + res.reward;
-    state.user.spins = (state.user.spins || 0) + 1;
-    updateBalanceDisplay();
-    closeTaskOverlay();
-    showToast(`+${res.reward} TR +1 🎰`, 'success');
-    loadTasks();
   } catch (e) {
-    showToast(e.message || 'Failed to claim', 'error');
-    document.getElementById('taskClaimBtn').disabled = false;
+    showToast(e.message || 'Invalid code', 'error');
   }
-});
+}
 
-document.getElementById('taskVerifyBtn').addEventListener('click', async () => {
-  if (!state.currentTask) return;
-  document.getElementById('taskVerifyBtn').disabled = true;
-  document.getElementById('taskVerifyBtn').textContent = 'Verifying...';
+// ============================================================
+// TASKS
+// ============================================================
+async function loadTasks() {
   try {
-    const res = await apiPost('/verify-join', { task_id: state.currentTask.id });
-    state.user.coins = (state.user.coins || 0) + res.reward;
-    state.user.spins = (state.user.spins || 0) + 1;
-    updateBalanceDisplay();
-    closeTaskOverlay();
-    showToast(`+${res.reward} TR +1 🎰`, 'success');
-    loadTasks();
+    const data = await apiGet('/tasks', `telegram_id=${state.user.telegram_id}`);
+    state.tasks = data.tasks || [];
+    renderAdvertiserTasks('all');
   } catch (e) {
-    showToast(e.message || 'Not a member yet. Please join first.', 'error');
-    document.getElementById('taskVerifyBtn').disabled = false;
-    document.getElementById('taskVerifyBtn').textContent = t('iJoined');
-  }
-});
-
-function closeTaskOverlay() {
-  clearInterval(state.currentTaskTimer);
-  state.currentTask = null;
-  document.getElementById('taskOverlay').classList.add('hidden');
-}
-
-document.getElementById('taskOverlayClose').addEventListener('click', closeTaskOverlay);
-
-// ── FRIENDS PAGE ─────────────────────────────────────────────────
-async function loadFriends() {
-  const user = getTgUser();
-  const link = `https://t.me/${CONFIG.BOT_USERNAME}?start=${user.id}`;
-  document.getElementById('referralLink').textContent = link;
-
-  try {
-    const res = await apiGet('/friends');
-    state.friends = res.friends || [];
-    document.getElementById('pendingReferral').textContent = (res.pending_earnings || 0).toLocaleString();
-    document.getElementById('totalFriends').textContent = res.total_friends || 0;
-    document.getElementById('totalEarnedRef').textContent = (res.total_earned || 0).toLocaleString();
-    renderFriends();
-  } catch (e) {
-    // Silently ignore network errors here
+    console.error('Load tasks error', e);
   }
 }
 
-function renderFriends() {
-  const list = document.getElementById('friendsList');
-  if (!state.friends.length) {
-    list.innerHTML = `<div class="empty-state">${t('noFriendsYet')}</div>`;
-    return;
-  }
-  list.innerHTML = state.friends.map(f => `
-    <div class="friend-item">
-      <div>
-        <div class="friend-name">${escapeHtml(f.name)}</div>
-        <div class="friend-coins">${(f.coins || 0).toLocaleString()} TR total</div>
-      </div>
-      <div class="friend-share">+${(f.your_share || 0).toLocaleString()} TR</div>
-    </div>
-  `).join('');
-}
+function renderDailyTasks(claimedList = []) {
+  const container = document.getElementById('dailyTasksList');
+  const dailyTasks = [
+    { id: 'checkin', icon: '☀️', name: t('checkIn'), reward: '+10 TR +1 Spin', type: 'checkin' },
+    { id: 'updates', icon: '📢', name: t('updates'), reward: '+10 TR', url: 'https://t.me/trewards_tonfirst', type: 'channel_tap' },
+    { id: 'share', icon: '🔗', name: t('share'), reward: '+10 TR', type: 'share' },
+  ];
 
-document.getElementById('copyReferral').addEventListener('click', () => {
-  const user = getTgUser();
-  const link = `https://t.me/${CONFIG.BOT_USERNAME}?start=${user.id}`;
-  navigator.clipboard?.writeText(link).then(() => showToast('Link copied!', 'success')).catch(() => {
-    const el = document.createElement('textarea');
-    el.value = link;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    showToast('Link copied!', 'success');
-  });
-});
-
-document.getElementById('inviteBtn').addEventListener('click', () => {
-  const user = getTgUser();
-  const link = `https://t.me/${CONFIG.BOT_USERNAME}?start=${user.id}`;
-  const text = `🚀 Join TRewards and earn TR coins! Complete tasks, spin the wheel, and withdraw TON!`;
-  if (tg) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
-});
-
-document.getElementById('claimReferralBtn').addEventListener('click', async () => {
-  try {
-    const res = await apiPost('/claim-referral');
-    state.user.coins = (state.user.coins || 0) + res.reward;
-    updateBalanceDisplay();
-    document.getElementById('pendingReferral').textContent = '0';
-    showToast(`+${res.reward} TR`, 'success');
-  } catch (e) {
-    showToast(e.message || 'Commissions are credited automatically', 'error');
-  }
-});
-
-// ── WALLET PAGE ──────────────────────────────────────────────────
-async function loadTransactions() {
-  try {
-    const res = await apiGet('/transactions');
-    state.transactions = res.transactions || [];
-    renderTransactions();
-  } catch (e) { /* ignore */ }
-}
-
-function renderTransactions() {
-  const list = document.getElementById('txList');
-  if (!state.transactions.length) {
-    list.innerHTML = `<div class="empty-state">${t('noTransactions')}</div>`;
-    return;
-  }
-  list.innerHTML = state.transactions.map(tx => {
-    const isCredit = tx.amount > 0;
-    const date = new Date(tx.created_at).toLocaleDateString();
+  container.innerHTML = dailyTasks.map(task => {
+    const done = claimedList.includes(task.id);
     return `
-      <div class="tx-item">
-        <div class="tx-left">
-          <div class="tx-type">${escapeHtml(tx.type.replace(/_/g, ' '))}</div>
-          <div class="tx-desc">${escapeHtml(tx.description || '')}</div>
-          <div class="tx-date">${date}</div>
+      <div class="task-card ${done ? 'completed' : ''}">
+        <div class="task-icon">${task.icon}</div>
+        <div class="task-info">
+          <div class="task-name">${task.name}</div>
+          <div class="task-reward">${task.reward}</div>
         </div>
-        <div class="tx-amount ${isCredit ? 'credit' : 'debit'}">
-          ${isCredit ? '+' : ''}${Number(tx.amount).toLocaleString()} TR
+        <div class="task-action">
+          <button class="task-btn ${done ? 'done' : ''}"
+            onclick="handleDailyTask('${task.id}', '${task.type}', '${task.url || ''}')"
+            ${done ? 'disabled' : ''}>
+            ${done ? t('done') : t('start')}
+          </button>
         </div>
       </div>`;
   }).join('');
 }
 
-// Withdraw tiers
-document.querySelectorAll('.tier-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const tier = btn.closest('.withdraw-tier');
-    const coins = parseInt(tier.dataset.coins);
-    const ton = parseFloat(tier.dataset.ton);
-    const net = parseFloat(tier.dataset.net);
-
-    if ((state.user?.coins || 0) < coins) {
-      showToast(`Need ${coins.toLocaleString()} TR`, 'error');
-      return;
+async function handleDailyTask(taskId, type, url) {
+  if (type === 'checkin') {
+    await claimDailyTask(taskId);
+  } else if (type === 'channel_tap') {
+    const btn = event.target;
+    if (btn.dataset.stage === '2') {
+      await claimDailyTask(taskId);
+    } else {
+      openUrl(url);
+      btn.dataset.stage = '2';
+      btn.textContent = t('claimNow');
+      btn.classList.add('claiming');
     }
+  } else if (type === 'share') {
+    const refLink = `https://t.me/trewards_ton_bot?start=${state.user.telegram_id}`;
+    const text = encodeURIComponent(`Join TRewards and earn TR coins! ${refLink}`);
+    openUrl(`https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${text}`);
+    setTimeout(() => claimDailyTask(taskId), 2000);
+  }
+}
 
-    state.pendingWithdraw = { coins, ton, net };
-    document.getElementById('wCoins').textContent = coins.toLocaleString() + ' TR';
-    document.getElementById('wGross').textContent = ton.toFixed(2) + ' TON';
-    document.getElementById('wNet').textContent = net.toFixed(2) + ' TON';
-    document.getElementById('withdrawOverlay').classList.remove('hidden');
+async function claimDailyTask(taskId) {
+  try {
+    const data = await apiPost('/claim-daily-task', {
+      telegram_id: state.user.telegram_id,
+      task_id: taskId
+    });
+    state.user = { ...state.user, ...data };
+    updateUI();
+    showToast(`+${data.coins_earned} TR!`, 'success');
+  } catch (e) {
+    showToast(e.message || 'Already claimed', 'error');
+  }
+}
+
+function renderAdvertiserTasks(category = 'all') {
+  const container = document.getElementById('advertiserTasksList');
+  const TYPE_ICONS = { channel: '📺', group: '👥', game: '🎮', website: '🌐' };
+  const TYPE_REWARDS = { channel: 1000, group: 1000, game: 1000, website: 500 };
+
+  let tasks = state.tasks;
+  if (category !== 'all') tasks = tasks.filter(t => t.task_type === category);
+
+  if (!tasks.length) {
+    container.innerHTML = `<div class="empty">No tasks available</div>`;
+    return;
+  }
+
+  container.innerHTML = tasks.map(task => {
+    const done = task.user_completed;
+    const reward = TYPE_REWARDS[task.task_type] || 500;
+    return `
+      <div class="task-card ${done ? 'completed' : ''}" id="task-${task.id}">
+        <div class="task-icon">${TYPE_ICONS[task.task_type] || '📋'}</div>
+        <div class="task-info">
+          <div class="task-name">${task.name}</div>
+          <div class="task-reward">+${reward.toLocaleString()} TR <span>+1 Spin</span></div>
+          <div class="progress-bar-wrap" id="pb-wrap-${task.id}">
+            <div class="progress-bar" id="pb-${task.id}" style="width:100%"></div>
+          </div>
+        </div>
+        <div class="task-action">
+          <button class="task-btn ${done ? 'done' : ''}"
+            onclick="handleTaskAction('${task.id}','${task.task_type}','${task.target_url}')"
+            id="task-btn-${task.id}"
+            ${done ? 'disabled' : ''}>
+            ${done ? t('done') : t('start')}
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function handleTaskAction(taskId, type, url) {
+  const btn = document.getElementById(`task-btn-${taskId}`);
+  if (!btn || btn.disabled) return;
+
+  if (type === 'channel' || type === 'group') {
+    // Open verify overlay
+    state.pendingTaskId = taskId;
+    state.pendingTaskUrl = url;
+    document.getElementById('verifyOpenLink').onclick = () => openUrl(url);
+    openOverlay('verifyOverlay');
+  } else {
+    // Visit / game — timer flow
+    const isGame = type === 'game';
+    const waitTime = isGame ? 10 : 15;
+    openUrl(url);
+    startTaskTimer(taskId, waitTime);
+  }
+}
+
+function startTaskTimer(taskId, seconds) {
+  const btn = document.getElementById(`task-btn-${taskId}`);
+  const pbWrap = document.getElementById(`pb-wrap-${taskId}`);
+  const pb = document.getElementById(`pb-${taskId}`);
+  if (!btn || !pbWrap || !pb) return;
+
+  pbWrap.style.display = 'block';
+  btn.disabled = true;
+  btn.textContent = `${seconds}s`;
+
+  let remaining = seconds;
+  const interval = setInterval(() => {
+    remaining--;
+    btn.textContent = `${remaining}s`;
+    pb.style.width = `${(remaining / seconds) * 100}%`;
+    if (remaining <= 0) {
+      clearInterval(interval);
+      btn.disabled = false;
+      btn.textContent = t('claimNow');
+      btn.classList.add('claiming');
+      btn.onclick = () => claimTask(taskId);
+    }
+  }, 1000);
+
+  state.taskTimers[taskId] = interval;
+}
+
+async function claimTask(taskId) {
+  const btn = document.getElementById(`task-btn-${taskId}`);
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+
+  try {
+    const data = await apiPost('/claim-task', {
+      telegram_id: state.user.telegram_id,
+      task_id: taskId
+    });
+    state.user.coins = (state.user.coins || 0) + (data.coins_earned || 0);
+    state.user.spins = (state.user.spins || 0) + 1;
+    updateUI();
+    showToast(`+${data.coins_earned} TR & +1 Spin!`, 'success');
+    if (btn) { btn.textContent = t('done'); btn.classList.remove('claiming'); btn.classList.add('done'); }
+    // Mark completed
+    const task = state.tasks.find(t => t.id == taskId);
+    if (task) task.user_completed = true;
+  } catch (e) {
+    showToast(e.message || 'Claim failed', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = t('claimNow'); }
+  }
+}
+
+async function verifyJoin() {
+  const btn = document.getElementById('verifyJoinedBtn');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    const data = await apiPost('/verify-join', {
+      telegram_id: state.user.telegram_id,
+      task_id: state.pendingTaskId
+    });
+    closeOverlay('verifyOverlay');
+    state.user.coins = (state.user.coins || 0) + (data.coins_earned || 0);
+    state.user.spins = (state.user.spins || 0) + 1;
+    updateUI();
+    showToast(`+${data.coins_earned} TR & +1 Spin!`, 'success');
+    const task = state.tasks.find(t => t.id == state.pendingTaskId);
+    if (task) task.user_completed = true;
+    renderAdvertiserTasks('all');
+  } catch (e) {
+    showToast(e.message || 'Not a member yet!', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('iJoined');
+  }
+}
+
+// ============================================================
+// FRIENDS
+// ============================================================
+async function loadFriends() {
+  try {
+    const data = await apiGet('/friends', `telegram_id=${state.user.telegram_id}`);
+    document.getElementById('totalFriendsCount').textContent = data.total_friends || 0;
+    document.getElementById('totalEarnedReferral').textContent = (data.total_earned || 0).toLocaleString();
+    document.getElementById('pendingReferralAmt').textContent = (data.pending || 0).toLocaleString();
+    renderFriendsList(data.friends || []);
+  } catch (e) { console.error(e); }
+}
+
+function renderFriendsList(friends) {
+  const container = document.getElementById('friendsList');
+  if (!friends.length) {
+    container.innerHTML = `<div class="empty">No friends yet. Share your referral link!</div>`;
+    return;
+  }
+  container.innerHTML = friends.map(f => `
+    <div class="friend-item">
+      <div class="friend-avatar">👤</div>
+      <div class="friend-info">
+        <div class="friend-name">${f.first_name || f.username || 'User'}</div>
+        <div class="friend-coins">${(f.coins || 0).toLocaleString()} TR</div>
+      </div>
+      <div class="friend-earn">+${(f.your_share || 0).toLocaleString()} TR</div>
+    </div>`).join('');
+}
+
+async function claimReferral() {
+  try {
+    const data = await apiPost('/claim-referral', { telegram_id: state.user.telegram_id });
+    showToast(`+${data.coins_earned} TR claimed!`, 'success');
+    state.user.coins = (state.user.coins || 0) + data.coins_earned;
+    updateUI();
+    document.getElementById('pendingReferralAmt').textContent = '0';
+  } catch (e) {
+    showToast(e.message || 'Nothing to claim', 'error');
+  }
+}
+
+// ============================================================
+// WALLET
+// ============================================================
+const WITHDRAW_TIERS = [
+  { coins: 250000, ton: 0.10, net: 0.05 },
+  { coins: 500000, ton: 0.20, net: 0.15 },
+  { coins: 750000, ton: 0.30, net: 0.25 },
+  { coins: 1000000, ton: 0.40, net: 0.35 },
+];
+
+function renderWithdrawTiers() {
+  const container = document.getElementById('withdrawTiers');
+  container.innerHTML = WITHDRAW_TIERS.map((tier, i) => `
+    <div class="withdraw-tier" onclick="selectWithdrawTier(${i})">
+      <div class="tier-info">
+        <div class="tier-coins">${tier.coins.toLocaleString()} TR</div>
+        <div class="tier-ton">→ ${tier.ton} TON (fee: 0.05)</div>
+      </div>
+      <div class="tier-net">${tier.net} TON</div>
+    </div>`).join('');
+
+  // Withdraw button at end
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-gold btn-full';
+  btn.textContent = t('withdraw');
+  btn.style.marginTop = '4px';
+  btn.onclick = openWithdrawConfirm;
+  container.appendChild(btn);
+}
+
+function selectWithdrawTier(idx) {
+  document.querySelectorAll('.withdraw-tier').forEach((el, i) => {
+    el.classList.toggle('selected', i === idx);
   });
-});
+  state.selectedWithdrawTier = idx;
+}
 
-document.getElementById('withdrawClose').addEventListener('click', () => {
-  document.getElementById('withdrawOverlay').classList.add('hidden');
-});
+function openWithdrawConfirm() {
+  if (state.selectedWithdrawTier === null) {
+    showToast('Select a withdrawal tier first', 'error');
+    return;
+  }
+  const tier = WITHDRAW_TIERS[state.selectedWithdrawTier];
+  if ((state.user?.coins || 0) < tier.coins) {
+    showToast('Insufficient TR coins', 'error');
+    return;
+  }
+  document.getElementById('withdrawSummary').innerHTML = `
+    <div class="withdraw-summary">
+      <div class="summary-row"><span>TR Coins</span><span>-${tier.coins.toLocaleString()}</span></div>
+      <div class="summary-row"><span>Gross TON</span><span>${tier.ton} TON</span></div>
+      <div class="summary-row"><span>Network Fee</span><span>-0.05 TON</span></div>
+      <div class="summary-row net"><span>You Receive</span><span>${tier.net} TON</span></div>
+    </div>`;
+  openOverlay('withdrawOverlay');
+}
 
-document.getElementById('confirmWithdrawBtn').addEventListener('click', async () => {
-  if (!state.pendingWithdraw) return;
-  const { coins, ton, net } = state.pendingWithdraw;
+async function confirmWithdraw() {
+  const tier = WITHDRAW_TIERS[state.selectedWithdrawTier];
   const btn = document.getElementById('confirmWithdrawBtn');
   btn.disabled = true;
   try {
-    await apiPost('/withdraw', { coins_amount: coins, ton_amount: ton, net_amount: net });
-    state.user.coins = Math.max(0, (state.user.coins || 0) - coins);
-    updateBalanceDisplay();
-    document.getElementById('withdrawOverlay').classList.add('hidden');
-    showToast(`Withdrawal of ${net} TON queued! ✅`, 'success');
+    await apiPost('/withdraw', {
+      telegram_id: state.user.telegram_id,
+      tier_index: state.selectedWithdrawTier
+    });
+    closeOverlay('withdrawOverlay');
+    state.user.coins -= tier.coins;
+    updateUI();
+    showToast(`Withdrawal of ${tier.net} TON queued!`, 'success');
     loadTransactions();
   } catch (e) {
     showToast(e.message || 'Withdrawal failed', 'error');
   } finally {
     btn.disabled = false;
-    state.pendingWithdraw = null;
-  }
-});
-
-// ── TOP UP ───────────────────────────────────────────────────────
-document.querySelectorAll('.topup-amount-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.topup-amount-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    state.selectedTopupAmount = parseFloat(btn.dataset.amount);
-    document.getElementById('customTopupAmount').value = '';
-  });
-});
-
-document.getElementById('topUpBtn').addEventListener('click', () => {
-  const custom = parseFloat(document.getElementById('customTopupAmount').value);
-  const amount = custom > 0 ? custom : state.selectedTopupAmount;
-  if (!amount || amount <= 0) { showToast('Select or enter an amount', 'error'); return; }
-  state.pendingTopup = amount;
-  document.getElementById('topupAmountDisplay').textContent = amount;
-  document.getElementById('topupOverlay').classList.remove('hidden');
-});
-
-document.getElementById('topupClose').addEventListener('click', () => {
-  document.getElementById('topupOverlay').classList.add('hidden');
-});
-
-async function createTopup(method) {
-  if (!state.pendingTopup) return;
-  const xBtn = document.getElementById('xrocketBtn');
-  const cBtn = document.getElementById('cryptoPayBtn');
-  xBtn.disabled = true;
-  cBtn.disabled = true;
-  try {
-    const res = await apiPost('/create-topup', { amount: state.pendingTopup, method });
-    document.getElementById('topupOverlay').classList.add('hidden');
-    if (res.payment_url) {
-      if (tg) tg.openLink(res.payment_url);
-      else window.open(res.payment_url, '_blank');
-      showToast('Payment page opened', 'success');
-    }
-  } catch (e) {
-    showToast(e.message || 'Failed to create invoice', 'error');
-  } finally {
-    xBtn.disabled = false;
-    cBtn.disabled = false;
-    state.pendingTopup = null;
   }
 }
 
-document.getElementById('xrocketBtn').addEventListener('click', () => createTopup('xrocket'));
-document.getElementById('cryptoPayBtn').addEventListener('click', () => createTopup('cryptopay'));
-
-// ── ADVERTISER DASHBOARD ─────────────────────────────────────────
-document.getElementById('addTaskBtn').addEventListener('click', () => {
-  loadAdvertiserData();
-  document.getElementById('advertiserOverlay').classList.remove('hidden');
-});
-
-document.getElementById('advertiserClose').addEventListener('click', () => {
-  document.getElementById('advertiserOverlay').classList.add('hidden');
-});
-
-document.querySelectorAll('.tab-switch-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-switch-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.ad-tab').forEach(tab => {
-      tab.classList.remove('active');
-      tab.classList.add('hidden');
-    });
-    btn.classList.add('active');
-    const tab = document.getElementById(`adTab-${btn.dataset.adtab}`);
-    if (tab) { tab.classList.remove('hidden'); tab.classList.add('active'); }
-    if (btn.dataset.adtab === 'my') renderAdTasks();
-  });
-});
-
-async function loadAdvertiserData() {
+async function loadTransactions() {
   try {
-    const res = await apiGet('/advertiser');
-    state.adBalance = res.ad_balance || 0;
-    state.adTasks = res.tasks || [];
-    document.getElementById('adBalance').textContent = state.adBalance.toFixed(3);
-  } catch (e) { /* ignore */ }
+    const data = await apiGet('/transactions', `telegram_id=${state.user.telegram_id}`);
+    renderTransactions(data.transactions || []);
+  } catch (e) { console.error(e); }
 }
 
-const targetSelect = document.getElementById('adTaskTarget');
-targetSelect.addEventListener('change', updateCostPreview);
-
-function updateCostPreview() {
-  const target = parseInt(targetSelect.value) || 500;
-  const cost = (target * 0.001).toFixed(1);
-  document.getElementById('taskCostPreview').textContent = `${cost} TON`;
-}
-
-document.getElementById('adTopUpBtn').addEventListener('click', () => {
-  state.pendingTopup = 1;
-  document.getElementById('topupAmountDisplay').textContent = 1;
-  document.getElementById('advertiserOverlay').classList.add('hidden');
-  document.getElementById('topupOverlay').classList.remove('hidden');
-});
-
-document.getElementById('publishTaskBtn').addEventListener('click', async () => {
-  const name = document.getElementById('adTaskName').value.trim();
-  const type = document.getElementById('adTaskType').value;
-  const url = document.getElementById('adTaskUrl').value.trim();
-  const target = parseInt(targetSelect.value);
-
-  if (!name || !url) { showToast('Fill in all fields', 'error'); return; }
-
-  const cost = target * 0.001;
-  if (state.adBalance < cost) { showToast(`Need ${cost} TON ad balance`, 'error'); return; }
-
-  const btn = document.getElementById('publishTaskBtn');
-  btn.disabled = true;
-  try {
-    await apiPost('/create-task', { task_name: name, task_type: type, target_url: url, completion_target: target });
-    state.adBalance -= cost;
-    document.getElementById('adBalance').textContent = state.adBalance.toFixed(3);
-    document.getElementById('adTaskName').value = '';
-    document.getElementById('adTaskUrl').value = '';
-    showToast('Task published! ✅', 'success');
-  } catch (e) {
-    showToast(e.message || 'Failed to publish task', 'error');
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-function renderAdTasks() {
-  const list = document.getElementById('adTasksList');
-  if (!state.adTasks.length) {
-    list.innerHTML = `<div class="empty-state">${t('noTasksPublished')}</div>`;
+function renderTransactions(txs) {
+  const container = document.getElementById('txList');
+  if (!txs.length) {
+    container.innerHTML = `<div class="empty">No transactions yet</div>`;
     return;
   }
-  list.innerHTML = state.adTasks.map(task => {
-    const pct = Math.min(100, Math.round((task.completed_count / task.completion_target) * 100));
+  const TX_ICONS = { spin: '🎰', task: '✅', streak: '🔥', referral: '👥', promo: '🎁', withdraw: '💸', topup: '💳', daily: '☀️' };
+  container.innerHTML = txs.map(tx => {
+    const credit = tx.amount > 0;
+    const icon = TX_ICONS[tx.type] || '💰';
+    const date = new Date(tx.created_at).toLocaleDateString();
     return `
-      <div class="ad-task-item">
-        <div class="ad-task-name">${escapeHtml(task.task_name)}</div>
-        <div class="ad-task-progress">
-          <div class="ad-task-progress-fill" style="width:${pct}%"></div>
+      <div class="tx-item">
+        <div class="tx-icon">${icon}</div>
+        <div class="tx-info">
+          <div class="tx-desc">${tx.description}</div>
+          <div class="tx-date">${date}</div>
         </div>
-        <div class="ad-task-meta">
-          <span>${task.completed_count} / ${task.completion_target}</span>
-          <span class="ad-task-status status-${task.status}">${task.status}</span>
+        <div class="tx-amount ${credit ? 'credit' : 'debit'}">
+          ${credit ? '+' : ''}${tx.amount.toLocaleString()} ${tx.currency || 'TR'}
         </div>
       </div>`;
   }).join('');
 }
 
-// ── INIT ─────────────────────────────────────────────────────────
-async function init() {
-  if (tg) {
-    tg.ready();
-    tg.expand();
-  }
+// ============================================================
+// TOP UP
+// ============================================================
+async function doTopup(method) {
+  const customVal = document.getElementById('customTopup')?.value;
+  const amount = parseFloat(customVal) || state.selectedTopupAmount;
 
-  applyI18n();
-  drawWheel(0);
-  setupDailyTasks();
-  updateCostPreview();
-  renderStreakDots();
+  if (!amount || amount <= 0) {
+    showToast('Select or enter an amount', 'error');
+    return;
+  }
 
   try {
-    const tgUser = getTgUser();
-    const startParam = getStartParam();
-    const body = {
-      first_name: tgUser.first_name || '',
-      last_name: tgUser.last_name || '',
-      username: tgUser.username || '',
-    };
-    // Pass referral ID if present in start param
-    if (startParam && /^\d+$/.test(startParam)) {
-      body.referred_by = startParam;
-    }
-
-    const res = await apiPost('/user', body);
-    state.user = res.user;
-    updateBalanceDisplay();
-    renderStreakDots();
-
-    if (res.user.daily_checkin_claimed) markDailyTask('checkin');
-    if (res.user.daily_updates_claimed) {
-      markDailyTask('updates');
-      state.updatesTaskClicked = true;
-    }
-    if (res.user.daily_share_claimed) markDailyTask('share');
-    if (res.user.streak_claimed_today) {
-      const btn = document.getElementById('claimStreakBtn');
-      btn.disabled = true;
-      btn.textContent = '✓ Claimed';
-    }
+    const data = await apiPost('/create-topup', {
+      telegram_id: state.user.telegram_id,
+      amount,
+      method
+    });
+    if (data.payment_url) openUrl(data.payment_url);
+    showToast('Payment link opened', 'info');
   } catch (e) {
-    // Use safe default for dev/offline
-    state.user = { id: 0, coins: 0, spins: 3, streak_count: 0 };
-    updateBalanceDisplay();
-    console.warn('User load failed:', e.message);
+    showToast(e.message || 'Payment failed', 'error');
   }
 }
 
-// ── UTILS ────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+// ============================================================
+// ADVERTISER PANEL
+// ============================================================
+async function openAdvertiserPanel() {
+  openOverlay('advertiserOverlay');
+  try {
+    const data = await apiGet('/advertiser', `telegram_id=${state.user.telegram_id}`);
+    state.advertiserData = data;
+    document.getElementById('adBalance').textContent = (data.ad_balance || 0).toFixed(2);
+  } catch (e) { console.error(e); }
 }
 
-init();
+function updateCostPreview() {
+  const limit = parseInt(document.getElementById('adTaskLimit').value) || 500;
+  const cost = (limit * 0.001).toFixed(3);
+  document.getElementById('costPreview').innerHTML = `Cost: <strong>${cost} TON</strong>`;
+}
+
+async function publishTask() {
+  const name = document.getElementById('adTaskName').value.trim();
+  const type = document.getElementById('adTaskType').value;
+  const url = document.getElementById('adTaskUrl').value.trim();
+  const limit = parseInt(document.getElementById('adTaskLimit').value);
+
+  if (!name || !url) { showToast('Fill all fields', 'error'); return; }
+
+  try {
+    await apiPost('/create-task', {
+      telegram_id: state.user.telegram_id,
+      name, task_type: type, target_url: url, completion_limit: limit
+    });
+    showToast('Task published!', 'success');
+    document.getElementById('adTaskName').value = '';
+    document.getElementById('adTaskUrl').value = '';
+    openAdvertiserPanel();
+  } catch (e) {
+    showToast(e.message || 'Publish failed', 'error');
+  }
+}
+
+async function loadMyTasks() {
+  try {
+    const data = await apiGet('/advertiser', `telegram_id=${state.user.telegram_id}`);
+    const container = document.getElementById('myTasksList');
+    const tasks = data.tasks || [];
+    if (!tasks.length) {
+      container.innerHTML = `<div class="empty">No tasks yet</div>`;
+      return;
+    }
+    container.innerHTML = tasks.map(t => `
+      <div class="my-task-item">
+        <div class="my-task-name">${t.name}</div>
+        <div class="my-task-meta">
+          <span>${t.completions || 0} / ${t.completion_limit}</span>
+          <span class="status-${t.status}">${t.status}</span>
+        </div>
+      </div>`).join('');
+  } catch (e) { console.error(e); }
+}
+
+// ============================================================
+// OVERLAYS
+// ============================================================
+function openOverlay(id) {
+  document.getElementById(id)?.classList.add('active');
+}
+function closeOverlay(id) {
+  document.getElementById(id)?.classList.remove('active');
+}
+
+// Close overlay on backdrop click
+document.querySelectorAll('.overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeOverlay(overlay.id);
+  });
+});
+
+// ============================================================
+// API HELPERS
+// ============================================================
+async function apiPost(endpoint, body) {
+  const res = await fetch(`${API}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Init-Data': tg?.initData || '' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.detail || 'Request failed');
+  return data;
+}
+
+async function apiGet(endpoint, query = '') {
+  const url = `${API}${endpoint}${query ? '?' + query : ''}`;
+  const res = await fetch(url, {
+    headers: { 'X-Init-Data': tg?.initData || '' }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.detail || 'Request failed');
+  return data;
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+let toastTimer = null;
+function showToast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function openUrl(url) {
+  if (tg?.openLink) tg.openLink(url);
+  else window.open(url, '_blank');
+}
+
+function copyFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+}
