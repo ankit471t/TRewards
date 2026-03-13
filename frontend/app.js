@@ -2,7 +2,7 @@
 // TREWARDS - Main Application JS
 // ============================================================
 
-const API = 'https://trewards-backend.onrender.com/api'; // relative path — served from same domain
+const API = 'https://trewards-backend.onrender.com/api'; // ← your Render backend URL
 
 // i18n translations
 const TRANSLATIONS = {
@@ -94,19 +94,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   drawWheel();
   renderStreakDots(0, 0);
   renderWithdrawTiers();
-
-  if (tgUser || true) { // allow testing without tg
-    await initUser();
-  }
+  await initUser();
 });
 
 async function initUser() {
+  const userId = tgUser?.id;
+  if (!userId) {
+    // Not opened inside Telegram
+    showToast('Please open this app inside Telegram', 'error');
+    console.warn('No Telegram user found. tgUser:', tgUser);
+    // Still try with a test ID so UI loads during development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      tgUser = { id: 99999999, username: 'devtest', first_name: 'Dev', last_name: '' };
+    } else {
+      return;
+    }
+  }
+
   const payload = {
-    telegram_id: tgUser?.id || 0,
-    username: tgUser?.username || 'demo_user',
-    first_name: tgUser?.first_name || 'Demo',
-    last_name: tgUser?.last_name || '',
-    init_data: tg?.initData || '',
+    telegram_id: tgUser.id,
+    username:    tgUser.username   || '',
+    first_name:  tgUser.first_name || '',
+    last_name:   tgUser.last_name  || '',
+    init_data:   tg?.initData      || '',
   };
 
   try {
@@ -117,8 +127,9 @@ async function initUser() {
     loadFriends();
     loadTransactions();
   } catch (e) {
-    showToast('Failed to connect to server', 'error');
-    console.error(e);
+    console.error('initUser error:', e);
+    showToast('Connection error. Retrying...', 'error');
+    setTimeout(initUser, 3000);
   }
 }
 
@@ -303,6 +314,7 @@ function renderStreakDots(days, claimedToday) {
 }
 
 async function claimStreak() {
+  if (!state.user) { showToast('Loading... please wait', 'error'); return; }
   try {
     const data = await apiPost('/claim-streak', { telegram_id: state.user.telegram_id });
     state.user = { ...state.user, ...data };
@@ -379,7 +391,7 @@ function drawWheel(angle = 0) {
 
 async function doSpin() {
   if (isSpinning) return;
-  if (!state.user) return;
+  if (!state.user) { showToast('Loading... please wait', 'error'); return; }
   if ((state.user.spins || 0) < 1) {
     showToast('No spins available!', 'error');
     return;
