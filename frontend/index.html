@@ -690,13 +690,11 @@ window.addEventListener('load', async () => {
   drawWheel(0);
   renderTiers();
 
-  // Ping backend with retry
+  // Ping backend (no AbortSignal — crashes Telegram WebView)
   let connected = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const pingCtrl = new AbortController();
-    setTimeout(() => pingCtrl.abort(), 8000);
-    const ping = await fetch(API_BASE + '/health', { signal: pingCtrl.signal });
+      const ping = await fetch(API_BASE + '/health');
       if (ping.ok) { connected = true; break; }
     } catch(e) {
       console.warn('Backend ping attempt ' + attempt + ' failed:', e.message);
@@ -706,7 +704,7 @@ window.addEventListener('load', async () => {
 
   if (!connected) {
     showLoading(false);
-    showToast('Cannot reach server. Retrying...', 'error');
+    showToast('Cannot reach server. Check connection.', 'error');
     renderAll();
     return;
   }
@@ -729,17 +727,14 @@ function showLoading(show) {
 }
 
 async function apiCall(path, method='GET', body=null) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  // No AbortSignal — Telegram WebView blocks postMessage with signal objects
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': initData },
-    signal: controller.signal
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': initData }
   };
   if (body) opts.body = JSON.stringify(body);
   try {
     const r = await fetch(API_BASE + path, opts);
-    clearTimeout(timer);
     if (!r.ok) {
       let msg = r.statusText;
       try { const e = await r.json(); msg = e.detail || e.error || msg; } catch(_) {}
@@ -748,10 +743,8 @@ async function apiCall(path, method='GET', body=null) {
     }
     return await r.json();
   } catch(e) {
-    clearTimeout(timer);
-    if (e.name === 'AbortError') { console.error('API timeout:', path); return { error: 'Request timed out' }; }
     console.error('API error:', path, e.message);
-    return { error: 'Network error — check connection' };
+    return { error: 'Network error' };
   }
 }
 
