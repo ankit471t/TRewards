@@ -10,9 +10,11 @@ import json
 import time
 import secrets
 import string
+import threading
 from datetime import datetime, date, timedelta
 from typing import Optional
 from urllib.parse import unquote, parse_qsl
+from contextlib import asynccontextmanager
 
 import httpx
 import psycopg2
@@ -899,3 +901,442 @@ async def withdrawal_action(request: Request):
         return {"success": True, "status": "declined"}
 
     raise HTTPException(400, "Invalid action")
+
+# ─── Telegram Bot (runs in background thread) ──────────────
+def run_bot():
+    """Start the Telegram bot using long polling in a background thread."""
+    import requests as req_lib
+
+    if not BOT_TOKEN:
+        print("⚠️  BOT_TOKEN not set — bot disabled")
+        return
+
+    WEBAPP_URL_BOT = os.getenv("WEBAPP_URL", "https://trewards.onrender.com")
+    offset = 0
+
+    def tg(method, **kwargs):
+        try:
+            r = req_lib.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/{method}",
+                json=kwargs, timeout=30
+            )
+            return r.json()
+        except Exception as e:
+            print(f"TG API error [{method}]: {e}")
+            return {}
+
+    def answer_cb(cid): tg("answerCallbackQuery", callback_query_id=cid)
+
+    promo_wizard = {}   # user_id → wizard state
+
+    def handle_update(upd):
+        nonlocal promo_wizard
+
+        # ── callback_query ──────────────────────────────────
+        if "callback_query" in upd:
+            cq = upd["callback_query"]
+            chat_id  = cq["message"]["chat"]["id"]
+            msg_id   = cq["message"]["message_id"]
+            user_id  = cq["from"]["id"]
+            data     = cq.get("data", "")
+            answer_cb(cq["id"])
+
+            # Withdrawal admin actions
+            if data.startswith("wd_"):
+                if user_id not in ADMIN_IDS:
+                    return
+                parts = data.split("_")          # wd_approve_5  or  wd_complete_5
+                action = parts[1]
+                wid    = int(parts[2])
+
+                import requests as rr
+                res = rr.post(
+                    f"http://localhost:{os.getenv('PORT', 8000)}/api/withdrawal-action",
+                    json={"admin_id": user_id, "withdrawal_id": wid, "action": action},
+                    timeout=10
+                ).json()
+
+                if res.get("error"):
+                    tg("sendMessage", chat_id=chat_id, text=f"❌ {res['error']}")
+                    return
+
+                orig_text = cq["message"].get("text", "")
+                if action == "complete":
+                    tg("editMessageReplyMarkup", chat_id=chat_id, message_id=msg_id,
+                       reply_markup={"inline_keyboard": []})
+                    tg("editMessageText", chat_id=chat_id, message_id=msg_id,
+                       text=orig_text + "\n\n✅ COMPLETED — Payment sent",
+                       parse_mode="Markdown")
+                elif action == "approve":
+                    tg("editMessageText", chat_id=chat_id, message_id=msg_id,
+                       text=orig_text + "\n\n✅ APPROVED — Processing...",
+                       parse_mode="Markdown",
+                       reply_markup={"inline_keyboard": [[
+                           {"text": "❌ Decline",  "callback_data": f"wd_decline_{wid}"},
+                           {"text": "💸 Complete", "callback_data": f"wd_complete_{wid}"}
+                       ]]})
+                elif action == "decline":
+                    tg("editMessageReplyMarkup", chat_id=chat_id, message_id=msg_id,
+                       reply_markup={"inline_keyboard": []})
+                    tg("editMessageText", chat_id=chat_id, message_id=msg_id,
+                       text=orig_text + "\n\n❌ DECLINED — Coins refunded",
+                       parse_mode="Markdown")
+                return
+
+            # Admin panel callbacks
+            if user_id not in ADMIN_IDS:
+                return
+
+            if data == "admin_promo_create":
+                promo_wizard[user_id] = {"step": 1}
+                tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+                   text="🎁 *Create Promo Code — Step 1/4*\n\nEnter the promo code name (e.g. WELCOME100):")
+                return
+
+            if data == "admin_promo_list":
+                codes = db_exec(
+                    """SELECT p.*, (SELECT COUNT(*) FROM promo_activations WHERE promo_id=p.id) as used
+                       FROM promo_codes p ORDER BY created_at DESC""", fetch=True
+                ) or []
+                if not codes:
+                    tg("sendMessage", chat_id=chat_id, text="📋 No promo codes found.")
+                    return
+                lines = "\n\n".join(
+                    f"• `{c['code']}` — {c['reward_amount']} {c['reward_type'].upper()}\n"
+                    f"  Used: {c['used']}/{c['max_activations']} | {'✅ Active' if c['is_active'] else '❌ Inactive'}"
+                    for c in codes
+                )
+                tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+                   text=f"📋 *Promo Codes:*\n\n{lines}")
+                return
+
+            if data == "admin_promo_delete":
+                promo_wizard[user_id] = {"step": "delete"}
+                tg("sendMessage", chat_id=chat_id, text="🗑 Enter the promo code to delete:")
+                return
+
+            if data == "admin_promo_history":
+                acts = db_exec(
+                    """SELECT pa.*, pc.code FROM promo_activations pa
+                       JOIN promo_codes pc ON pa.promo_id=pc.id
+                       ORDER BY pa.created_at DESC LIMIT 20""", fetch=True
+                ) or []
+                if not acts:
+                    tg("sendMessage", chat_id=chat_id, text="No activations yet.")
+                    return
+                lines = "\n".join(
+                    f"• {a['code']} → User {a['user_id']} on {str(a['created_at'])[:10]}"
+                    for a in acts
+                )
+                tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+                   text=f"📈 *Recent Activations:*\n\n{lines}")
+                return
+
+            if data == "admin_payment_history":
+                pays = db_exec(
+                    "SELECT * FROM payments ORDER BY created_at DESC LIMIT 10", fetch=True
+                ) or []
+                if not pays:
+                    tg("sendMessage", chat_id=chat_id, text="No payments yet.")
+                    return
+                lines = "\n".join(
+                    f"• {p['amount']} TON via {p['method']} — {p['status']} (User {p['user_id']})"
+                    for p in pays
+                )
+                tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+                   text=f"💸 *Recent Payments:*\n\n{lines}")
+                return
+
+            if data == "admin_total_users":
+                total   = db_exec("SELECT COUNT(*) as c FROM users", fetchone=True)
+                active  = db_exec("SELECT COUNT(*) as c FROM users WHERE updated_at::date=CURRENT_DATE", fetchone=True)
+                wdraw   = db_exec("SELECT COALESCE(SUM(ton_net),0) as t FROM withdrawals WHERE status='completed'", fetchone=True)
+                compl   = db_exec("SELECT COUNT(*) as c FROM task_completions", fetchone=True)
+                tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+                   text=(
+                       f"👥 *Platform Stats*\n\n"
+                       f"Total Users: *{total['c']}*\n"
+                       f"Active Today: *{active['c']}*\n"
+                       f"Total Withdrawn: *{float(wdraw['t']):.4f} TON*\n"
+                       f"Task Completions: *{compl['c']}*"
+                   ))
+                return
+
+            if data.startswith("promo_type_") and promo_wizard.get(user_id, {}).get("step") == 2:
+                promo_wizard[user_id]["reward_type"] = data.replace("promo_type_", "")
+                promo_wizard[user_id]["step"] = 3
+                tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+                   text="🎁 *Create Promo Code — Step 3/4*\n\nEnter reward amount (e.g. 5000 for TR, 0.5 for TON):")
+                return
+
+        # ── message ─────────────────────────────────────────
+        if "message" not in upd:
+            return
+
+        msg     = upd["message"]
+        chat_id = msg["chat"]["id"]
+        user_id = msg["from"]["id"]
+        text    = msg.get("text", "")
+        first   = msg["from"].get("first_name", "Friend")
+
+        # /start [ref]
+        if text.startswith("/start"):
+            parts = text.split(maxsplit=1)
+            ref_param = parts[1].strip() if len(parts) > 1 else ""
+            referrer_id = None
+            if ref_param.isdigit() and int(ref_param) != user_id:
+                referrer_id = int(ref_param)
+
+            # Register user
+            try:
+                import requests as rr
+                rr.post(f"http://localhost:{os.getenv('PORT', 8000)}/api/user", json={
+                    "user_id": user_id,
+                    "first_name": msg["from"].get("first_name", ""),
+                    "last_name":  msg["from"].get("last_name", ""),
+                    "username":   msg["from"].get("username", ""),
+                }, timeout=10)
+                if referrer_id:
+                    rr.post(f"http://localhost:{os.getenv('PORT', 8000)}/api/set-referrer", json={
+                        "user_id": user_id, "referrer_id": referrer_id
+                    }, timeout=10)
+            except Exception as e:
+                print(f"Register error: {e}")
+
+            tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+               text=(
+                   f"🏆 *Welcome to TRewards, {first}!*\n\n"
+                   f"Earn *TR Coins* by completing tasks, spinning the wheel, and inviting friends.\n\n"
+                   f"💎 *Withdraw your coins as TON cryptocurrency!*\n\n"
+                   f"━━━━━━━━━━━━━━━━━━━━\n"
+                   f"🔥 Daily streak bonuses\n"
+                   f"🎰 Spin the wheel for prizes\n"
+                   f"👥 30% referral commission\n"
+                   f"📢 Advertiser task rewards\n"
+                   f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                   f"Tap the button below to open TRewards! 👇"
+               ),
+               reply_markup={"inline_keyboard": [[
+                   {"text": "🚀 Open TRewards", "web_app": {"url": WEBAPP_URL_BOT}}
+               ], [
+                   {"text": "📢 TRewards Channel", "url": "https://t.me/trewards_ton"}
+               ]]})
+            return
+
+        # /amiadminyes
+        if text == "/amiadminyes":
+            if user_id not in ADMIN_IDS:
+                tg("sendMessage", chat_id=chat_id, text="⛔ Access denied.")
+                return
+            tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+               text="⚙️ *TRewards Admin Panel*\n\nWelcome, Admin. Choose an action:",
+               reply_markup={"inline_keyboard": [
+                   [{"text": "🎁 Create Promo Code",  "callback_data": "admin_promo_create"}],
+                   [{"text": "📋 List Promo Codes",   "callback_data": "admin_promo_list"}],
+                   [{"text": "🗑 Delete Promo Code",  "callback_data": "admin_promo_delete"}],
+                   [{"text": "📈 Activation History", "callback_data": "admin_promo_history"}],
+                   [{"text": "💸 Payment History",    "callback_data": "admin_payment_history"}],
+                   [{"text": "👥 Total Users",        "callback_data": "admin_total_users"}],
+               ]})
+            return
+
+        # Promo wizard text input
+        if user_id not in ADMIN_IDS or user_id not in promo_wizard:
+            return
+
+        wizard = promo_wizard[user_id]
+
+        if wizard["step"] == "delete":
+            del promo_wizard[user_id]
+            code = text.strip().upper()
+            db_exec("UPDATE promo_codes SET is_active=false WHERE code=%s", (code,))
+            tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+               text=f"✅ Promo code `{code}` deactivated.")
+            return
+
+        if wizard["step"] == 1:
+            wizard["code"] = text.strip().upper()
+            wizard["step"] = 2
+            tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+               text=f"🎁 *Step 2/4*\n\nCode: `{wizard['code']}`\n\nSelect reward type:",
+               reply_markup={"inline_keyboard": [[
+                   {"text": "🪙 TR Coins", "callback_data": "promo_type_tr"},
+                   {"text": "💎 TON",      "callback_data": "promo_type_ton"},
+               ]]})
+            return
+
+        if wizard["step"] == 3:
+            try:
+                wizard["reward_amount"] = float(text.strip())
+            except ValueError:
+                tg("sendMessage", chat_id=chat_id, text="❌ Invalid amount. Enter a number:")
+                return
+            wizard["step"] = 4
+            tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+               text="🎁 *Step 4/4*\n\nEnter maximum number of activations (e.g. 100):")
+            return
+
+        if wizard["step"] == 4:
+            try:
+                wizard["max_activations"] = int(text.strip())
+            except ValueError:
+                tg("sendMessage", chat_id=chat_id, text="❌ Enter a positive integer:")
+                return
+            del promo_wizard[user_id]
+            # Check duplicate
+            existing = db_exec("SELECT id FROM promo_codes WHERE code=%s", (wizard["code"],), fetchone=True)
+            if existing:
+                tg("sendMessage", chat_id=chat_id, text="❌ Promo code already exists.")
+                return
+            db_exec(
+                """INSERT INTO promo_codes (code, reward_type, reward_amount, max_activations, is_active, created_by, created_at)
+                   VALUES (%s,%s,%s,%s,true,%s,NOW())""",
+                (wizard["code"], wizard["reward_type"], wizard["reward_amount"],
+                 wizard["max_activations"], user_id)
+            )
+            tg("sendMessage", chat_id=chat_id, parse_mode="Markdown",
+               text=(
+                   f"✅ *Promo Code Created!*\n\n"
+                   f"Code: `{wizard['code']}`\n"
+                   f"Reward: {wizard['reward_amount']} {wizard['reward_type'].upper()}\n"
+                   f"Max Uses: {wizard['max_activations']}"
+               ))
+
+    # ── Polling loop ────────────────────────────────────────
+    print("🤖 TRewards Bot polling started...")
+    while True:
+        try:
+            resp = req_lib.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates",
+                params={"offset": offset, "timeout": 30, "allowed_updates": ["message", "callback_query"]},
+                timeout=35
+            ).json()
+            for upd in resp.get("result", []):
+                offset = upd["update_id"] + 1
+                try:
+                    handle_update(upd)
+                except Exception as e:
+                    print(f"Handle update error: {e}")
+        except Exception as e:
+            print(f"Polling error: {e}")
+            time.sleep(5)
+
+
+# ── Start bot thread when uvicorn starts ────────────────────
+@app.on_event("startup")
+def startup_event():
+    t = threading.Thread(target=run_bot, daemon=True)
+    t.start()
+    print("✅ TRewards API + Bot started")
+    """
+Admin API routes - append these to main.py
+Or import them as a router
+"""
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+admin_router = APIRouter(prefix="/api/admin")
+
+def is_admin(admin_id: int) -> bool:
+    return admin_id in ADMIN_IDS
+
+class CreatePromoRequest(BaseModel):
+    admin_id: int
+    code: str
+    reward_type: str
+    reward_amount: float
+    max_activations: int
+
+class SetReferrerRequest(BaseModel):
+    user_id: int
+    referrer_id: int
+
+@app.post("/api/set-referrer")
+async def set_referrer(req: SetReferrerRequest):
+    """Set referrer for a user (called from bot on /start with ref param)"""
+    if req.user_id == req.referrer_id:
+        return {"ok": False, "error": "Self-referral not allowed"}
+    # Only set if not already set
+    user = db_exec("SELECT referrer_id FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    if user and not user.get("referrer_id"):
+        referrer = db_exec("SELECT user_id FROM users WHERE user_id=%s", (req.referrer_id,), fetchone=True)
+        if referrer:
+            db_exec("UPDATE users SET referrer_id=%s WHERE user_id=%s", (req.referrer_id, req.user_id))
+    return {"ok": True}
+
+@app.post("/api/admin/create-promo")
+async def admin_create_promo(req: CreatePromoRequest):
+    if not is_admin(req.admin_id):
+        raise HTTPException(403, "Unauthorized")
+    existing = db_exec("SELECT id FROM promo_codes WHERE code=%s", (req.code,), fetchone=True)
+    if existing:
+        raise HTTPException(400, "Promo code already exists")
+    db_exec(
+        """INSERT INTO promo_codes (code, reward_type, reward_amount, max_activations, is_active, created_by, created_at)
+           VALUES (%s,%s,%s,%s,true,%s,NOW())""",
+        (req.code, req.reward_type, req.reward_amount, req.max_activations, req.admin_id)
+    )
+    return {"ok": True}
+
+@app.get("/api/admin/promo-codes")
+async def admin_list_promos(admin_id: int):
+    if not is_admin(admin_id):
+        raise HTTPException(403, "Unauthorized")
+    codes = db_exec(
+        """SELECT p.*, 
+           (SELECT COUNT(*) FROM promo_activations WHERE promo_id=p.id) as used
+           FROM promo_codes p ORDER BY created_at DESC""",
+        fetch=True
+    )
+    return {"codes": [dict(c) for c in (codes or [])]}
+
+@app.delete("/api/admin/promo-codes/{code}")
+async def admin_delete_promo(code: str, admin_id: int):
+    if not is_admin(admin_id):
+        raise HTTPException(403, "Unauthorized")
+    db_exec("UPDATE promo_codes SET is_active=false WHERE code=%s", (code,))
+    return {"ok": True}
+
+@app.get("/api/admin/promo-history")
+async def admin_promo_history(admin_id: int):
+    if not is_admin(admin_id):
+        raise HTTPException(403, "Unauthorized")
+    acts = db_exec(
+        """SELECT pa.*, pc.code FROM promo_activations pa
+           JOIN promo_codes pc ON pa.promo_id=pc.id
+           ORDER BY pa.created_at DESC LIMIT 50""",
+        fetch=True
+    )
+    return {"activations": [dict(a) for a in (acts or [])]}
+
+@app.get("/api/admin/payments")
+async def admin_payments(admin_id: int):
+    if not is_admin(admin_id):
+        raise HTTPException(403, "Unauthorized")
+    pays = db_exec(
+        "SELECT * FROM payments ORDER BY created_at DESC LIMIT 50",
+        fetch=True
+    )
+    return {"payments": [dict(p) for p in (pays or [])]}
+
+@app.get("/api/admin/stats")
+async def admin_stats(admin_id: int):
+    if not is_admin(admin_id):
+        raise HTTPException(403, "Unauthorized")
+    total_users = db_exec("SELECT COUNT(*) as c FROM users", fetchone=True)
+    active_today = db_exec(
+        "SELECT COUNT(*) as c FROM users WHERE updated_at::date=CURRENT_DATE",
+        fetchone=True
+    )
+    total_withdrawals = db_exec(
+        "SELECT COALESCE(SUM(ton_net),0) as t FROM withdrawals WHERE status='completed'",
+        fetchone=True
+    )
+    total_completions = db_exec("SELECT COUNT(*) as c FROM task_completions", fetchone=True)
+    return {
+        "total_users": total_users["c"] if total_users else 0,
+        "active_today": active_today["c"] if active_today else 0,
+        "total_withdrawals": float(total_withdrawals["t"]) if total_withdrawals else 0,
+        "total_completions": total_completions["c"] if total_completions else 0
+    }
