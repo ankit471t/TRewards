@@ -38,9 +38,15 @@ app.add_middleware(
 # ─── DB ────────────────────────────────────────────────────
 def get_db():
     url = DATABASE_URL
+    # Strip query params — psycopg2 doesn't accept ?sslmode= in URI
     if "?" in url:
         url = url.split("?")[0]
-    return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor, sslmode="require")
+    # Supabase requires SSL
+    try:
+        return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor, sslmode="require")
+    except Exception:
+        # Fallback without sslmode if it fails
+        return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
 
 def db_exec(query, params=(), fetch=False, fetchone=False):
     conn = get_db()
@@ -52,10 +58,13 @@ def db_exec(query, params=(), fetch=False, fetchone=False):
         if fetch:    return cur.fetchall()
         return None
     except Exception as e:
-        conn.rollback()
+        try: conn.rollback()
+        except: pass
+        print(f"DB error: {e} | Query: {query[:80]}")
         raise e
     finally:
-        conn.close()
+        try: conn.close()
+        except: pass
 
 # ─── Helpers ───────────────────────────────────────────────
 def log_tx(user_id, type_, desc, amount, currency="TR"):
@@ -190,12 +199,44 @@ def root():
 @app.head("/health")
 def health():
     db_ok = False
+    db_err = ""
     try:
         db_exec("SELECT 1", fetchone=True)
         db_ok = True
     except Exception as e:
+        db_err = str(e)
         print(f"DB health error: {e}")
-    return {"status": "ok", "db": "connected" if db_ok else "error", "timestamp": datetime.utcnow().isoformat()}
+    return {
+        "status": "ok",
+        "db": "connected" if db_ok else "error",
+        "db_error": db_err if not db_ok else None,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.get("/api/debug")
+def debug():
+    """Debug endpoint — shows env vars status (no secrets)"""
+    db_ok = False
+    db_err = ""
+    try:
+        result = db_exec("SELECT COUNT(*) as c FROM users", fetchone=True)
+        db_ok = True
+        user_count = result["c"] if result else 0
+    except Exception as e:
+        db_err = str(e)
+        user_count = -1
+    return {
+        "db_connected":    db_ok,
+        "db_error":        db_err,
+        "user_count":      user_count,
+        "has_bot_token":   bool(BOT_TOKEN),
+        "has_db_url":      bool(DATABASE_URL),
+        "has_xrocket":     bool(XROCKET_API_KEY),
+        "has_cryptopay":   bool(CRYPTOPAY_API_KEY),
+        "admin_ids":       ADMIN_IDS,
+        "withdrawal_ch":   bool(WITHDRAWAL_CHANNEL_ID),
+        "webapp_url":      WEBAPP_URL,
+    }
 
 # ── /api/user ───────────────────────────────────────────────
 @app.post("/api/user")

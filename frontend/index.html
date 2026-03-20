@@ -694,7 +694,9 @@ window.addEventListener('load', async () => {
   let connected = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const ping = await fetch(API_BASE + '/health', { signal: AbortSignal.timeout(8000) });
+      const pingCtrl = new AbortController();
+    setTimeout(() => pingCtrl.abort(), 8000);
+    const ping = await fetch(API_BASE + '/health', { signal: pingCtrl.signal });
       if (ping.ok) { connected = true; break; }
     } catch(e) {
       console.warn('Backend ping attempt ' + attempt + ' failed:', e.message);
@@ -727,31 +729,29 @@ function showLoading(show) {
 }
 
 async function apiCall(path, method='GET', body=null) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
   const opts = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Telegram-Init-Data': initData
-    },
-    signal: AbortSignal.timeout(15000)
+    headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': initData },
+    signal: controller.signal
   };
   if (body) opts.body = JSON.stringify(body);
   try {
     const r = await fetch(API_BASE + path, opts);
+    clearTimeout(timer);
     if (!r.ok) {
-      const err = await r.json().catch(() => ({ detail: r.statusText }));
-      const msg = err.detail || err.error || r.statusText;
-      console.error('API error', r.status, path, msg);
+      let msg = r.statusText;
+      try { const e = await r.json(); msg = e.detail || e.error || msg; } catch(_) {}
+      console.error('API', r.status, path, msg);
       return { error: msg };
     }
     return await r.json();
   } catch(e) {
-    if (e.name === 'TimeoutError') {
-      console.error('API timeout:', path);
-      return { error: 'Request timed out' };
-    }
+    clearTimeout(timer);
+    if (e.name === 'AbortError') { console.error('API timeout:', path); return { error: 'Request timed out' }; }
     console.error('API error:', path, e.message);
-    return { error: 'Network error' };
+    return { error: 'Network error — check connection' };
   }
 }
 
