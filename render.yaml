@@ -1,0 +1,60 @@
+services:
+  # ─── Backend (FastAPI) ──────────────────────────────────────
+  - type: web
+    name: trewards-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: XROCKET_API_KEY
+        sync: false
+      - key: CRYPTOPAY_API_KEY
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: WITHDRAWAL_CHANNEL_ID
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+
+  # ─── Frontend (Static) ─────────────────────────────────────
+  - type: web
+    name: trewards-frontend
+    runtime: static
+    rootDir: frontend
+    staticPublishPath: .
+    headers:
+      - path: "/*"
+        name: "Cache-Control"
+        value: "no-cache"
+      - path: "/*"
+        name: "X-Frame-Options"
+        value: "ALLOWALL"
+
+  # ─── Bot (Node.js) ─────────────────────────────────────────
+  - type: worker
+    name: trewards-bot
+    runtime: node
+    buildCommand: npm install
+    startCommand: node bot.js
+    rootDir: bot
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: WITHDRAWAL_CHANNEL_ID
+        sync: false

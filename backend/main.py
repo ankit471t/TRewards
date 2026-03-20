@@ -1,29 +1,39 @@
-import hashlib
+"""
+TRewards Backend - FastAPI + PostgreSQL (Supabase)
+Run: uvicorn main:app --host 0.0.0.0 --port 8000
+"""
+
+import os
 import hmac
+import hashlib
 import json
-import logging
-import random
+import time
 import secrets
-import urllib.parse
-from datetime import date, datetime, timedelta
+import string
+from datetime import datetime, date, timedelta
 from typing import Optional
+from urllib.parse import unquote, parse_qsl
 
 import httpx
+import psycopg2
+import psycopg2.extras
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-import config
-from database import (
-    get_pool, init_db, get_user, create_user,
-    add_coins, add_spins
-)
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# ─── Config ────────────────────────────────────────────────
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")  # Supabase pooler URL port 6543
+XROCKET_API_KEY = os.getenv("XROCKET_API_KEY", "")
+CRYPTOPAY_API_KEY = os.getenv("CRYPTOPAY_API_KEY", "")
+CRYPTOPAY_BASE = "https://pay.crypt.bot/api"  # mainnet; testnet: https://testnet-pay.crypt.bot/api
+XROCKET_BASE = "https://pay.xrocket.tg"
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "123456789").split(",") if x.strip()]
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "trewards_ton")
+WITHDRAWAL_CHANNEL_ID = os.getenv("WITHDRAWAL_CHANNEL_ID", "")  # e.g. -1001234567890
 
 app = FastAPI(title="TRewards API")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,981 +42,860 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── DB ────────────────────────────────────────────────────
+def get_db():
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    return conn
 
-@app.on_event("startup")
-async def startup():
-    await init_db()
-    logger.info("TRewards API started")
-
-
-# ─── Helpers ────────────────────────────────────────────────────────────────
-
-def verify_telegram_init_data(init_data: str) -> dict:
-    """Validate Telegram WebApp initData HMAC-SHA256"""
+def db_exec(query, params=(), fetch=False, fetchone=False):
+    conn = get_db()
     try:
-        parsed = dict(urllib.parse.parse_qsl(init_data))
-        received_hash = parsed.pop("hash", "")
-        data_check = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
-        secret_key = hmac.new(b"WebAppData", config.BOT_TOKEN.encode(), hashlib.sha256).digest()
-        expected = hmac.new(secret_key, data_check.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, received_hash):
-            raise ValueError("Invalid hash")
+        cur = conn.cursor()
+        cur.execute(query, params)
+        conn.commit()
+        if fetchone:
+            return cur.fetchone()
+        if fetch:
+            return cur.fetchall()
+        return None
+    finally:
+        conn.close()
+
+# ─── Validation ────────────────────────────────────────────
+def verify_telegram_init_data(init_data: str) -> Optional[dict]:
+    """Validate Telegram WebApp initData HMAC"""
+    if not init_data or not BOT_TOKEN:
+        return None
+    try:
+        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+        hash_str = parsed.pop("hash", "")
+        data_check = "\n".join(sorted(f"{k}={v}" for k, v in parsed.items()))
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        computed = hmac.new(secret_key, data_check.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(computed, hash_str):
+            return None
         user_data = json.loads(parsed.get("user", "{}"))
         return user_data
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid init data: {str(e)}")
+    except Exception:
+        return None
 
+def get_user_from_request(request: Request, x_telegram_init_data: str = "") -> Optional[dict]:
+    """Extract and validate user from initData header"""
+    init_data = x_telegram_init_data or request.headers.get("x-telegram-init-data", "")
+    user = verify_telegram_init_data(init_data)
+    return user
 
-async def get_current_user(request: Request):
-    init_data = request.headers.get("X-Telegram-Init-Data", "")
-    if not init_data:
-        # Dev fallback - check body
-        try:
-            body = await request.json()
-            init_data = body.get("init_data", "")
-        except Exception:
-            pass
-    if not init_data:
-        raise HTTPException(status_code=401, detail="Missing init data")
-    return verify_telegram_init_data(init_data)
-
-
-# ─── Models ─────────────────────────────────────────────────────────────────
-
+# ─── Models ────────────────────────────────────────────────
 class UserRequest(BaseModel):
-    init_data: str
-    referrer_id: Optional[int] = None
-    language: Optional[str] = "en"
-
-
-class PromoRequest(BaseModel):
-    init_data: str
-    code: str
-
+    user_id: int
+    first_name: str = ""
+    last_name: str = ""
+    username: str = ""
 
 class SpinRequest(BaseModel):
-    init_data: str
-
+    user_id: int
 
 class StreakRequest(BaseModel):
-    init_data: str
-
+    user_id: int
 
 class DailyTaskRequest(BaseModel):
-    init_data: str
-    task_type: str  # checkin, update, share
+    user_id: int
+    task_id: str
 
+class PromoRequest(BaseModel):
+    user_id: int
+    code: str
 
 class ClaimTaskRequest(BaseModel):
-    init_data: str
+    user_id: int
     task_id: int
-
 
 class VerifyJoinRequest(BaseModel):
-    init_data: str
+    user_id: int
     task_id: int
 
-
 class ClaimReferralRequest(BaseModel):
-    init_data: str
-
+    user_id: int
 
 class WithdrawRequest(BaseModel):
-    init_data: str
-    tier_index: int  # 0-3
-    wallet_address: str
-
+    user_id: int
+    tier_tr: int
+    tier_ton: float
+    net_ton: float
 
 class TopUpRequest(BaseModel):
-    init_data: str
+    user_id: int
     amount: float
-    method: str  # xrocket or cryptopay
-
+    method: str
+    target: str = "wallet"
 
 class CreateTaskRequest(BaseModel):
-    init_data: str
+    user_id: int
     name: str
-    task_type: str
+    type: str
     url: str
-    completion_limit: int
+    limit: int
 
+class ConvertRequest(BaseModel):
+    user_id: int
+    tr_amount: int
 
-class LanguageRequest(BaseModel):
-    init_data: str
-    language: str
+class XRocketWebhook(BaseModel):
+    invoiceId: Optional[str] = None
+    status: Optional[str] = None
 
+# ─── Helpers ───────────────────────────────────────────────
+def log_transaction(user_id, type_, description, amount, currency="TR"):
+    db_exec(
+        "INSERT INTO transactions (user_id, type, description, amount, currency) VALUES (%s,%s,%s,%s,%s)",
+        (user_id, type_, description, amount, currency)
+    )
 
-# ─── Routes ─────────────────────────────────────────────────────────────────
+async def get_telegram_user_status(chat_id: str, user_id: int) -> str:
+    """Check if user is member of a channel/group"""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember",
+                params={"chat_id": chat_id, "user_id": user_id},
+                timeout=10
+            )
+            data = r.json()
+            if data.get("ok"):
+                return data["result"]["status"]
+    except Exception:
+        pass
+    return "left"
+
+# ─── Routes ────────────────────────────────────────────────
 
 @app.get("/")
-async def root():
-    return {"status": "ok", "service": "TRewards API"}
-
+def root():
+    return {"status": "TRewards API running", "version": "1.0.0"}
 
 @app.get("/health")
-async def health():
-    return {"status": "healthy"}
+def health():
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
-
-# POST /api/user - Register or get user
 @app.post("/api/user")
-async def upsert_user(req: UserRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await create_user(
-            conn,
-            user_id,
-            tg_user.get("username"),
-            tg_user.get("first_name", ""),
-            tg_user.get("last_name", ""),
-            req.referrer_id
+async def get_or_create_user(req: UserRequest):
+    """Register or fetch user"""
+    user = db_exec(
+        "SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True
+    )
+    if not user:
+        db_exec(
+            """INSERT INTO users (user_id, first_name, last_name, username, balance, spins, streak, created_at)
+               VALUES (%s,%s,%s,%s,0,3,0,NOW())""",
+            (req.user_id, req.first_name, req.last_name, req.username)
         )
+        log_transaction(req.user_id, "earn", "Welcome Bonus", 100)
+        db_exec("UPDATE users SET balance=100 WHERE user_id=%s", (req.user_id,))
+        user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
 
-        # Update language preference
-        if req.language:
-            await conn.execute(
-                "UPDATE users SET language = $1 WHERE id = $2",
-                req.language, user_id
-            )
+    today = date.today().isoformat()
+    streak_claimed = str(user.get("last_streak_date", "")) == today
 
-        return {
-            "id": user["id"],
-            "username": user["username"],
-            "first_name": user["first_name"],
-            "coins": user["coins"],
-            "spins": user["spins"],
-            "streak": user["streak"],
-            "last_streak_date": user["last_streak_date"].isoformat() if user["last_streak_date"] else None,
-            "ton_balance": float(user["ton_balance"]),
-            "ad_balance": float(user["ad_balance"]),
-            "language": user["language"],
-            "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user_id}",
-        }
+    # Get pending referral
+    pending = db_exec(
+        "SELECT COALESCE(SUM(pending_amount),0) as total FROM referral_earnings WHERE user_id=%s AND claimed=false",
+        (req.user_id,), fetchone=True
+    )
 
+    return {
+        "user_id": user["user_id"],
+        "first_name": user["first_name"],
+        "username": user["username"],
+        "balance": user["balance"],
+        "spins": user["spins"],
+        "streak": user["streak"],
+        "streak_claimed_today": streak_claimed,
+        "pending_referral": int(pending["total"]) if pending else 0,
+        "daily_tasks_completed": user.get("daily_tasks_completed") or []
+    }
 
-# POST /api/claim-streak
 @app.post("/api/claim-streak")
 async def claim_streak(req: StreakRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    if not user:
+        raise HTTPException(404, "User not found")
+    today = date.today().isoformat()
+    if str(user.get("last_streak_date", "")) == today:
+        raise HTTPException(400, "Already claimed today")
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    if str(user.get("last_streak_date", "")) == yesterday:
+        new_streak = (user["streak"] or 0) + 1
+    else:
+        new_streak = 1
+    if new_streak > 7:
+        new_streak = 1
 
-        today = date.today()
-        last_date = user["last_streak_date"]
+    db_exec(
+        "UPDATE users SET balance=balance+10, spins=spins+1, streak=%s, last_streak_date=%s WHERE user_id=%s",
+        (new_streak, today, req.user_id)
+    )
+    log_transaction(req.user_id, "streak", f"Day {new_streak} streak bonus", 10)
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    return {
+        "balance": user["balance"], "spins": user["spins"], "streak": new_streak,
+        "streak_claimed_today": True, "user_id": user["user_id"],
+        "daily_tasks_completed": user.get("daily_tasks_completed") or [],
+        "pending_referral": 0
+    }
 
-        if last_date == today:
-            raise HTTPException(status_code=400, detail="Already claimed today")
-
-        # Calculate streak
-        if last_date == today - timedelta(days=1):
-            new_streak = (user["streak"] % 7) + 1
-        else:
-            new_streak = 1
-
-        await conn.execute("""
-            UPDATE users SET
-                streak = $1,
-                last_streak_date = $2,
-                streak_started = CASE WHEN $1 = 1 THEN $2 ELSE streak_started END
-            WHERE id = $3
-        """, new_streak, today, user_id)
-
-        await add_coins(conn, user_id, config.STREAK_COIN_REWARD, "streak", f"Day {new_streak} streak bonus")
-        await add_spins(conn, user_id, config.STREAK_SPIN_REWARD)
-
-        return {
-            "success": True,
-            "coins_earned": config.STREAK_COIN_REWARD,
-            "spins_earned": config.STREAK_SPIN_REWARD,
-            "streak": new_streak,
-        }
-
-
-# POST /api/spin
 @app.post("/api/spin")
 async def spin_wheel(req: SpinRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
+    import random
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if (user["spins"] or 0) <= 0:
+        raise HTTPException(400, "No spin tokens")
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    # Equal probability for all segments
+    rewards = [10, 50, 80, 100, 300, 500]
+    reward = random.choice(rewards)
 
-        if user["spins"] < 1:
-            raise HTTPException(status_code=400, detail="No spins available")
+    db_exec(
+        "UPDATE users SET balance=balance+%s, spins=spins-1 WHERE user_id=%s",
+        (reward, req.user_id)
+    )
+    db_exec(
+        "INSERT INTO spin_history (user_id, reward, created_at) VALUES (%s,%s,NOW())",
+        (req.user_id, reward)
+    )
+    log_transaction(req.user_id, "spin", f"Spin Wheel reward", reward)
 
-        # Weighted random result
-        result = random.choices(config.SPIN_SEGMENTS, weights=config.SPIN_WEIGHTS, k=1)[0]
-        segment_index = config.SPIN_SEGMENTS.index(result)
+    # Referral commission for referrer
+    await process_referral_earnings(req.user_id, reward)
 
-        # Deduct spin, add coins
-        await conn.execute(
-            "UPDATE users SET spins = spins - 1 WHERE id = $1",
-            user_id
-        )
-        await add_coins(conn, user_id, result, "spin", f"Spin wheel reward")
-        await conn.execute(
-            "INSERT INTO spin_history (user_id, result_coins) VALUES ($1, $2)",
-            user_id, result
-        )
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    return {
+        "reward": reward, "balance": user["balance"], "spins": user["spins"],
+        "streak": user["streak"], "streak_claimed_today": False,
+        "user_id": user["user_id"], "daily_tasks_completed": user.get("daily_tasks_completed") or [],
+        "pending_referral": 0
+    }
 
-        updated = await get_user(conn, user_id)
-        return {
-            "success": True,
-            "result": result,
-            "segment_index": segment_index,
-            "coins_earned": result,
-            "new_balance": updated["coins"],
-            "remaining_spins": updated["spins"],
-        }
+async def process_referral_earnings(user_id: int, amount: int):
+    """Add 30% to referrer's pending earnings"""
+    ref = db_exec("SELECT referrer_id FROM users WHERE user_id=%s", (user_id,), fetchone=True)
+    if ref and ref.get("referrer_id"):
+        commission = int(amount * 0.30)
+        if commission > 0:
+            db_exec(
+                """INSERT INTO referral_earnings (user_id, from_user_id, pending_amount, claimed, created_at)
+                   VALUES (%s,%s,%s,false,NOW())""",
+                (ref["referrer_id"], user_id, commission)
+            )
 
-
-# POST /api/redeem-promo
 @app.post("/api/redeem-promo")
 async def redeem_promo(req: PromoRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
+    promo = db_exec(
+        "SELECT * FROM promo_codes WHERE code=%s AND is_active=true", (req.code.upper(),), fetchone=True
+    )
+    if not promo:
+        raise HTTPException(400, "Invalid or expired promo code")
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        promo = await conn.fetchrow("""
-            SELECT * FROM promo_codes
-            WHERE LOWER(code) = LOWER($1) AND is_active = TRUE
-        """, req.code.strip())
+    # Check max activations
+    count = db_exec(
+        "SELECT COUNT(*) as c FROM promo_activations WHERE promo_id=%s",
+        (promo["id"],), fetchone=True
+    )
+    if count["c"] >= promo["max_activations"]:
+        raise HTTPException(400, "Promo code limit reached")
 
-        if not promo:
-            raise HTTPException(status_code=404, detail="Invalid or expired promo code")
+    # Check user already used
+    already = db_exec(
+        "SELECT id FROM promo_activations WHERE promo_id=%s AND user_id=%s",
+        (promo["id"], req.user_id), fetchone=True
+    )
+    if already:
+        raise HTTPException(400, "Already redeemed this code")
 
-        if promo["current_activations"] >= promo["max_activations"]:
-            raise HTTPException(status_code=400, detail="Promo code limit reached")
+    db_exec(
+        "INSERT INTO promo_activations (promo_id, user_id, created_at) VALUES (%s,%s,NOW())",
+        (promo["id"], req.user_id)
+    )
 
-        # Check if user already used it
-        existing = await conn.fetchrow("""
-            SELECT id FROM promo_activations WHERE promo_id = $1 AND user_id = $2
-        """, promo["id"], user_id)
-        if existing:
-            raise HTTPException(status_code=400, detail="Already redeemed this code")
+    reward_type = promo["reward_type"]
+    reward_amount = promo["reward_amount"]
 
-        # Apply reward
-        async with conn.transaction():
-            await conn.execute("""
-                UPDATE promo_codes SET current_activations = current_activations + 1
-                WHERE id = $1
-            """, promo["id"])
-            await conn.execute("""
-                INSERT INTO promo_activations (promo_id, user_id) VALUES ($1, $2)
-            """, promo["id"], user_id)
+    if reward_type == "tr":
+        db_exec("UPDATE users SET balance=balance+%s WHERE user_id=%s", (reward_amount, req.user_id))
+        log_transaction(req.user_id, "promo", f"Promo: {promo['code']}", reward_amount)
+    # TON rewards stored in user's withdrawal queue manually
 
-            if promo["reward_type"] == "coins":
-                amount = int(promo["reward_amount"])
-                await add_coins(conn, user_id, amount, "promo", f"Promo code: {promo['code']}")
-                return {"success": True, "reward_type": "coins", "amount": amount}
-            else:  # ton
-                ton_amt = float(promo["reward_amount"])
-                await conn.execute(
-                    "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2",
-                    ton_amt, user_id
-                )
-                await conn.execute("""
-                    INSERT INTO transactions (user_id, type, description, ton_amount)
-                    VALUES ($1, 'promo', $2, $3)
-                """, user_id, f"Promo code: {promo['code']}", ton_amt)
-                return {"success": True, "reward_type": "ton", "amount": ton_amt}
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    return {
+        "reward_type": reward_type, "reward_amount": reward_amount,
+        "balance": user["balance"], "spins": user["spins"],
+        "streak": user["streak"], "user_id": user["user_id"],
+        "streak_claimed_today": False, "daily_tasks_completed": user.get("daily_tasks_completed") or [],
+        "pending_referral": 0
+    }
 
-
-# GET /api/tasks
-@app.get("/api/tasks")
-async def get_tasks(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    user_id = tg_user["id"]
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        tasks = await conn.fetch("""
-            SELECT t.*,
-                EXISTS(
-                    SELECT 1 FROM task_completions tc
-                    WHERE tc.task_id = t.id AND tc.user_id = $1
-                ) as completed
-            FROM tasks t
-            WHERE t.status = 'active' AND t.completed_count < t.completion_limit
-            ORDER BY t.created_at DESC
-        """, user_id)
-
-        return [dict(t) for t in tasks]
-
-
-# POST /api/claim-task
-@app.post("/api/claim-task")
-async def claim_task(req: ClaimTaskRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        task = await conn.fetchrow(
-            "SELECT * FROM tasks WHERE id = $1 AND status = 'active'",
-            req.task_id
-        )
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found or inactive")
-
-        if task["type"] in ("channel", "group"):
-            raise HTTPException(status_code=400, detail="Use verify-join for channel/group tasks")
-
-        if task["completed_count"] >= task["completion_limit"]:
-            raise HTTPException(status_code=400, detail="Task limit reached")
-
-        existing = await conn.fetchrow("""
-            SELECT id FROM task_completions WHERE task_id = $1 AND user_id = $2
-        """, req.task_id, user_id)
-        if existing:
-            raise HTTPException(status_code=400, detail="Task already completed")
-
-        async with conn.transaction():
-            await conn.execute("""
-                INSERT INTO task_completions (task_id, user_id) VALUES ($1, $2)
-            """, req.task_id, user_id)
-            await conn.execute("""
-                UPDATE tasks SET completed_count = completed_count + 1 WHERE id = $1
-            """, req.task_id)
-            await add_coins(conn, user_id, task["reward_coins"], "task", f"Task: {task['name']}")
-            await add_spins(conn, user_id, config.TASK_SPIN_BONUS)
-
-            # Mark task completed if limit reached
-            await conn.execute("""
-                UPDATE tasks SET status = 'completed'
-                WHERE id = $1 AND completed_count >= completion_limit
-            """, req.task_id)
-
-        updated = await get_user(conn, user_id)
-        return {
-            "success": True,
-            "coins_earned": task["reward_coins"],
-            "spins_earned": config.TASK_SPIN_BONUS,
-            "new_balance": updated["coins"],
-        }
-
-
-# POST /api/verify-join
-@app.post("/api/verify-join")
-async def verify_join(req: VerifyJoinRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        task = await conn.fetchrow(
-            "SELECT * FROM tasks WHERE id = $1 AND status = 'active'",
-            req.task_id
-        )
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found or inactive")
-
-        if task["type"] not in ("channel", "group"):
-            raise HTTPException(status_code=400, detail="Not a channel/group task")
-
-        if task["completed_count"] >= task["completion_limit"]:
-            raise HTTPException(status_code=400, detail="Task limit reached")
-
-        existing = await conn.fetchrow("""
-            SELECT id FROM task_completions WHERE task_id = $1 AND user_id = $2
-        """, req.task_id, user_id)
-        if existing:
-            raise HTTPException(status_code=400, detail="Task already completed")
-
-        # Extract chat username from URL
-        chat_id = task["url"].split("t.me/")[-1].strip("/")
-        if chat_id.startswith("+"):
-            # Private invite link - can't verify programmatically, just award
-            is_member = True
-        else:
-            # Check via Telegram API
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(
-                        f"https://api.telegram.org/bot{config.BOT_TOKEN}/getChatMember",
-                        params={"chat_id": f"@{chat_id}", "user_id": user_id},
-                        timeout=10
-                    )
-                    data = resp.json()
-                    if data.get("ok"):
-                        status = data["result"]["status"]
-                        is_member = status in ("member", "administrator", "creator")
-                    else:
-                        is_member = False
-            except Exception as e:
-                logger.error(f"Telegram getChatMember error: {e}")
-                is_member = False
-
-        if not is_member:
-            raise HTTPException(status_code=400, detail="Not a member of the channel/group")
-
-        async with conn.transaction():
-            await conn.execute("""
-                INSERT INTO task_completions (task_id, user_id) VALUES ($1, $2)
-            """, req.task_id, user_id)
-            await conn.execute("""
-                UPDATE tasks SET completed_count = completed_count + 1 WHERE id = $1
-            """, req.task_id)
-            await add_coins(conn, user_id, task["reward_coins"], "task", f"Task: {task['name']}")
-            await add_spins(conn, user_id, config.TASK_SPIN_BONUS)
-
-            await conn.execute("""
-                UPDATE tasks SET status = 'completed'
-                WHERE id = $1 AND completed_count >= completion_limit
-            """, req.task_id)
-
-        updated = await get_user(conn, user_id)
-        return {
-            "success": True,
-            "coins_earned": task["reward_coins"],
-            "spins_earned": config.TASK_SPIN_BONUS,
-            "new_balance": updated["coins"],
-        }
-
-
-# POST /api/claim-daily-task
 @app.post("/api/claim-daily-task")
 async def claim_daily_task(req: DailyTaskRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    if not user:
+        raise HTTPException(404, "User not found")
 
-    valid_types = ("checkin", "update", "share")
-    if req.task_type not in valid_types:
-        raise HTTPException(status_code=400, detail="Invalid task type")
+    completed = user.get("daily_tasks_completed") or []
+    today = date.today().isoformat()
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        today = date.today()
-        existing = await conn.fetchrow("""
-            SELECT id FROM daily_task_completions
-            WHERE user_id = $1 AND task_type = $2 AND completed_date = $3
-        """, user_id, req.task_type, today)
+    # Reset daily tasks if it's a new day
+    last_reset = user.get("daily_tasks_reset_date")
+    if str(last_reset) != today:
+        completed = []
+        db_exec("UPDATE users SET daily_tasks_completed=%s, daily_tasks_reset_date=%s WHERE user_id=%s",
+                (json.dumps([]), today, req.user_id))
 
-        if existing:
-            raise HTTPException(status_code=400, detail="Daily task already claimed today")
+    if req.task_id in completed:
+        raise HTTPException(400, "Task already completed today")
 
-        async with conn.transaction():
-            await conn.execute("""
-                INSERT INTO daily_task_completions (user_id, task_type, completed_date)
-                VALUES ($1, $2, $3)
-            """, user_id, req.task_type, today)
+    completed.append(req.task_id)
+    db_exec(
+        "UPDATE users SET balance=balance+500, spins=spins+1, daily_tasks_completed=%s WHERE user_id=%s",
+        (json.dumps(completed), req.user_id)
+    )
+    log_transaction(req.user_id, "task", f"Daily task: {req.task_id}", 500)
+    await process_referral_earnings(req.user_id, 500)
 
-            reward_coins = config.STREAK_COIN_REWARD  # 10 TR
-            reward_spins = 1
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    today_str = date.today().isoformat()
+    streak_claimed = str(user.get("last_streak_date", "")) == today_str
+    return {
+        "balance": user["balance"], "spins": user["spins"], "streak": user["streak"],
+        "streak_claimed_today": streak_claimed, "user_id": user["user_id"],
+        "daily_tasks_completed": completed, "pending_referral": 0
+    }
 
-            await add_coins(conn, user_id, reward_coins, "daily_task", f"Daily task: {req.task_type}")
-            await add_spins(conn, user_id, reward_spins)
+@app.get("/api/tasks")
+async def get_tasks(user_id: int):
+    tasks = db_exec(
+        "SELECT * FROM tasks WHERE status='active' ORDER BY created_at DESC",
+        fetch=True
+    )
+    completed = db_exec(
+        "SELECT task_id FROM task_completions WHERE user_id=%s",
+        (user_id,), fetch=True
+    )
+    completed_ids = {r["task_id"] for r in (completed or [])}
+    result = []
+    for t in (tasks or []):
+        result.append({
+            "id": t["id"], "name": t["name"], "type": t["type"],
+            "url": t["url"], "reward": t["reward"],
+            "completed": t["id"] in completed_ids,
+            "status": t["status"]
+        })
+    return {"tasks": result}
 
-        updated = await get_user(conn, user_id)
-        return {
-            "success": True,
-            "coins_earned": reward_coins,
-            "spins_earned": reward_spins,
-            "new_balance": updated["coins"],
-        }
+@app.post("/api/claim-task")
+async def claim_task(req: ClaimTaskRequest):
+    task = db_exec("SELECT * FROM tasks WHERE id=%s AND status='active'", (req.task_id,), fetchone=True)
+    if not task:
+        raise HTTPException(404, "Task not found or inactive")
 
+    existing = db_exec(
+        "SELECT id FROM task_completions WHERE user_id=%s AND task_id=%s",
+        (req.user_id, req.task_id), fetchone=True
+    )
+    if existing:
+        raise HTTPException(400, "Task already completed")
 
-# GET /api/daily-task-status
-@app.get("/api/daily-task-status")
-async def daily_task_status(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    user_id = tg_user["id"]
+    reward = task["reward"] or (3000 if task["type"] == "website" else 5000)
+    db_exec(
+        "INSERT INTO task_completions (user_id, task_id, created_at) VALUES (%s,%s,NOW())",
+        (req.user_id, req.task_id)
+    )
+    db_exec(
+        "UPDATE users SET balance=balance+%s, spins=spins+1 WHERE user_id=%s",
+        (reward, req.user_id)
+    )
+    db_exec(
+        "UPDATE tasks SET completed_count=completed_count+1 WHERE id=%s", (req.task_id,)
+    )
+    # Deduct from advertiser balance
+    cost = 0.001  # TON per completion
+    db_exec(
+        "UPDATE users SET ad_balance=GREATEST(0, ad_balance-%s) WHERE user_id=(SELECT advertiser_id FROM tasks WHERE id=%s)",
+        (cost, req.task_id)
+    )
+    # Update task status if limit reached
+    db_exec(
+        "UPDATE tasks SET status='completed' WHERE id=%s AND completed_count >= completion_limit",
+        (req.task_id,)
+    )
+    log_transaction(req.user_id, "task", f"Task: {task['name']}", reward)
+    await process_referral_earnings(req.user_id, reward)
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        today = date.today()
-        rows = await conn.fetch("""
-            SELECT task_type FROM daily_task_completions
-            WHERE user_id = $1 AND completed_date = $2
-        """, user_id, today)
-        return {"completed": [r["task_type"] for r in rows]}
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    today_str = date.today().isoformat()
+    streak_claimed = str(user.get("last_streak_date", "")) == today_str
+    return {
+        "reward": reward, "balance": user["balance"], "spins": user["spins"],
+        "streak": user["streak"], "streak_claimed_today": streak_claimed,
+        "user_id": user["user_id"], "daily_tasks_completed": user.get("daily_tasks_completed") or [],
+        "pending_referral": 0
+    }
 
+@app.post("/api/verify-join")
+async def verify_join(req: VerifyJoinRequest):
+    task = db_exec("SELECT * FROM tasks WHERE id=%s", (req.task_id,), fetchone=True)
+    if not task:
+        raise HTTPException(404, "Task not found")
 
-# GET /api/friends
+    # Extract chat username/ID from URL
+    url = task["url"]
+    chat_id = url.split("t.me/")[-1].split("/")[0] if "t.me/" in url else url
+    if not chat_id.startswith("@"):
+        chat_id = "@" + chat_id
+
+    status = await get_telegram_user_status(chat_id, req.user_id)
+    if status in ["left", "kicked", "banned"]:
+        raise HTTPException(400, "You haven't joined yet. Please join first.")
+
+    # Same as claim_task from here
+    existing = db_exec(
+        "SELECT id FROM task_completions WHERE user_id=%s AND task_id=%s",
+        (req.user_id, req.task_id), fetchone=True
+    )
+    if existing:
+        raise HTTPException(400, "Task already completed")
+
+    reward = 5000
+    db_exec(
+        "INSERT INTO task_completions (user_id, task_id, created_at) VALUES (%s,%s,NOW())",
+        (req.user_id, req.task_id)
+    )
+    db_exec(
+        "UPDATE users SET balance=balance+%s, spins=spins+1 WHERE user_id=%s",
+        (reward, req.user_id)
+    )
+    db_exec("UPDATE tasks SET completed_count=completed_count+1 WHERE id=%s", (req.task_id,))
+    log_transaction(req.user_id, "task", f"Join task: {task['name']}", reward)
+    await process_referral_earnings(req.user_id, reward)
+
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    today_str = date.today().isoformat()
+    streak_claimed = str(user.get("last_streak_date", "")) == today_str
+    return {
+        "reward": reward, "balance": user["balance"], "spins": user["spins"],
+        "streak": user["streak"], "streak_claimed_today": streak_claimed,
+        "user_id": user["user_id"], "daily_tasks_completed": user.get("daily_tasks_completed") or [],
+        "pending_referral": 0
+    }
+
 @app.get("/api/friends")
-async def get_friends(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    user_id = tg_user["id"]
+async def get_friends(user_id: int):
+    friends = db_exec(
+        """SELECT u.user_id, u.first_name, u.last_name, u.username, u.balance as total_earned
+           FROM users u WHERE u.referrer_id=%s ORDER BY u.balance DESC LIMIT 10""",
+        (user_id,), fetch=True
+    )
+    total_earned = db_exec(
+        "SELECT COALESCE(SUM(pending_amount),0) as total FROM referral_earnings WHERE user_id=%s",
+        (user_id,), fetchone=True
+    )
+    return {
+        "friends": [dict(f) for f in (friends or [])],
+        "total_earned": int(total_earned["total"]) if total_earned else 0
+    }
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        friends = await conn.fetch("""
-            SELECT id, username, first_name, last_name, coins
-            FROM users WHERE referrer_id = $1
-            ORDER BY coins DESC
-        """, user_id)
-
-        friend_list = []
-        for f in friends:
-            your_share = int(f["coins"] * config.REFERRAL_COMMISSION)
-            friend_list.append({
-                "id": f["id"],
-                "name": f["first_name"] or f["username"] or "Unknown",
-                "username": f["username"],
-                "coins": f["coins"],
-                "your_share": your_share,
-            })
-
-        return {
-            "friends": friend_list,
-            "total_friends": len(friend_list),
-            "total_earned": user["referral_earnings"],
-            "unclaimed": user["unclaimed_referral"],
-            "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user_id}",
-        }
-
-
-# POST /api/claim-referral
 @app.post("/api/claim-referral")
 async def claim_referral(req: ClaimReferralRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
+    pending = db_exec(
+        "SELECT COALESCE(SUM(pending_amount),0) as total FROM referral_earnings WHERE user_id=%s AND claimed=false",
+        (req.user_id,), fetchone=True
+    )
+    amount = int(pending["total"]) if pending else 0
+    if amount <= 0:
+        raise HTTPException(400, "No pending referral rewards")
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    db_exec(
+        "UPDATE referral_earnings SET claimed=true WHERE user_id=%s AND claimed=false",
+        (req.user_id,)
+    )
+    db_exec("UPDATE users SET balance=balance+%s WHERE user_id=%s", (amount, req.user_id))
+    log_transaction(req.user_id, "referral", "Referral commission claimed", amount)
 
-        unclaimed = user["unclaimed_referral"]
-        if unclaimed <= 0:
-            raise HTTPException(status_code=400, detail="No referral earnings to claim")
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    today_str = date.today().isoformat()
+    streak_claimed = str(user.get("last_streak_date", "")) == today_str
+    return {
+        "balance": user["balance"], "spins": user["spins"], "streak": user["streak"],
+        "streak_claimed_today": streak_claimed, "user_id": user["user_id"],
+        "daily_tasks_completed": user.get("daily_tasks_completed") or [], "pending_referral": 0
+    }
 
-        async with conn.transaction():
-            await conn.execute(
-                "UPDATE users SET unclaimed_referral = 0, coins = coins + $1 WHERE id = $2",
-                unclaimed, user_id
-            )
-            await conn.execute("""
-                INSERT INTO transactions (user_id, type, description, amount)
-                VALUES ($1, 'referral', 'Referral commission claimed', $2)
-            """, user_id, unclaimed)
-
-        return {"success": True, "claimed": unclaimed}
-
-
-# GET /api/transactions
 @app.get("/api/transactions")
-async def get_transactions(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    user_id = tg_user["id"]
+async def get_transactions(user_id: int):
+    txs = db_exec(
+        "SELECT * FROM transactions WHERE user_id=%s ORDER BY created_at DESC LIMIT 20",
+        (user_id,), fetch=True
+    )
+    return {"transactions": [dict(t) for t in (txs or [])]}
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        txns = await conn.fetch("""
-            SELECT * FROM transactions WHERE user_id = $1
-            ORDER BY created_at DESC LIMIT 50
-        """, user_id)
-
-        return [dict(t) for t in txns]
-
-
-# POST /api/withdraw
 @app.post("/api/withdraw")
 async def withdraw(req: WithdrawRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if (user["balance"] or 0) < req.tier_tr:
+        raise HTTPException(400, "Insufficient balance")
 
-    if req.tier_index < 0 or req.tier_index >= len(config.WITHDRAWAL_TIERS):
-        raise HTTPException(status_code=400, detail="Invalid tier")
+    db_exec("UPDATE users SET balance=balance-%s WHERE user_id=%s", (req.tier_tr, req.user_id))
+    db_exec(
+        """INSERT INTO withdrawals (user_id, tr_amount, ton_gross, ton_net, status, created_at)
+           VALUES (%s,%s,%s,%s,'pending',NOW())""",
+        (req.user_id, req.tier_tr, req.tier_ton, req.net_ton)
+    )
+    log_transaction(req.user_id, "withdraw", f"Withdrawal {req.net_ton} TON", -req.tier_tr)
 
-    tier = config.WITHDRAWAL_TIERS[req.tier_index]
+    # Notify admin channel with inline keyboard
+    withdrawal_id = db_exec(
+        "SELECT id FROM withdrawals WHERE user_id=%s ORDER BY created_at DESC LIMIT 1",
+        (req.user_id,), fetchone=True
+    )
+    wid = withdrawal_id["id"] if withdrawal_id else 0
 
-    if not req.wallet_address or len(req.wallet_address) < 10:
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
+    await send_withdrawal_notification(
+        user_id=req.user_id,
+        first_name=user.get("first_name", "User"),
+        username=user.get("username", ""),
+        tr_amount=req.tier_tr,
+        ton_net=req.net_ton,
+        withdrawal_id=wid
+    )
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    today_str = date.today().isoformat()
+    streak_claimed = str(user.get("last_streak_date", "")) == today_str
+    return {
+        "balance": user["balance"], "spins": user["spins"], "streak": user["streak"],
+        "streak_claimed_today": streak_claimed, "user_id": user["user_id"],
+        "daily_tasks_completed": user.get("daily_tasks_completed") or [], "pending_referral": 0
+    }
 
-        if user["coins"] < tier["coins"]:
-            raise HTTPException(status_code=400, detail="Insufficient coins")
+async def send_withdrawal_notification(user_id, first_name, username, tr_amount, ton_net, withdrawal_id):
+    if not WITHDRAWAL_CHANNEL_ID or not BOT_TOKEN:
+        return
+    text = (
+        f"💸 *Withdrawal Request*\n\n"
+        f"👤 User: {first_name} (@{username}) `{user_id}`\n"
+        f"💰 Amount: `{ton_net:.4f} TON`\n"
+        f"🪙 TR Deducted: `{ton_net:,}` TR\n"
+        f"🆔 Withdrawal ID: `{withdrawal_id}`\n"
+        f"⏰ Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+    )
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "✅ Approve", "callback_data": f"wd_approve_{withdrawal_id}"},
+            {"text": "❌ Decline", "callback_data": f"wd_decline_{withdrawal_id}"},
+            {"text": "💸 Complete", "callback_data": f"wd_complete_{withdrawal_id}"}
+        ]]
+    }
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={
+                "chat_id": WITHDRAWAL_CHANNEL_ID,
+                "text": text,
+                "parse_mode": "Markdown",
+                "reply_markup": keyboard
+            }
+        )
 
-        async with conn.transaction():
-            await conn.execute(
-                "UPDATE users SET coins = coins - $1 WHERE id = $2",
-                tier["coins"], user_id
-            )
-            withdrawal_id = await conn.fetchval("""
-                INSERT INTO withdrawals (user_id, coins_deducted, ton_amount, net_ton, wallet_address)
-                VALUES ($1, $2, $3, $4, $5) RETURNING id
-            """, user_id, tier["coins"], tier["ton"], tier["net"], req.wallet_address)
+@app.post("/api/convert")
+async def convert_tr_to_ton(req: ConvertRequest):
+    if req.tr_amount < 1000000:
+        raise HTTPException(400, "Minimum 1,000,000 TR to convert")
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    if not user or (user["balance"] or 0) < req.tr_amount:
+        raise HTTPException(400, "Insufficient balance")
 
-            await conn.execute("""
-                INSERT INTO transactions (user_id, type, description, amount)
-                VALUES ($1, 'withdrawal', $2, $3)
-            """, user_id, f"Withdrawal #{withdrawal_id}: {tier['ton']} TON → {req.wallet_address[:8]}...", -tier["coins"])
+    ton_amount = round(req.tr_amount / 1000000 * 0.15, 4)
+    db_exec("UPDATE users SET balance=balance-%s WHERE user_id=%s", (req.tr_amount, req.user_id))
+    db_exec(
+        """INSERT INTO withdrawals (user_id, tr_amount, ton_gross, ton_net, status, type, created_at)
+           VALUES (%s,%s,%s,%s,'pending','convert',NOW())""",
+        (req.user_id, req.tr_amount, ton_amount, ton_amount)
+    )
+    log_transaction(req.user_id, "convert", f"Convert {req.tr_amount:,} TR → {ton_amount} TON", -req.tr_amount)
 
-        return {
-            "success": True,
-            "withdrawal_id": withdrawal_id,
-            "coins_deducted": tier["coins"],
-            "ton_amount": tier["ton"],
-            "net_ton": tier["net"],
-            "message": "Withdrawal queued. Processed within 24 hours."
-        }
+    user = db_exec("SELECT * FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    today_str = date.today().isoformat()
+    streak_claimed = str(user.get("last_streak_date", "")) == today_str
+    return {
+        "ton_amount": ton_amount, "balance": user["balance"], "spins": user["spins"],
+        "streak": user["streak"], "streak_claimed_today": streak_claimed,
+        "user_id": user["user_id"], "daily_tasks_completed": user.get("daily_tasks_completed") or [],
+        "pending_referral": 0
+    }
 
-
-# POST /api/create-topup
 @app.post("/api/create-topup")
 async def create_topup(req: TopUpRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-
     if req.amount <= 0:
-        raise HTTPException(status_code=400, detail="Invalid amount")
+        raise HTTPException(400, "Invalid amount")
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        if req.method == "xrocket":
-            invoice_url, invoice_id = await create_xrocket_invoice(user_id, req.amount)
-        elif req.method == "cryptopay":
-            invoice_url, invoice_id = await create_cryptopay_invoice(user_id, req.amount)
-        else:
-            raise HTTPException(status_code=400, detail="Invalid payment method")
+    invoice_id = "TR_" + secrets.token_hex(8).upper()
 
-        await conn.execute("""
-            INSERT INTO payments (user_id, provider, invoice_id, amount_ton, payload)
-            VALUES ($1, $2, $3, $4, $5)
-        """, user_id, req.method, invoice_id, req.amount, json.dumps({"user_id": user_id}))
-
-        return {"invoice_url": invoice_url, "invoice_id": invoice_id}
-
-
-async def create_xrocket_invoice(user_id: int, amount: float) -> tuple:
-    """Create xRocket invoice"""
-    try:
+    if req.method == "xrocket":
+        if not XROCKET_API_KEY:
+            raise HTTPException(500, "xRocket not configured")
         async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://pay.xrocket.tg/app/invoice/create",
-                headers={
-                    "Rocket-Pay-Key": config.XROCKET_API_KEY,
-                    "Content-Type": "application/json"
-                },
+            r = await client.post(
+                f"{XROCKET_BASE}/tg-invoices",
+                headers={"Rocket-Pay-Key": XROCKET_API_KEY, "Content-Type": "application/json"},
                 json={
+                    "amount": str(req.amount),
                     "currency": "TONCOIN",
-                    "amount": amount,
-                    "description": f"TRewards top-up for user {user_id}",
-                    "payload": json.dumps({"user_id": user_id}),
-                    "callbackUrl": f"https://api.trewards.onrender.com/payment-webhook/xrocket"
-                },
-                timeout=15
+                    "description": f"TRewards top-up {req.amount} TON",
+                    "payload": json.dumps({"user_id": req.user_id, "invoice_id": invoice_id, "target": req.target}),
+                    "callbackUrl": f"{os.getenv('BACKEND_URL', '')}/payment-webhook/xrocket"
+                }
             )
-            data = resp.json()
-            if data.get("success"):
-                invoice = data["data"]
-                return invoice["link"], str(invoice["id"])
-            raise HTTPException(status_code=500, detail=f"xRocket error: {data.get('message')}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Payment provider error: {str(e)}")
+            data = r.json()
+            pay_url = data.get("data", {}).get("payUrl") or data.get("payUrl")
+            if not pay_url:
+                raise HTTPException(500, f"xRocket error: {data}")
 
-
-async def create_cryptopay_invoice(user_id: int, amount: float) -> tuple:
-    """Create Crypto Pay invoice"""
-    try:
+    elif req.method == "cryptopay":
+        if not CRYPTOPAY_API_KEY:
+            raise HTTPException(500, "CryptoPay not configured")
         async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://pay.crypt.bot/api/createInvoice",
-                headers={"Crypto-Pay-API-Token": config.CRYPTOPAY_API_TOKEN},
+            r = await client.post(
+                f"{CRYPTOPAY_BASE}/createInvoice",
+                headers={"Crypto-Pay-API-Token": CRYPTOPAY_API_KEY},
                 json={
                     "asset": "TON",
-                    "amount": str(amount),
-                    "description": f"TRewards top-up",
-                    "payload": json.dumps({"user_id": user_id}),
-                    "allow_comments": False,
-                    "allow_anonymous": False,
-                },
-                timeout=15
+                    "amount": str(req.amount),
+                    "description": f"TRewards top-up {req.amount} TON",
+                    "payload": json.dumps({"user_id": req.user_id, "invoice_id": invoice_id, "target": req.target}),
+                    "paid_btn_name": "openBot",
+                    "paid_btn_url": f"https://t.me/{os.getenv('BOT_USERNAME', 'trewards_ton_bot')}"
+                }
             )
-            data = resp.json()
-            if data.get("ok"):
-                invoice = data["result"]
-                return invoice["pay_url"], str(invoice["invoice_id"])
-            raise HTTPException(status_code=500, detail=f"CryptoPay error: {data.get('error')}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Payment provider error: {str(e)}")
+            data = r.json()
+            pay_url = data.get("result", {}).get("pay_url")
+            if not pay_url:
+                raise HTTPException(500, f"CryptoPay error: {data}")
+    else:
+        raise HTTPException(400, "Invalid payment method")
 
+    db_exec(
+        """INSERT INTO payments (user_id, invoice_id, amount, method, status, target, created_at)
+           VALUES (%s,%s,%s,%s,'pending',%s,NOW())""",
+        (req.user_id, invoice_id, req.amount, req.method, req.target)
+    )
+    return {"pay_url": pay_url, "invoice_id": invoice_id}
 
-# GET /api/advertiser
 @app.get("/api/advertiser")
-async def get_advertiser(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    user_id = tg_user["id"]
+async def get_advertiser(user_id: int):
+    user = db_exec("SELECT ad_balance FROM users WHERE user_id=%s", (user_id,), fetchone=True)
+    tasks = db_exec(
+        "SELECT * FROM tasks WHERE advertiser_id=%s ORDER BY created_at DESC",
+        (user_id,), fetch=True
+    )
+    return {
+        "ad_balance": float(user["ad_balance"] or 0) if user else 0,
+        "tasks": [dict(t) for t in (tasks or [])]
+    }
 
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        tasks = await conn.fetch("""
-            SELECT * FROM tasks WHERE advertiser_id = $1 ORDER BY created_at DESC
-        """, user_id)
-
-        return {
-            "ad_balance": float(user["ad_balance"]),
-            "tasks": [dict(t) for t in tasks]
-        }
-
-
-# POST /api/create-task
 @app.post("/api/create-task")
 async def create_task(req: CreateTaskRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
+    reward = 3000 if req.type == "website" else 5000
+    cost = req.limit * 0.001
 
-    valid_types = ("visit", "channel", "group", "game")
-    if req.task_type not in valid_types:
-        raise HTTPException(status_code=400, detail="Invalid task type")
+    user = db_exec("SELECT ad_balance FROM users WHERE user_id=%s", (req.user_id,), fetchone=True)
+    if not user or (user.get("ad_balance") or 0) < cost:
+        raise HTTPException(400, f"Insufficient ad balance. Need {cost:.3f} TON")
 
-    valid_limits = (500, 1000, 2000, 5000, 10000)
-    if req.completion_limit not in valid_limits:
-        raise HTTPException(status_code=400, detail="Invalid completion limit")
+    db_exec("UPDATE users SET ad_balance=ad_balance-%s WHERE user_id=%s", (cost, req.user_id))
+    db_exec(
+        """INSERT INTO tasks (advertiser_id, name, type, url, reward, completion_limit, completed_count, status, created_at)
+           VALUES (%s,%s,%s,%s,%s,%s,0,'active',NOW())""",
+        (req.user_id, req.name, req.type, req.url, reward, req.limit)
+    )
+    return {"success": True, "cost": cost}
 
-    cost = req.completion_limit * 0.001  # 0.001 TON per completion
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        if float(user["ad_balance"]) < cost:
-            raise HTTPException(status_code=400, detail=f"Insufficient ad balance. Need {cost} TON")
-
-        reward_map = {
-            "visit": config.TASK_REWARD_VISIT,
-            "channel": config.TASK_REWARD_CHANNEL,
-            "group": config.TASK_REWARD_GROUP,
-            "game": config.TASK_REWARD_GAME,
-        }
-
-        async with conn.transaction():
-            await conn.execute(
-                "UPDATE users SET ad_balance = ad_balance - $1 WHERE id = $2",
-                cost, user_id
-            )
-            task_id = await conn.fetchval("""
-                INSERT INTO tasks (advertiser_id, name, type, url, reward_coins, completion_limit, cost_ton)
-                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
-            """, user_id, req.name, req.task_type, req.url,
-                reward_map[req.task_type], req.completion_limit, cost)
-
-        return {"success": True, "task_id": task_id, "cost": cost}
-
-
-# POST /api/set-language
-@app.post("/api/set-language")
-async def set_language(req: LanguageRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-
-    if req.language not in ("en", "ru"):
-        raise HTTPException(status_code=400, detail="Invalid language")
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE users SET language = $1 WHERE id = $2",
-            req.language, user_id
-        )
-    return {"success": True}
-
-
-# ─── Payment Webhooks ────────────────────────────────────────────────────────
+# ─── Webhooks ──────────────────────────────────────────────
 
 @app.post("/payment-webhook/xrocket")
 async def xrocket_webhook(request: Request):
-    body = await request.body()
-    signature = request.headers.get("rocket-pay-signature", "")
+    body = await request.json()
+    try:
+        # Verify signature
+        sig = request.headers.get("rocket-pay-signature", "")
+        raw = await request.body()
+        expected = hmac.new(XROCKET_API_KEY.encode(), raw, hashlib.sha256).hexdigest()
+        if sig and sig != expected:
+            return JSONResponse({"ok": False, "error": "Invalid signature"})
 
-    # Verify signature
-    expected = hmac.new(
-        config.XROCKET_WEBHOOK_SECRET.encode(),
-        body,
-        hashlib.sha256
-    ).hexdigest()
+        status = body.get("status")
+        if status != "PAID":
+            return {"ok": True}
 
-    if not hmac.compare_digest(expected, signature):
-        logger.warning("xRocket webhook: invalid signature")
-        raise HTTPException(status_code=401, detail="Invalid signature")
+        payload_str = body.get("payload", "{}")
+        payload = json.loads(payload_str) if isinstance(payload_str, str) else payload_str
+        user_id = payload.get("user_id")
+        invoice_id = payload.get("invoice_id")
+        target = payload.get("target", "wallet")
+        amount = float(body.get("amount", 0))
+        currency = body.get("currency", "TONCOIN")
 
-    data = json.loads(body)
-    logger.info(f"xRocket webhook: {data}")
+        if currency not in ("TONCOIN", "TON"):
+            return {"ok": True}
 
-    if data.get("type") != "invoice" or data.get("status") != "paid":
-        return {"ok": True}
+        # Prevent double credit
+        existing = db_exec(
+            "SELECT id FROM payments WHERE invoice_id=%s AND status='paid'",
+            (invoice_id,), fetchone=True
+        )
+        if existing:
+            return {"ok": True, "duplicate": True}
 
-    invoice_id = str(data.get("id"))
-    amount = float(data.get("amount", 0))
-    currency = data.get("currency", "")
+        db_exec(
+            "UPDATE payments SET status='paid', paid_at=NOW() WHERE invoice_id=%s",
+            (invoice_id,)
+        )
+        if target == "advertiser":
+            db_exec("UPDATE users SET ad_balance=ad_balance+%s WHERE user_id=%s", (amount, user_id))
+            log_transaction(user_id, "topup", f"Ad balance top-up via xRocket", amount, "TON")
+        else:
+            db_exec("UPDATE users SET ton_balance=COALESCE(ton_balance,0)+%s WHERE user_id=%s", (amount, user_id))
+            log_transaction(user_id, "topup", f"Top-up via xRocket", amount, "TON")
 
-    if currency != "TONCOIN":
-        return {"ok": True}
-
-    await process_payment("xrocket", invoice_id, amount)
+        # Notify user via bot
+        await notify_user_payment(user_id, amount, "xRocket")
+    except Exception as e:
+        print(f"xRocket webhook error: {e}")
     return {"ok": True}
-
 
 @app.post("/payment-webhook/cryptopay")
 async def cryptopay_webhook(request: Request):
-    body = await request.body()
-    signature = request.headers.get("crypto-pay-api-signature", "")
+    body = await request.json()
+    try:
+        # Verify signature
+        token_hash = hashlib.sha256(CRYPTOPAY_API_KEY.encode()).hexdigest()
+        sig = request.headers.get("crypto-pay-api-signature", "")
+        raw = await request.body()
+        expected = hmac.new(token_hash.encode(), raw, hashlib.sha256).hexdigest()
+        if sig and sig != expected:
+            return JSONResponse({"ok": False})
 
-    # Verify HMAC
-    secret = hashlib.sha256(config.CRYPTOPAY_WEBHOOK_SECRET.encode()).digest()
-    expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
+        if body.get("update_type") != "invoice_paid":
+            return {"ok": True}
 
-    if not hmac.compare_digest(expected, signature):
-        logger.warning("CryptoPay webhook: invalid signature")
-        raise HTTPException(status_code=401, detail="Invalid signature")
+        invoice = body.get("payload", {})
+        if invoice.get("status") != "paid":
+            return {"ok": True}
+        if invoice.get("asset") != "TON":
+            return {"ok": True}
 
-    data = json.loads(body)
-    if data.get("update_type") != "invoice_paid":
-        return {"ok": True}
+        invoice_id = invoice.get("payload", "")
+        payload_data = {}
+        try:
+            payload_data = json.loads(invoice_id) if invoice_id else {}
+        except Exception:
+            pass
 
-    payload_data = data.get("payload", {})
-    invoice_id = str(payload_data.get("invoice_id"))
-    amount = float(payload_data.get("amount", 0))
-    asset = payload_data.get("asset", "")
+        user_id = payload_data.get("user_id")
+        cp_invoice_id = str(invoice.get("invoice_id", ""))
+        target = payload_data.get("target", "wallet")
+        amount = float(invoice.get("amount", 0))
 
-    if asset != "TON":
-        return {"ok": True}
+        existing = db_exec(
+            "SELECT id FROM payments WHERE invoice_id=%s AND status='paid'",
+            (cp_invoice_id,), fetchone=True
+        )
+        if existing:
+            return {"ok": True}
 
-    await process_payment("cryptopay", invoice_id, amount)
+        db_exec(
+            "UPDATE payments SET status='paid', paid_at=NOW() WHERE invoice_id=%s",
+            (cp_invoice_id,)
+        )
+        if target == "advertiser":
+            db_exec("UPDATE users SET ad_balance=ad_balance+%s WHERE user_id=%s", (amount, user_id))
+            log_transaction(user_id, "topup", "Ad balance top-up via CryptoPay", amount, "TON")
+        else:
+            db_exec("UPDATE users SET ton_balance=COALESCE(ton_balance,0)+%s WHERE user_id=%s", (amount, user_id))
+            log_transaction(user_id, "topup", "Top-up via CryptoPay", amount, "TON")
+
+        await notify_user_payment(user_id, amount, "CryptoPay")
+    except Exception as e:
+        print(f"CryptoPay webhook error: {e}")
     return {"ok": True}
 
-
-async def process_payment(provider: str, invoice_id: str, amount: float):
-    """Credit user after successful payment - idempotent"""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        payment = await conn.fetchrow(
-            "SELECT * FROM payments WHERE invoice_id = $1",
-            invoice_id
-        )
-        if not payment:
-            logger.warning(f"Payment {invoice_id} not found in DB")
-            return
-
-        if payment["status"] == "paid":
-            logger.info(f"Payment {invoice_id} already processed (duplicate webhook)")
-            return
-
-        async with conn.transaction():
-            await conn.execute("""
-                UPDATE payments SET status = 'paid', paid_at = NOW()
-                WHERE invoice_id = $1
-            """, invoice_id)
-
-            user_id = payment["user_id"]
-            # Credit ad balance
-            await conn.execute(
-                "UPDATE users SET ad_balance = ad_balance + $1 WHERE id = $2",
-                amount, user_id
+async def notify_user_payment(user_id: int, amount: float, method: str):
+    if not BOT_TOKEN or not user_id:
+        return
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={
+                    "chat_id": user_id,
+                    "text": f"✅ Payment received!\n\n💰 {amount:.4f} TON added via {method}.\n\nOpen TRewards to use your balance.",
+                    "parse_mode": "Markdown"
+                }
             )
-            await conn.execute("""
-                INSERT INTO transactions (user_id, type, description, ton_amount)
-                VALUES ($1, 'topup', $2, $3)
-            """, user_id, f"Ad balance top-up via {provider}", amount)
+    except Exception as e:
+        print(f"Notify user error: {e}")
 
-        logger.info(f"Payment processed: user={payment['user_id']}, amount={amount} TON via {provider}")
+# ─── Withdrawal callback handler (called from bot) ─────────
+@app.post("/api/withdrawal-action")
+async def withdrawal_action(request: Request):
+    body = await request.json()
+    admin_id = body.get("admin_id")
+    withdrawal_id = body.get("withdrawal_id")
+    action = body.get("action")  # approve / decline / complete
 
+    if admin_id not in ADMIN_IDS:
+        raise HTTPException(403, "Unauthorized")
 
-# ─── Admin endpoints ─────────────────────────────────────────────────────────
+    withdrawal = db_exec(
+        "SELECT * FROM withdrawals WHERE id=%s", (withdrawal_id,), fetchone=True
+    )
+    if not withdrawal:
+        raise HTTPException(404, "Withdrawal not found")
 
-def require_admin(user_id: int):
-    if user_id not in config.ADMIN_IDS:
-        raise HTTPException(status_code=403, detail="Admin only")
-
-
-class AdminPromoCreate(BaseModel):
-    init_data: str
-    code: str
-    reward_type: str
-    reward_amount: float
-    max_activations: int
-
-
-@app.post("/api/admin/create-promo")
-async def admin_create_promo(req: AdminPromoCreate):
-    tg_user = verify_telegram_init_data(req.init_data)
-    require_admin(tg_user["id"])
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        try:
-            promo_id = await conn.fetchval("""
-                INSERT INTO promo_codes (code, reward_type, reward_amount, max_activations, created_by)
-                VALUES ($1, $2, $3, $4, $5) RETURNING id
-            """, req.code.upper(), req.reward_type, req.reward_amount, req.max_activations, tg_user["id"])
-            return {"success": True, "promo_id": promo_id}
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Code already exists: {str(e)}")
-
-
-@app.get("/api/admin/promos")
-async def admin_list_promos(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    require_admin(tg_user["id"])
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        promos = await conn.fetch("SELECT * FROM promo_codes ORDER BY created_at DESC")
-        return [dict(p) for p in promos]
-
-
-@app.delete("/api/admin/promo/{promo_id}")
-async def admin_delete_promo(promo_id: int, init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    require_admin(tg_user["id"])
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE promo_codes SET is_active = FALSE WHERE id = $1",
-            promo_id
+    if action == "complete":
+        db_exec("UPDATE withdrawals SET status='completed' WHERE id=%s", (withdrawal_id,))
+        # Notify user
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={
+                    "chat_id": withdrawal["user_id"],
+                    "text": "✅ *Payment Sent!*\n\nYour withdrawal has been processed. Please check your wallet.\n\n💸 Thank you for using TRewards!",
+                    "parse_mode": "Markdown"
+                }
+            )
+        return {"success": True, "status": "completed"}
+    elif action == "approve":
+        db_exec("UPDATE withdrawals SET status='approved' WHERE id=%s", (withdrawal_id,))
+        return {"success": True, "status": "approved"}
+    elif action == "decline":
+        # Refund coins
+        db_exec(
+            "UPDATE users SET balance=balance+%s WHERE user_id=%s",
+            (withdrawal["tr_amount"], withdrawal["user_id"])
         )
-        return {"success": True}
+        db_exec("UPDATE withdrawals SET status='declined' WHERE id=%s", (withdrawal_id,))
+        log_transaction(withdrawal["user_id"], "earn", "Withdrawal declined - refund", withdrawal["tr_amount"])
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={
+                    "chat_id": withdrawal["user_id"],
+                    "text": "❌ Your withdrawal request was declined. Your TR coins have been refunded.",
+                }
+            )
+        return {"success": True, "status": "declined"}
 
-
-@app.get("/api/admin/stats")
-async def admin_stats(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    require_admin(tg_user["id"])
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        total_users = await conn.fetchval("SELECT COUNT(*) FROM users")
-        total_payments = await conn.fetchval(
-            "SELECT COALESCE(SUM(amount_ton), 0) FROM payments WHERE status = 'paid'"
-        )
-        total_withdrawals = await conn.fetchval(
-            "SELECT COUNT(*) FROM withdrawals WHERE status = 'pending'"
-        )
-        return {
-            "total_users": total_users,
-            "total_payments_ton": float(total_payments),
-            "pending_withdrawals": total_withdrawals,
-        }
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    raise HTTPException(400, "Invalid action")
