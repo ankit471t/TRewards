@@ -1,11 +1,12 @@
 {
-  "name": "trewards-bot",
+  "name": "trewards-app",
   "version": "1.0.0",
-  "description": "TRewards Telegram Bot",
+  "description": "TRewards — FastAPI Backend + Telegram Bot",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js"
+    "start": "bash start.sh",
+    "build": "npm install && pip3 install -r requirements.txt --no-cache-dir",
+    "dev": "bash start.sh"
   },
   "dependencies": {
     "node-telegram-bot-api": "^0.66.0",
