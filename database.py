@@ -10,7 +10,12 @@ pool = None
 async def get_pool():
     global pool
     if pool is None:
-        pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+        pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=2,
+            max_size=10,
+            statement_cache_size=0,   # required for Supabase pooler (pgBouncer)
+        )
     return pool
 
 
