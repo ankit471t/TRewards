@@ -484,6 +484,7 @@ bot.on('message', async (msg) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ERROR HANDLER
+// HTTP FastAPI handle kar raha hai — bot sirf polling karta hai
 // ─────────────────────────────────────────────────────────────────────────────
 
 bot.on('polling_error', (error) => {

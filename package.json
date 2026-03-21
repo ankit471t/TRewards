@@ -1,7 +1,7 @@
 {
   "name": "trewards-bot",
   "version": "1.0.0",
-  "description": "TRewards Telegram Bot — TON rewards mini app bot",
+  "description": "TRewards Telegram Bot",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
