@@ -1,24 +1,14 @@
 {
-  "name": "trewards-app",
+  "name": "trewards-bot",
   "version": "1.0.0",
-  "description": "TRewards — FastAPI Backend + Telegram Bot",
+  "description": "TRewards Telegram Bot — AWS Lambda",
   "main": "bot.js",
   "scripts": {
-    "start": "bash start.sh",
-    "build": "npm install && pip3 install -r requirements.txt --no-cache-dir",
-    "dev": "bash start.sh"
+    "dev": "node bot.js",
+    "zip": "zip -r bot.zip bot.js node_modules package.json"
   },
   "dependencies": {
-    "node-telegram-bot-api": "^0.66.0",
-    "pg": "^8.11.5",
-    "dotenv": "^16.4.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.4"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "author": "",
-  "license": "MIT"
+    "node-telegram-bot-api": "^0.64.0",
+    "pg": "^8.11.5"
+  }
 }

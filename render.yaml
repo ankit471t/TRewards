@@ -1,0 +1,49 @@
+# render.yaml — Deploy TRewards on Render
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ── FastAPI backend ─────────────────────────────────────────────────────────
+  - type: web
+    name: trewards-api
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false           # set manually in Render dashboard
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        value: trewards_ton_bot
+      - key: ADMIN_IDS
+        sync: false
+      - key: FRONTEND_URL
+        value: https://trewards.onrender.com
+      - key: API_URL
+        value: https://trewards-api.onrender.com
+      - key: XROCKET_API_KEY
+        sync: false
+      - key: XROCKET_WEBHOOK_SECRET
+        sync: false
+      - key: CRYPTOPAY_API_TOKEN
+        sync: false
+      - key: CRYPTOPAY_WEBHOOK_SECRET
+        sync: false
+
+  # ── Static frontend ─────────────────────────────────────────────────────────
+  - type: web
+    name: trewards
+    runtime: static
+    region: oregon
+    plan: free
+    staticPublishPath: ./frontend
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
