@@ -8,16 +8,20 @@ import secrets
 import urllib.parse
 from datetime import date, timedelta
 from typing import Optional
+from functools import lru_cache
+import time
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import config
 from database import (
     get_pool, init_db, get_user, create_user,
-    add_coins, add_spins, _current_week_id, _prev_week_id
+    add_coins, add_spins, add_ton,
+    _current_week_id, _prev_week_id
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +36,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── Simple in-memory cache ───────────────────────────────────────────────────
+_cache: dict = {}
+_cache_ttl: dict = {}
+
+def cache_get(key: str):
+    if key in _cache and time.time() < _cache_ttl.get(key, 0):
+        return _cache[key]
+    return None
+
+def cache_set(key: str, val, ttl: int = 60):
+    _cache[key] = val
+    _cache_ttl[key] = time.time() + ttl
+
+def cache_del(key: str):
+    _cache.pop(key, None)
+    _cache_ttl.pop(key, None)
+
+def cache_del_prefix(prefix: str):
+    keys = [k for k in list(_cache.keys()) if k.startswith(prefix)]
+    for k in keys:
+        cache_del(k)
 
 
 @app.on_event("startup")
@@ -67,6 +93,9 @@ class UserRequest(BaseModel):
     init_data: str
     referrer_id: Optional[int] = None
     language: Optional[str] = "en"
+
+class InitDataOnly(BaseModel):
+    init_data: str
 
 class StreakRequest(BaseModel):
     init_data: str
@@ -105,7 +134,18 @@ class ConvertRequest(BaseModel):
 class TopUpRequest(BaseModel):
     init_data: str
     amount: float
-    method: str
+    method: str  # 'xrocket' | 'ton_wallet' | 'stars'
+
+class StarsTopUpRequest(BaseModel):
+    init_data: str
+    stars_amount: int
+
+class ConnectWalletRequest(BaseModel):
+    init_data: str
+    wallet_address: str
+
+class DisconnectWalletRequest(BaseModel):
+    init_data: str
 
 class CreateTaskRequest(BaseModel):
     init_data: str
@@ -142,10 +182,15 @@ class AdminPromoCreate(BaseModel):
 
 class BroadcastRequest(BaseModel):
     init_data: str
-    message: str                        # plain text or HTML
-    parse_mode: Optional[str] = "HTML"  # HTML | Markdown | None
-    button_text: Optional[str] = None   # optional inline button label
-    button_url: Optional[str] = None    # optional inline button URL
+    message: str
+    parse_mode: Optional[str] = "HTML"
+    button_text: Optional[str] = None
+    button_url: Optional[str] = None
+
+class TONWebhookRequest(BaseModel):
+    comment_id: str
+    amount_ton: float
+    tx_hash: str
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────
@@ -165,6 +210,11 @@ async def health():
 async def upsert_user(req: UserRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+
+    cached = cache_get(f"user:{user_id}")
+    if cached:
+        return cached
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await create_user(
@@ -178,7 +228,9 @@ async def upsert_user(req: UserRequest):
             await conn.execute(
                 "UPDATE users SET language = $1 WHERE id = $2", req.language, user_id
             )
-        return _user_payload(user, user_id)
+        payload = _user_payload(user, user_id)
+        cache_set(f"user:{user_id}", payload, ttl=30)
+        return payload
 
 
 def _user_payload(user, user_id):
@@ -191,9 +243,11 @@ def _user_payload(user, user_id):
         "streak": user["streak"],
         "last_streak_date": user["last_streak_date"].isoformat() if user["last_streak_date"] else None,
         "ton_balance": float(user["ton_balance"]),
-        "ad_balance": float(user["ad_balance"]),
+        "ad_balance": float(user["ton_balance"]),  # ton_balance IS ad_balance — same pool
         "language": user["language"],
         "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user_id}",
+        "ton_wallet_address": user["ton_wallet_address"],
+        "ton_comment_id": user["ton_comment_id"],
     }
 
 
@@ -203,6 +257,7 @@ def _user_payload(user, user_id):
 async def claim_streak(req: StreakRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
@@ -232,6 +287,7 @@ async def claim_streak(req: StreakRequest):
 async def spin_wheel(req: SpinRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
@@ -255,6 +311,7 @@ async def spin_wheel(req: SpinRequest):
 async def redeem_promo(req: PromoRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         promo = await conn.fetchrow(
@@ -286,13 +343,7 @@ async def redeem_promo(req: PromoRequest):
                 return {"success": True, "reward_type": "coins", "amount": amount}
             else:
                 ton_amt = float(promo["reward_amount"])
-                await conn.execute(
-                    "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2", ton_amt, user_id
-                )
-                await conn.execute(
-                    "INSERT INTO transactions (user_id, type, description, ton_amount) VALUES ($1,'promo',$2,$3)",
-                    user_id, f"Promo code: {promo['code']}", ton_amt
-                )
+                await add_ton(conn, user_id, ton_amt, "promo", f"Promo code: {promo['code']}")
                 return {"success": True, "reward_type": "ton", "amount": ton_amt}
 
 
@@ -302,6 +353,12 @@ async def redeem_promo(req: PromoRequest):
 async def get_tasks(init_data: str):
     tg_user = verify_telegram_init_data(init_data)
     user_id = tg_user["id"]
+
+    cache_key = f"tasks:{user_id}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         tasks = await conn.fetch("""
@@ -313,7 +370,9 @@ async def get_tasks(init_data: str):
               AND (t.completion_limit IS NULL OR t.completed_count < t.completion_limit)
             ORDER BY t.created_at DESC
         """, user_id)
-        return [dict(t) for t in tasks]
+        result = [dict(t) for t in tasks]
+        cache_set(cache_key, result, ttl=30)
+        return result
 
 
 # ─── POST /api/claim-task ─────────────────────────────────────────────────────
@@ -322,6 +381,8 @@ async def get_tasks(init_data: str):
 async def claim_task(req: ClaimTaskRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
+    cache_del(f"tasks:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         task = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1 AND status = 'active'", req.task_id)
@@ -357,6 +418,8 @@ async def claim_task(req: ClaimTaskRequest):
 async def verify_join(req: VerifyJoinRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
+    cache_del(f"tasks:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         task = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1 AND status = 'active'", req.task_id)
@@ -417,6 +480,7 @@ async def claim_daily_task(req: DailyTaskRequest):
     user_id = tg_user["id"]
     if req.task_type not in ("checkin", "update", "share"):
         raise HTTPException(status_code=400, detail="Invalid task type")
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         today = date.today()
@@ -444,6 +508,12 @@ async def claim_daily_task(req: DailyTaskRequest):
 async def daily_task_status(init_data: str):
     tg_user = verify_telegram_init_data(init_data)
     user_id = tg_user["id"]
+
+    cache_key = f"daily:{user_id}:{date.today()}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         today = date.today()
@@ -451,7 +521,9 @@ async def daily_task_status(init_data: str):
             "SELECT task_type FROM daily_task_completions WHERE user_id = $1 AND completed_date = $2",
             user_id, today
         )
-        return {"completed": [r["task_type"] for r in rows]}
+        result = {"completed": [r["task_type"] for r in rows]}
+        cache_set(cache_key, result, ttl=60)
+        return result
 
 
 # ─── POST /api/watch-ad ───────────────────────────────────────────────────────
@@ -460,6 +532,7 @@ async def daily_task_status(init_data: str):
 async def watch_ad(req: WatchAdRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         await add_coins(conn, user_id, config.WATCH_AD_REWARD, "watch_ad", f"Watched ad: {req.ad_id}")
@@ -473,13 +546,19 @@ async def watch_ad(req: WatchAdRequest):
 async def get_friends(init_data: str):
     tg_user = verify_telegram_init_data(init_data)
     user_id = tg_user["id"]
+
+    cache_key = f"friends:{user_id}"
+    cached = cache_get(cache_key)
+    if cached:
+        return cached
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         friends = await conn.fetch(
-            "SELECT id, username, first_name, coins FROM users WHERE referrer_id = $1 ORDER BY coins DESC",
+            "SELECT id, username, first_name, coins FROM users WHERE referrer_id = $1 ORDER BY coins DESC LIMIT 50",
             user_id
         )
         curr_week = _current_week_id()
@@ -511,13 +590,15 @@ async def get_friends(init_data: str):
         prev_lb = [{"rank": i+1, "name": r["first_name"] or "Unknown",
                     "weekly_friends": r["friend_count"], "is_me": r["referrer_id"] == user_id}
                    for i, r in enumerate(prev_rows)]
-        return {
+        result = {
             "friends": friend_list, "total_friends": len(friend_list),
             "weekly_friends": weekly_friends, "total_earned": user["referral_earnings"],
             "unclaimed": user["unclaimed_referral"],
             "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user_id}",
             "leaderboard": lb, "prev_leaderboard": prev_lb,
         }
+        cache_set(cache_key, result, ttl=60)
+        return result
 
 
 # ─── POST /api/claim-referral ─────────────────────────────────────────────────
@@ -526,6 +607,8 @@ async def get_friends(init_data: str):
 async def claim_referral(req: ClaimReferralRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
+    cache_del(f"friends:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
@@ -572,6 +655,7 @@ async def withdraw(req: WithdrawRequest):
     tier = config.WITHDRAWAL_TIERS[req.tier_index]
     if not req.wallet_address or len(req.wallet_address) < 10:
         raise HTTPException(status_code=400, detail="Invalid wallet address")
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
@@ -602,6 +686,7 @@ async def convert_tr_to_ton(req: ConvertRequest):
     user_id = tg_user["id"]
     if req.tr_amount < 1_000_000:
         raise HTTPException(status_code=400, detail="Minimum 1,000,000 TR")
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
@@ -626,27 +711,166 @@ async def convert_tr_to_ton(req: ConvertRequest):
                 "new_tr_balance": updated["coins"], "new_ton_balance": float(updated["ton_balance"])}
 
 
+# ─── POST /api/connect-wallet ─────────────────────────────────────────────────
+
+@app.post("/api/connect-wallet")
+async def connect_wallet(req: ConnectWalletRequest):
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+    addr = req.wallet_address.strip()
+    if not addr or len(addr) < 10:
+        raise HTTPException(status_code=400, detail="Invalid wallet address")
+    cache_del(f"user:{user_id}")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET ton_wallet_address = $1 WHERE id = $2",
+            addr, user_id
+        )
+        return {"success": True, "wallet_address": addr}
+
+
+# ─── POST /api/disconnect-wallet ─────────────────────────────────────────────
+
+@app.post("/api/disconnect-wallet")
+async def disconnect_wallet(req: DisconnectWalletRequest):
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET ton_wallet_address = NULL WHERE id = $1", user_id
+        )
+        return {"success": True}
+
+
 # ─── POST /api/create-topup ───────────────────────────────────────────────────
 
 @app.post("/api/create-topup")
 async def create_topup(req: TopUpRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
-    if req.amount <= 0:
-        raise HTTPException(status_code=400, detail="Invalid amount")
+
+    if req.method == "xrocket":
+        if req.amount < config.MIN_TOPUP_TON:
+            raise HTTPException(status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON")
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            invoice_url, invoice_id = await _create_xrocket_invoice(user_id, req.amount)
+            await conn.execute(
+                "INSERT INTO payments (user_id, provider, invoice_id, amount_ton, payload) VALUES ($1,$2,$3,$4,$5)",
+                user_id, req.method, invoice_id, req.amount, json.dumps({"user_id": user_id})
+            )
+            return {"invoice_url": invoice_url, "invoice_id": invoice_id, "method": "xrocket"}
+
+    elif req.method == "ton_wallet":
+        if req.amount < config.MIN_TOPUP_TON:
+            raise HTTPException(status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON")
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            user = await get_user(conn, user_id)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            if not user["ton_wallet_address"]:
+                raise HTTPException(status_code=400, detail="Connect your TON wallet first")
+            comment_id = user["ton_comment_id"]
+            # Create a pending topup request
+            await conn.execute("""
+                INSERT INTO ton_topup_requests (user_id, comment_id, amount_ton, status)
+                VALUES ($1, $2, $3, 'pending')
+                ON CONFLICT (comment_id) DO NOTHING
+            """, user_id, comment_id, req.amount)
+            return {
+                "method": "ton_wallet",
+                "receiving_address": config.TON_WALLET_RECEIVE,
+                "comment_id": comment_id,
+                "amount": req.amount,
+                "message": f"Send {req.amount} TON to the address above with comment: {comment_id}"
+            }
+
+    elif req.method == "stars":
+        # Stars invoicing is handled via the bot; here we just return the stars amount
+        stars_needed = int(req.amount * config.STARS_PER_TON)
+        if stars_needed < config.MIN_TOPUP_STARS:
+            raise HTTPException(status_code=400, detail=f"Minimum {config.MIN_TOPUP_STARS} stars required")
+        return {"method": "stars", "stars_amount": stars_needed, "ton_equivalent": req.amount}
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid payment method")
+
+
+# ─── POST /api/topup-stars ────────────────────────────────────────────────────
+# Called after Telegram confirms stars payment (via bot pre_checkout + successful_payment)
+
+@app.post("/api/topup-stars")
+async def topup_stars(req: StarsTopUpRequest):
+    """Called by bot after successful stars payment to credit TON."""
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+    if req.stars_amount < config.MIN_TOPUP_STARS:
+        raise HTTPException(status_code=400, detail=f"Minimum {config.MIN_TOPUP_STARS} stars")
+    ton_to_credit = req.stars_amount / config.STARS_PER_TON
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
-        if req.method == "xrocket":
-            invoice_url, invoice_id = await _create_xrocket_invoice(user_id, req.amount)
-        elif req.method == "cryptopay":
-            invoice_url, invoice_id = await _create_cryptopay_invoice(user_id, req.amount)
-        else:
-            raise HTTPException(status_code=400, detail="Invalid payment method")
-        await conn.execute(
-            "INSERT INTO payments (user_id, provider, invoice_id, amount_ton, payload) VALUES ($1,$2,$3,$4,$5)",
-            user_id, req.method, invoice_id, req.amount, json.dumps({"user_id": user_id})
+        await add_ton(conn, user_id, ton_to_credit, "topup_stars", f"Stars top-up: {req.stars_amount} stars")
+        updated = await get_user(conn, user_id)
+        return {"success": True, "ton_credited": ton_to_credit, "new_ton_balance": float(updated["ton_balance"])}
+
+
+# ─── POST /payment-webhook/ton-topup ─────────────────────────────────────────
+# Called by your TONAPI webhook when a TON transfer arrives at your receiving wallet
+
+@app.post("/payment-webhook/ton-topup")
+async def ton_topup_webhook(request: Request):
+    """
+    TONAPI webhook — verifies the comment ID and credits TON to user.
+    Expected JSON: { "comment_id": "123456", "amount_ton": 1.5, "tx_hash": "abc..." }
+    """
+    # Verify secret header
+    secret = request.headers.get("X-Webhook-Secret", "")
+    if config.TONAPI_KEY and secret != config.TONAPI_KEY:
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
+    body = await request.json()
+    comment_id = str(body.get("comment_id", "")).strip()
+    amount_ton = float(body.get("amount_ton", 0))
+    tx_hash = str(body.get("tx_hash", ""))
+
+    if not comment_id or amount_ton < config.MIN_TOPUP_TON:
+        return {"ok": True, "skipped": True}
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # Find user by comment_id
+        user = await conn.fetchrow(
+            "SELECT id FROM users WHERE ton_comment_id = $1", comment_id
         )
-        return {"invoice_url": invoice_url, "invoice_id": invoice_id}
+        if not user:
+            logger.warning(f"TON topup: no user found for comment_id={comment_id}")
+            return {"ok": True, "skipped": True}
+
+        # Check if already processed
+        existing = await conn.fetchrow(
+            "SELECT id FROM ton_topup_requests WHERE comment_id = $1 AND status = 'credited'", comment_id
+        )
+        if existing:
+            return {"ok": True, "already_credited": True}
+
+        user_id = user["id"]
+        async with conn.transaction():
+            await conn.execute("""
+                INSERT INTO ton_topup_requests (user_id, comment_id, amount_ton, status, tx_hash, credited_at)
+                VALUES ($1, $2, $3, 'credited', $4, NOW())
+                ON CONFLICT (comment_id) DO UPDATE
+                SET amount_ton = $3, status = 'credited', tx_hash = $4, credited_at = NOW()
+            """, user_id, comment_id, amount_ton, tx_hash)
+            await add_ton(conn, user_id, amount_ton, "topup_ton_wallet", f"TON wallet top-up: {amount_ton} TON")
+
+        cache_del(f"user:{user_id}")
+        logger.info(f"TON topup credited: user={user_id}, amount={amount_ton}, comment={comment_id}")
+        return {"ok": True, "user_id": user_id, "amount_credited": amount_ton}
 
 
 async def _create_xrocket_invoice(user_id: int, amount: float) -> tuple:
@@ -667,23 +891,6 @@ async def _create_xrocket_invoice(user_id: int, amount: float) -> tuple:
         raise HTTPException(status_code=500, detail=f"xRocket error: {data.get('message')}")
 
 
-async def _create_cryptopay_invoice(user_id: int, amount: float) -> tuple:
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "https://pay.crypt.bot/api/createInvoice",
-            headers={"Crypto-Pay-API-Token": config.CRYPTOPAY_API_TOKEN},
-            json={"asset": "TON", "amount": str(amount), "description": "TRewards top-up",
-                  "payload": json.dumps({"user_id": user_id}),
-                  "allow_comments": False, "allow_anonymous": False},
-            timeout=15
-        )
-        data = resp.json()
-        if data.get("ok"):
-            inv = data["result"]
-            return inv["pay_url"], str(inv["invoice_id"])
-        raise HTTPException(status_code=500, detail=f"CryptoPay error: {data.get('error')}")
-
-
 # ─── GET /api/advertiser ──────────────────────────────────────────────────────
 
 @app.get("/api/advertiser")
@@ -694,7 +901,7 @@ async def get_advertiser(init_data: str):
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
         tasks = await conn.fetch("SELECT * FROM tasks WHERE advertiser_id = $1 ORDER BY created_at DESC", user_id)
-        return {"ad_balance": float(user["ad_balance"]), "tasks": [dict(t) for t in tasks]}
+        return {"ad_balance": float(user["ton_balance"]), "tasks": [dict(t) for t in tasks]}
 
 
 # ─── POST /api/create-task ────────────────────────────────────────────────────
@@ -720,13 +927,14 @@ async def create_task(req: CreateTaskRequest):
     reward_map = {"visit": config.TASK_REWARD_VISIT, "channel": config.TASK_REWARD_CHANNEL,
                   "group": config.TASK_REWARD_GROUP, "game": config.TASK_REWARD_GAME,
                   "daily": config.TASK_REWARD_VISIT}
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
-        if float(user["ad_balance"]) < cost:
-            raise HTTPException(status_code=400, detail=f"Insufficient ad balance. Need {cost:.3f} TON")
+        if float(user["ton_balance"]) < cost:
+            raise HTTPException(status_code=400, detail=f"Insufficient TON balance. Need {cost:.3f} TON")
         async with conn.transaction():
-            await conn.execute("UPDATE users SET ad_balance = ad_balance - $1 WHERE id = $2", cost, user_id)
+            await conn.execute("UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2", cost, user_id)
             task_id = await conn.fetchval("""
                 INSERT INTO tasks (advertiser_id, name, type, url, reward_coins, completion_limit, days_limit, cost_ton)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
@@ -742,6 +950,7 @@ async def set_language(req: LanguageRequest):
     user_id = tg_user["id"]
     if req.language not in ("en", "ru"):
         raise HTTPException(status_code=400, detail="Invalid language")
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("UPDATE users SET language = $1 WHERE id = $2", req.language, user_id)
@@ -761,6 +970,7 @@ async def create_check(req: CreateCheckRequest):
     recipients = 1 if req.check_type == "personal" else (req.recipients or 2)
     if req.check_type == "multi" and recipients < 2:
         raise HTTPException(status_code=400, detail="Multi check requires at least 2 recipients")
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
@@ -815,6 +1025,7 @@ async def get_check(check_id: str, init_data: str):
 async def claim_check(req: ClaimCheckRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
         check = await conn.fetchrow("SELECT * FROM ton_checks WHERE id = $1 FOR UPDATE", req.check_id)
@@ -886,66 +1097,36 @@ async def get_checks(init_data: str):
         return {"my_checks": [dict(c) for c in my_checks], "received_checks": [dict(c) for c in received]}
 
 
-# ─── POST /api/admin/broadcast  (NEW) ────────────────────────────────────────
-#
-#  Sends a message to every user in the database.
-#  The actual sending is done in the background so the HTTP response returns
-#  immediately.  Progress is logged server-side.
-#
-#  Request body:
-#    init_data   – admin's Telegram initData (HMAC-verified + admin ID check)
-#    message     – text to send (supports HTML / Markdown via parse_mode)
-#    parse_mode  – "HTML" | "Markdown" | null   (default: "HTML")
-#    button_text – optional inline button label
-#    button_url  – optional inline button URL
-#
-#  Response:
-#    { "success": true, "total_users": N, "task": "running in background" }
+# ─── POST /api/admin/broadcast ────────────────────────────────────────────────
 
 @app.post("/api/admin/broadcast")
 async def admin_broadcast(req: BroadcastRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     require_admin(tg_user["id"])
-
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
-
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch("SELECT id FROM users ORDER BY id")
-
     user_ids = [r["id"] for r in rows]
     if not user_ids:
         return {"success": True, "total_users": 0, "task": "no users"}
-
-    # Build optional inline keyboard
     reply_markup = None
     if req.button_text and req.button_url:
-        reply_markup = json.dumps({
-            "inline_keyboard": [[{"text": req.button_text, "url": req.button_url}]]
-        })
-
-    # Fire-and-forget background task
+        reply_markup = json.dumps(
+            {"inline_keyboard": [[{"text": req.button_text, "url": req.button_url}]]}
+        )
     asyncio.create_task(
         _broadcast_task(user_ids, req.message, req.parse_mode, reply_markup)
     )
-
     return {"success": True, "total_users": len(user_ids), "task": "running in background"}
 
 
 async def _broadcast_task(user_ids: list, message: str, parse_mode: str, reply_markup):
-    """
-    Sends message to all users in batches to respect Telegram's rate limit
-    (~30 msgs/sec to different users).
-    """
-    sent = 0
-    failed = 0
-    batch_size = config.BROADCAST_BATCH_SIZE
-    delay = config.BROADCAST_BATCH_DELAY
-
+    sent = 0; failed = 0
     async with httpx.AsyncClient(timeout=10) as client:
-        for i in range(0, len(user_ids), batch_size):
-            batch = user_ids[i:i + batch_size]
+        for i in range(0, len(user_ids), config.BROADCAST_BATCH_SIZE):
+            batch = user_ids[i:i + config.BROADCAST_BATCH_SIZE]
             tasks = [_send_one(client, uid, message, parse_mode, reply_markup) for uid in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for r in results:
@@ -953,29 +1134,23 @@ async def _broadcast_task(user_ids: list, message: str, parse_mode: str, reply_m
                     failed += 1
                 else:
                     sent += 1
-            logger.info(f"Broadcast progress: {sent + failed}/{len(user_ids)} (ok={sent} fail={failed})")
-            if i + batch_size < len(user_ids):
-                await asyncio.sleep(delay)
+            logger.info(f"Broadcast: {sent+failed}/{len(user_ids)} ok={sent} fail={failed}")
+            if i + config.BROADCAST_BATCH_SIZE < len(user_ids):
+                await asyncio.sleep(config.BROADCAST_BATCH_DELAY)
+    logger.info(f"Broadcast complete: sent={sent}, failed={failed}")
 
-    logger.info(f"Broadcast complete: sent={sent}, failed={failed}, total={len(user_ids)}")
 
-
-async def _send_one(client: httpx.AsyncClient, user_id: int, text: str,
-                    parse_mode: str, reply_markup) -> bool:
-    """Send a single message, return True on success."""
+async def _send_one(client, user_id: int, text: str, parse_mode: str, reply_markup) -> bool:
     payload = {"chat_id": user_id, "text": text}
     if parse_mode:
         payload["parse_mode"] = parse_mode
     if reply_markup:
         payload["reply_markup"] = reply_markup
-
     try:
         resp = await client.post(
-            f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage",
-            json=payload
+            f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage", json=payload
         )
-        data = resp.json()
-        return data.get("ok", False)
+        return resp.json().get("ok", False)
     except Exception as e:
         logger.warning(f"Broadcast to {user_id} failed: {e}")
         return False
@@ -987,33 +1162,16 @@ async def _send_one(client: httpx.AsyncClient, user_id: int, text: str,
 async def xrocket_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("rocket-pay-signature", "")
-    expected = hmac.new(config.XROCKET_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, signature):
-        raise HTTPException(status_code=401, detail="Invalid signature")
+    if config.XROCKET_WEBHOOK_SECRET:
+        expected = hmac.new(config.XROCKET_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            raise HTTPException(status_code=401, detail="Invalid signature")
     data = json.loads(body)
     if data.get("type") != "invoice" or data.get("status") != "paid":
         return {"ok": True}
     if data.get("currency") != "TONCOIN":
         return {"ok": True}
     await _process_payment("xrocket", str(data["id"]), float(data.get("amount", 0)))
-    return {"ok": True}
-
-
-@app.post("/payment-webhook/cryptopay")
-async def cryptopay_webhook(request: Request):
-    body = await request.body()
-    signature = request.headers.get("crypto-pay-api-signature", "")
-    secret = hashlib.sha256(config.CRYPTOPAY_WEBHOOK_SECRET.encode()).digest()
-    expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, signature):
-        raise HTTPException(status_code=401, detail="Invalid signature")
-    data = json.loads(body)
-    if data.get("update_type") != "invoice_paid":
-        return {"ok": True}
-    payload_data = data.get("payload", {})
-    if payload_data.get("asset") != "TON":
-        return {"ok": True}
-    await _process_payment("cryptopay", str(payload_data["invoice_id"]), float(payload_data.get("amount", 0)))
     return {"ok": True}
 
 
@@ -1025,11 +1183,8 @@ async def _process_payment(provider: str, invoice_id: str, amount: float):
             return
         async with conn.transaction():
             await conn.execute("UPDATE payments SET status = 'paid', paid_at = NOW() WHERE invoice_id = $1", invoice_id)
-            await conn.execute("UPDATE users SET ad_balance = ad_balance + $1 WHERE id = $2", amount, payment["user_id"])
-            await conn.execute(
-                "INSERT INTO transactions (user_id, type, description, ton_amount) VALUES ($1,'topup',$2,$3)",
-                payment["user_id"], f"Ad balance top-up via {provider}", amount
-            )
+            await add_ton(conn, payment["user_id"], amount, "topup", f"Top-up via {provider}: {amount} TON")
+        cache_del(f"user:{payment['user_id']}")
         logger.info(f"Payment processed: user={payment['user_id']}, {amount} TON via {provider}")
 
 

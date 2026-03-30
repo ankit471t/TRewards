@@ -10,7 +10,13 @@ pool = None
 async def get_pool():
     global pool
     if pool is None:
-        pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+        pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=2,
+            max_size=15,
+            command_timeout=30,
+            max_inactive_connection_lifetime=300,
+        )
     return pool
 
 
@@ -36,9 +42,21 @@ async def init_db():
                 ton_balance         NUMERIC(18,8) DEFAULT 0,
                 ad_balance          NUMERIC(18,8) DEFAULT 0,
                 language            TEXT DEFAULT 'en',
+                ton_wallet_address  TEXT,
+                ton_comment_id      TEXT UNIQUE,
                 created_at          TIMESTAMPTZ DEFAULT NOW()
             )
         """)
+
+        # Add new columns to existing users table if not present
+        for col_sql in [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ton_wallet_address TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS ton_comment_id TEXT",
+        ]:
+            try:
+                await conn.execute(col_sql)
+            except Exception:
+                pass
 
         # ── transactions ──────────────────────────────────────────────────────
         await conn.execute("""
@@ -53,23 +71,20 @@ async def init_db():
             )
         """)
 
-        # ── tasks (advertiser tasks) ───────────────────────────────────────────
-        # type now includes 'daily' for daily advertiser tasks
+        # ── tasks ─────────────────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id               SERIAL PRIMARY KEY,
                 advertiser_id    BIGINT REFERENCES users(id),
                 name             TEXT NOT NULL,
-                type             TEXT NOT NULL
-                                    CHECK (type IN ('visit','channel','group','game','daily')),
+                type             TEXT NOT NULL,
                 url              TEXT NOT NULL,
                 reward_coins     INTEGER NOT NULL,
-                completion_limit INTEGER,           -- NULL for daily tasks (uses days_limit)
-                days_limit       INTEGER,           -- for daily task type
+                completion_limit INTEGER,
+                days_limit       INTEGER,
                 completed_count  INTEGER DEFAULT 0,
                 cost_ton         NUMERIC(18,8) NOT NULL,
-                status           TEXT DEFAULT 'active'
-                                    CHECK (status IN ('active','paused','completed')),
+                status           TEXT DEFAULT 'active',
                 created_at       TIMESTAMPTZ DEFAULT NOW()
             )
         """)
@@ -85,7 +100,7 @@ async def init_db():
             )
         """)
 
-        # ── daily_task_completions (built-in daily tasks) ─────────────────────
+        # ── daily_task_completions ─────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS daily_task_completions (
                 id             SERIAL PRIMARY KEY,
@@ -101,7 +116,7 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS promo_codes (
                 id                   SERIAL PRIMARY KEY,
                 code                 TEXT UNIQUE NOT NULL,
-                reward_type          TEXT NOT NULL CHECK (reward_type IN ('coins','ton')),
+                reward_type          TEXT NOT NULL,
                 reward_amount        NUMERIC(18,8) NOT NULL,
                 max_activations      INTEGER NOT NULL,
                 current_activations  INTEGER DEFAULT 0,
@@ -137,6 +152,33 @@ async def init_db():
             )
         """)
 
+        # ── ton_topup_requests ────────────────────────────────────────────────
+        # For direct TON wallet top-ups (verified by unique comment ID)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ton_topup_requests (
+                id             SERIAL PRIMARY KEY,
+                user_id        BIGINT REFERENCES users(id),
+                comment_id     TEXT NOT NULL UNIQUE,
+                amount_ton     NUMERIC(18,8),
+                status         TEXT DEFAULT 'pending',
+                tx_hash        TEXT,
+                created_at     TIMESTAMPTZ DEFAULT NOW(),
+                credited_at    TIMESTAMPTZ
+            )
+        """)
+
+        # ── stars_payments ────────────────────────────────────────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS stars_payments (
+                id             SERIAL PRIMARY KEY,
+                user_id        BIGINT REFERENCES users(id),
+                telegram_charge_id TEXT UNIQUE NOT NULL,
+                stars_amount   INTEGER NOT NULL,
+                ton_credited   NUMERIC(18,8) NOT NULL,
+                created_at     TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+
         # ── withdrawals ───────────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS withdrawals (
@@ -147,8 +189,7 @@ async def init_db():
                 net_ton         NUMERIC(18,8) NOT NULL,
                 fee_ton         NUMERIC(18,8) DEFAULT 0,
                 wallet_address  TEXT,
-                status          TEXT DEFAULT 'pending'
-                                    CHECK (status IN ('pending','processing','paid','failed')),
+                status          TEXT DEFAULT 'pending',
                 created_at      TIMESTAMPTZ DEFAULT NOW(),
                 processed_at    TIMESTAMPTZ
             )
@@ -167,14 +208,13 @@ async def init_db():
         # ── ton_checks ────────────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ton_checks (
-                id           TEXT PRIMARY KEY,          -- random token
+                id           TEXT PRIMARY KEY,
                 creator_id   BIGINT REFERENCES users(id),
-                check_type   TEXT NOT NULL CHECK (check_type IN ('personal','multi')),
-                amount       NUMERIC(18,8) NOT NULL,    -- total TON locked
+                check_type   TEXT NOT NULL,
+                amount       NUMERIC(18,8) NOT NULL,
                 recipients   INTEGER NOT NULL DEFAULT 1,
                 claimed_count INTEGER DEFAULT 0,
-                status       TEXT DEFAULT 'active'
-                                 CHECK (status IN ('active','claimed','expired')),
+                status       TEXT DEFAULT 'active',
                 created_at   TIMESTAMPTZ DEFAULT NOW()
             )
         """)
@@ -191,14 +231,12 @@ async def init_db():
             )
         """)
 
-        # ── weekly_referrals (for leaderboard) ────────────────────────────────
-        # Computed view-style: derive from users.created_at + referrer_id
-        # We store week_id as e.g. '2025-W01' for fast aggregation
+        # ── weekly_referral_stats ─────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS weekly_referral_stats (
                 id          SERIAL PRIMARY KEY,
                 referrer_id BIGINT REFERENCES users(id),
-                week_id     TEXT NOT NULL,              -- e.g. '2025-W12'
+                week_id     TEXT NOT NULL,
                 friend_count INTEGER DEFAULT 0,
                 updated_at  TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(referrer_id, week_id)
@@ -206,15 +244,27 @@ async def init_db():
         """)
 
         # ── Indexes ───────────────────────────────────────────────────────────
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user   ON transactions(user_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_task_completions_user ON task_completions(user_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_invoice    ON payments(invoice_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_user    ON withdrawals(user_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_checks_creator      ON ton_checks(creator_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_check_claims_check  ON check_claims(check_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_weekly_ref_week     ON weekly_referral_stats(week_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_referrer      ON users(referrer_id)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_task_user_date ON daily_task_completions(user_id, completed_date)")
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_transactions_user      ON transactions(user_id, created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_task_completions_user   ON task_completions(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_task_completions_task   ON task_completions(task_id)",
+            "CREATE INDEX IF NOT EXISTS idx_payments_invoice        ON payments(invoice_id)",
+            "CREATE INDEX IF NOT EXISTS idx_withdrawals_user        ON withdrawals(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_checks_creator          ON ton_checks(creator_id)",
+            "CREATE INDEX IF NOT EXISTS idx_check_claims_check      ON check_claims(check_id)",
+            "CREATE INDEX IF NOT EXISTS idx_weekly_ref_week         ON weekly_referral_stats(week_id)",
+            "CREATE INDEX IF NOT EXISTS idx_users_referrer          ON users(referrer_id)",
+            "CREATE INDEX IF NOT EXISTS idx_daily_task_user_date    ON daily_task_completions(user_id, completed_date)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_status            ON tasks(status)",
+            "CREATE INDEX IF NOT EXISTS idx_ton_topup_comment       ON ton_topup_requests(comment_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ton_topup_user          ON ton_topup_requests(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_users_comment_id        ON users(ton_comment_id)",
+        ]
+        for idx in indexes:
+            try:
+                await conn.execute(idx)
+            except Exception:
+                pass
 
         logger.info("Database initialized successfully")
 
@@ -227,27 +277,33 @@ async def get_user(conn, user_id: int):
 
 async def create_user(conn, user_id: int, username: str, first_name: str,
                       last_name: str, referrer_id: int = None):
-    # Prevent self-referral
     if referrer_id == user_id:
         referrer_id = None
-
-    # Verify referrer exists
     if referrer_id:
         ref = await conn.fetchrow("SELECT id FROM users WHERE id = $1", referrer_id)
         if not ref:
             referrer_id = None
 
+    # Generate unique comment ID for TON top-up (6-digit number)
+    import random
+    comment_id = str(random.randint(100000, 999999))
+    # Ensure uniqueness
+    while True:
+        existing = await conn.fetchrow("SELECT id FROM users WHERE ton_comment_id = $1", comment_id)
+        if not existing:
+            break
+        comment_id = str(random.randint(100000, 999999))
+
     user = await conn.fetchrow("""
-        INSERT INTO users (id, username, first_name, last_name, referrer_id)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO users (id, username, first_name, last_name, referrer_id, ton_comment_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (id) DO UPDATE SET
             username   = EXCLUDED.username,
             first_name = EXCLUDED.first_name,
             last_name  = EXCLUDED.last_name
         RETURNING *
-    """, user_id, username, first_name, last_name, referrer_id)
+    """, user_id, username, first_name, last_name, referrer_id, comment_id)
 
-    # If new user (referrer_id just set for the first time), update weekly stats
     if referrer_id and user["referrer_id"] == referrer_id:
         week_id = _current_week_id()
         await conn.execute("""
@@ -264,15 +320,13 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
 async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: str):
     """Add coins and record transaction. Also credits referral commission."""
     await conn.execute(
-        "UPDATE users SET coins = coins + $1 WHERE id = $2",
-        amount, user_id
+        "UPDATE users SET coins = coins + $1 WHERE id = $2", amount, user_id
     )
     await conn.execute("""
         INSERT INTO transactions (user_id, type, description, amount)
         VALUES ($1, $2, $3, $4)
     """, user_id, tx_type, description, amount)
 
-    # Referral commission (30%)
     if amount > 0:
         user = await conn.fetchrow("SELECT referrer_id FROM users WHERE id = $1", user_id)
         if user and user["referrer_id"]:
@@ -288,12 +342,22 @@ async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: 
 
 async def add_spins(conn, user_id: int, amount: int):
     await conn.execute(
-        "UPDATE users SET spins = spins + $1 WHERE id = $2",
-        amount, user_id
+        "UPDATE users SET spins = spins + $1 WHERE id = $2", amount, user_id
     )
 
 
-# ─── Week helper ──────────────────────────────────────────────────────────────
+async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: str):
+    """Add TON balance and record transaction."""
+    await conn.execute(
+        "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2", amount, user_id
+    )
+    await conn.execute("""
+        INSERT INTO transactions (user_id, type, description, ton_amount)
+        VALUES ($1, $2, $3, $4)
+    """, user_id, tx_type, description, amount)
+
+
+# ─── Week helpers ──────────────────────────────────────────────────────────────
 
 def _current_week_id() -> str:
     from datetime import date

@@ -7,15 +7,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ─── Telegram ────────────────────────────────────────────────────────────────
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
-BOT_USERNAME     = os.getenv("BOT_USERNAME", "treward_ton_bot")  # @treward_ton_bot
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "treward_ton")  # @treward_ton
+BOT_USERNAME     = os.getenv("BOT_USERNAME", "treward_ton_bot")
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "treward_ton")
 ADMIN_IDS        = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 
 # ─── Payment Providers ───────────────────────────────────────────────────────
 XROCKET_API_KEY          = os.getenv("XROCKET_API_KEY")
 XROCKET_WEBHOOK_SECRET   = os.getenv("XROCKET_WEBHOOK_SECRET")
-CRYPTOPAY_API_TOKEN      = os.getenv("CRYPTOPAY_API_TOKEN")
-CRYPTOPAY_WEBHOOK_SECRET = os.getenv("CRYPTOPAY_WEBHOOK_SECRET")
+
+# TON API (for direct wallet top-up detection)
+TONAPI_KEY               = os.getenv("TONAPI_KEY")
+TON_WALLET_RECEIVE       = os.getenv("TON_WALLET_RECEIVE")  # Your receiving TON wallet address
+
+# Telegram Stars
+STARS_WEBHOOK_SECRET     = os.getenv("STARS_WEBHOOK_SECRET")
 
 # ─── App URLs ─────────────────────────────────────────────────────────────────
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://trewards.onrender.com")
@@ -47,14 +52,15 @@ DAILY_TASK_COST_PER_DAY = 5.0
 
 # ─── Spin Wheel ───────────────────────────────────────────────────────────────
 SPIN_SEGMENTS = [10, 50, 80, 100, 300, 500]
-SPIN_WEIGHTS  = [35, 25, 20, 12,  6,   2]
+SPIN_WEIGHTS  = [15, 15, 15, 20,  20,   15]
 
 # ─── Streak ───────────────────────────────────────────────────────────────────
 STREAK_COIN_REWARD = 10
 STREAK_SPIN_REWARD = 1
 
 # ─── Daily Tasks ──────────────────────────────────────────────────────────────
-DAILY_TASK_COIN_REWARD = 10
+# Each individual daily task reward
+DAILY_TASK_COIN_REWARD = 1_000   # 1000 TR per daily task
 DAILY_TASK_SPIN_REWARD = 1
 
 # ─── Watch Ads ────────────────────────────────────────────────────────────────
@@ -66,7 +72,11 @@ REFERRAL_COMMISSION = 0.30
 # ─── TON Check ────────────────────────────────────────────────────────────────
 CHECK_MIN_AMOUNT = 0.01
 
+# ─── Top-Up Limits ────────────────────────────────────────────────────────────
+MIN_TOPUP_TON      = 0.50   # minimum top-up via xRocket or TON wallet
+MIN_TOPUP_STARS    = 50     # minimum Telegram Stars
+STARS_PER_TON      = 65     # 65 stars = 1 TON
+
 # ─── Broadcast ────────────────────────────────────────────────────────────────
-# Telegram allows ~30 msgs/sec to different users; batch to stay safe
-BROADCAST_BATCH_SIZE  = 30   # users per batch
-BROADCAST_BATCH_DELAY = 1.0  # seconds to sleep between batches
+BROADCAST_BATCH_SIZE  = 30
+BROADCAST_BATCH_DELAY = 1.0
