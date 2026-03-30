@@ -1,23 +1,26 @@
 import asyncpg
 import logging
+import random
+from datetime import date, timedelta
 from config import DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
-pool = None
+_pool = None
 
 
 async def get_pool():
-    global pool
-    if pool is None:
-        pool = await asyncpg.create_pool(
+    global _pool
+    if _pool is None:
+        _pool = await asyncpg.create_pool(
             DATABASE_URL,
-            min_size=2,
-            max_size=15,
+            min_size=3,
+            max_size=20,
             command_timeout=30,
             max_inactive_connection_lifetime=300,
+            statement_cache_size=0,  # required for Supabase pgBouncer
         )
-    return pool
+    return _pool
 
 
 async def init_db():
@@ -40,7 +43,6 @@ async def init_db():
                 referral_earnings   BIGINT DEFAULT 0,
                 unclaimed_referral  BIGINT DEFAULT 0,
                 ton_balance         NUMERIC(18,8) DEFAULT 0,
-                ad_balance          NUMERIC(18,8) DEFAULT 0,
                 language            TEXT DEFAULT 'en',
                 ton_wallet_address  TEXT,
                 ton_comment_id      TEXT UNIQUE,
@@ -48,13 +50,15 @@ async def init_db():
             )
         """)
 
-        # Add new columns to existing users table if not present
-        for col_sql in [
+        # Add columns if missing (safe migration)
+        migrations = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS ton_wallet_address TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS ton_comment_id TEXT",
-        ]:
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en'",
+        ]
+        for sql in migrations:
             try:
-                await conn.execute(col_sql)
+                await conn.execute(sql)
             except Exception:
                 pass
 
@@ -65,8 +69,8 @@ async def init_db():
                 user_id     BIGINT REFERENCES users(id),
                 type        TEXT NOT NULL,
                 description TEXT,
-                amount      BIGINT,
-                ton_amount  NUMERIC(18,8),
+                amount      BIGINT DEFAULT 0,
+                ton_amount  NUMERIC(18,8) DEFAULT 0,
                 created_at  TIMESTAMPTZ DEFAULT NOW()
             )
         """)
@@ -137,7 +141,7 @@ async def init_db():
             )
         """)
 
-        # ── payments ──────────────────────────────────────────────────────────
+        # ── payments (xRocket) ────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 id         SERIAL PRIMARY KEY,
@@ -152,8 +156,7 @@ async def init_db():
             )
         """)
 
-        # ── ton_topup_requests ────────────────────────────────────────────────
-        # For direct TON wallet top-ups (verified by unique comment ID)
+        # ── ton_topup_requests (direct wallet top-up via comment ID) ──────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ton_topup_requests (
                 id             SERIAL PRIMARY KEY,
@@ -170,12 +173,12 @@ async def init_db():
         # ── stars_payments ────────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS stars_payments (
-                id             SERIAL PRIMARY KEY,
-                user_id        BIGINT REFERENCES users(id),
+                id                 SERIAL PRIMARY KEY,
+                user_id            BIGINT REFERENCES users(id),
                 telegram_charge_id TEXT UNIQUE NOT NULL,
-                stars_amount   INTEGER NOT NULL,
-                ton_credited   NUMERIC(18,8) NOT NULL,
-                created_at     TIMESTAMPTZ DEFAULT NOW()
+                stars_amount       INTEGER NOT NULL,
+                ton_credited       NUMERIC(18,8) NOT NULL,
+                created_at         TIMESTAMPTZ DEFAULT NOW()
             )
         """)
 
@@ -208,14 +211,14 @@ async def init_db():
         # ── ton_checks ────────────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ton_checks (
-                id           TEXT PRIMARY KEY,
-                creator_id   BIGINT REFERENCES users(id),
-                check_type   TEXT NOT NULL,
-                amount       NUMERIC(18,8) NOT NULL,
-                recipients   INTEGER NOT NULL DEFAULT 1,
+                id            TEXT PRIMARY KEY,
+                creator_id    BIGINT REFERENCES users(id),
+                check_type    TEXT NOT NULL,
+                amount        NUMERIC(18,8) NOT NULL,
+                recipients    INTEGER NOT NULL DEFAULT 1,
                 claimed_count INTEGER DEFAULT 0,
-                status       TEXT DEFAULT 'active',
-                created_at   TIMESTAMPTZ DEFAULT NOW()
+                status        TEXT DEFAULT 'active',
+                created_at    TIMESTAMPTZ DEFAULT NOW()
             )
         """)
 
@@ -259,6 +262,8 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_ton_topup_comment       ON ton_topup_requests(comment_id)",
             "CREATE INDEX IF NOT EXISTS idx_ton_topup_user          ON ton_topup_requests(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_users_comment_id        ON users(ton_comment_id)",
+            "CREATE INDEX IF NOT EXISTS idx_users_created_at        ON users(created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_stars_charge            ON stars_payments(telegram_charge_id)",
         ]
         for idx in indexes:
             try:
@@ -277,6 +282,7 @@ async def get_user(conn, user_id: int):
 
 async def create_user(conn, user_id: int, username: str, first_name: str,
                       last_name: str, referrer_id: int = None):
+    """Upsert user, handle referral, generate unique comment ID."""
     if referrer_id == user_id:
         referrer_id = None
     if referrer_id:
@@ -284,12 +290,12 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         if not ref:
             referrer_id = None
 
-    # Generate unique comment ID for TON top-up (6-digit number)
-    import random
+    # Generate unique 6-digit numeric comment ID
     comment_id = str(random.randint(100000, 999999))
-    # Ensure uniqueness
     while True:
-        existing = await conn.fetchrow("SELECT id FROM users WHERE ton_comment_id = $1", comment_id)
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE ton_comment_id = $1", comment_id
+        )
         if not existing:
             break
         comment_id = str(random.randint(100000, 999999))
@@ -304,6 +310,7 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         RETURNING *
     """, user_id, username, first_name, last_name, referrer_id, comment_id)
 
+    # Update weekly referral stats only on first-time referral
     if referrer_id and user["referrer_id"] == referrer_id:
         week_id = _current_week_id()
         await conn.execute("""
@@ -318,7 +325,7 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
 
 
 async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: str):
-    """Add coins and record transaction. Also credits referral commission."""
+    """Add coins and record transaction. Credits 30% referral commission."""
     await conn.execute(
         "UPDATE users SET coins = coins + $1 WHERE id = $2", amount, user_id
     )
@@ -347,7 +354,7 @@ async def add_spins(conn, user_id: int, amount: int):
 
 
 async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: str):
-    """Add TON balance and record transaction."""
+    """Add TON balance (= ad balance) and record transaction."""
     await conn.execute(
         "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2", amount, user_id
     )
@@ -360,18 +367,16 @@ async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: 
 # ─── Week helpers ──────────────────────────────────────────────────────────────
 
 def _current_week_id() -> str:
-    from datetime import date
     d = date.today()
     jan1 = date(d.year, 1, 1)
     day_of_year = (d - jan1).days
-    week_num = (day_of_year) // 7 + 1
+    week_num = day_of_year // 7 + 1
     return f"{d.year}-W{week_num:02d}"
 
 
 def _prev_week_id() -> str:
-    from datetime import date, timedelta
     d = date.today() - timedelta(days=7)
     jan1 = date(d.year, 1, 1)
     day_of_year = (d - jan1).days
-    week_num = (day_of_year) // 7 + 1
+    week_num = day_of_year // 7 + 1
     return f"{d.year}-W{week_num:02d}"

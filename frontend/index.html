@@ -6,9 +6,14 @@
 <title>TRewards</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Telegram WebApp -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Monetag SDK -->
 <script src='//libtl.com/sdk.js' data-zone='10801469' data-sdk='show_10801469'></script>
+<!-- AdsGram SDK -->
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<!-- TON Connect UI -->
+<script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -132,7 +137,7 @@ html,body{height:100%;background:var(--bg);color:var(--t1);font-family:'Exo 2',s
 .stars-rate{background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.2);border-radius:var(--r);padding:10px;text-align:center;margin-bottom:10px;font-size:12px;color:var(--t2)}
 .stars-rate b{color:#ffa500}
 .overlay{position:absolute;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;align-items:flex-end;animation:fadeIn .2s ease}
-.overlay-box{background:var(--bg2);border:1px solid rgba(255,184,0,.2);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;animation:slideUp .3s ease;max-height:85vh;overflow-y:auto}
+.overlay-box{background:var(--bg2);border:1px solid rgba(255,184,0,.2);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;animation:slideUp .3s ease;max-height:90vh;overflow-y:auto}
 @keyframes slideUp{from{transform:translateY(60px)}to{transform:none}}
 .overlay-title{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--gold);text-align:center;margin-bottom:16px}
 .overlay-close{position:absolute;top:16px;right:20px;width:28px;height:28px;border-radius:50%;background:rgba(255,184,0,.1);border:none;color:var(--t2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
@@ -235,6 +240,9 @@ option{background:var(--bg2)}
 .daily-section{background:linear-gradient(135deg,#0A0F1A,#0D1420);border:1px solid rgba(0,152,234,.18);border-radius:var(--r2);padding:14px;margin-bottom:12px}
 .ton-note{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.15);border-radius:10px;padding:10px 14px;font-size:11px;color:var(--t2);margin-bottom:12px}
 .ton-note b{color:var(--ton)}
+/* TON Connect button container */
+#tc-btn-wrap tc-button,#tc-btn-wrap button{width:100%!important;border-radius:var(--r)!important}
+.ton-pay-popup{background:linear-gradient(135deg,#0A1520,#0D1E2E);border:1px solid rgba(0,152,234,.3);border-radius:var(--r2);padding:20px;text-align:center;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -250,27 +258,24 @@ option{background:var(--bg2)}
 
   <div class="scroll" id="scroll">
 
-    <!-- HOME -->
+    <!-- ═══ HOME ═══ -->
     <div class="tab active" id="tab-home">
       <div class="bal-card">
         <div class="bal-label" data-i="balance">TR BALANCE</div>
         <div class="bal-coins" id="balCoins">0</div>
-        <div class="bal-ton" data-i="approx">≈ <span id="balTon">0.0000</span> TON</div>
+        <div class="bal-ton">≈ <span id="balTon">0.0000</span> TON</div>
         <div class="bal-badges">
           <div class="badge">🔥 <span id="streakBadge">0</span> <span data-i="days">days</span></div>
           <div class="badge">🎰 <span id="spinsBadge">0</span> <span data-i="spins">spins</span></div>
         </div>
       </div>
-
       <div id="homeWatchAds"></div>
-
       <div class="card">
         <div class="sec-title" data-i="dailyStreak">DAILY STREAK</div>
         <div class="streak-dots" id="streakDots"></div>
-        <p style="font-size:11px;color:var(--t2);text-align:center;margin:4px 0 12px" data-i="streakDesc">Claim daily for +10 TR + 1 spin</p>
+        <p style="font-size:11px;color:var(--t2);text-align:center;margin:4px 0 12px" data-i="streakDesc">Claim daily for +1,000 TR + 1 spin</p>
         <button class="btn btn-gold" id="streakBtn" onclick="claimStreakWithAd()" style="width:100%" data-i="claimStreak">Claim Streak</button>
       </div>
-
       <div class="card">
         <div class="sec-title" data-i="spinWheel">SPIN WHEEL</div>
         <div class="spin-wrap">
@@ -280,7 +285,6 @@ option{background:var(--bg2)}
           <button class="btn spin-btn" id="spinBtn" onclick="doSpin()" data-i="spinNow">SPIN NOW</button>
         </div>
       </div>
-
       <div class="sec-title" data-i="quickActions">QUICK ACTIONS</div>
       <div class="qa-grid">
         <div class="qa-item" onclick="goTab('friends')"><div class="qa-icon">👥</div><div class="qa-label" data-i="inviteFriend">Invite Friend</div></div>
@@ -288,7 +292,6 @@ option{background:var(--bg2)}
         <div class="qa-item" onclick="goTab('tasks')"><div class="qa-icon">⚡</div><div class="qa-label" data-i="earnMore">Earn More</div></div>
         <div class="qa-item" onclick="goTab('check')"><div class="qa-icon">🧾</div><div class="qa-label" data-i="tonCheck">TON Check</div></div>
       </div>
-
       <div class="card">
         <div class="sec-title" data-i="promoCode">PROMO CODE</div>
         <div class="promo-row">
@@ -298,15 +301,15 @@ option{background:var(--bg2)}
       </div>
     </div>
 
-    <!-- TASKS -->
+    <!-- ═══ TASKS ═══ -->
     <div class="tab" id="tab-tasks">
       <div class="filter-row" id="filterRow">
-        <button class="chip active" data-f="all" onclick="setFilter('all')" data-i="filterAll">All</button>
-        <button class="chip" data-f="daily" onclick="setFilter('daily')" data-i="filterDaily">📅 Daily</button>
-        <button class="chip" data-f="channel" onclick="setFilter('channel')" data-i="filterChannel">Channel</button>
-        <button class="chip" data-f="group" onclick="setFilter('group')" data-i="filterGroup">Group</button>
-        <button class="chip" data-f="game" onclick="setFilter('game')" data-i="filterGame">Game</button>
-        <button class="chip" data-f="visit" onclick="setFilter('visit')" data-i="filterVisit">Website</button>
+        <button class="chip active" data-f="all"     onclick="setFilter('all')"     data-i="filterAll">All</button>
+        <button class="chip"        data-f="daily"   onclick="setFilter('daily')"   data-i="filterDaily">📅 Daily</button>
+        <button class="chip"        data-f="channel" onclick="setFilter('channel')" data-i="filterChannel">Channel</button>
+        <button class="chip"        data-f="group"   onclick="setFilter('group')"   data-i="filterGroup">Group</button>
+        <button class="chip"        data-f="game"    onclick="setFilter('game')"    data-i="filterGame">Game</button>
+        <button class="chip"        data-f="visit"   onclick="setFilter('visit')"   data-i="filterVisit">Website</button>
       </div>
       <div id="dailyTaskPanel" style="display:none">
         <div class="daily-section">
@@ -321,27 +324,17 @@ option{background:var(--bg2)}
       </div>
     </div>
 
-    <!-- FRIENDS -->
+    <!-- ═══ FRIENDS ═══ -->
     <div class="tab" id="tab-friends">
       <div class="week-stats">
-        <div class="wstat">
-          <div class="wstat-val" id="totalFriendsVal">0</div>
-          <div class="wstat-lbl" data-i="totalFriends">Total Friends</div>
-        </div>
-        <div class="wstat purple">
-          <div class="wstat-val" id="weeklyFriendsVal">0</div>
-          <div class="wstat-lbl" data-i="thisWeek">This Week</div>
-        </div>
-        <div class="wstat green">
-          <div class="wstat-val" id="friendsEarned">0</div>
-          <div class="wstat-lbl" data-i="trEarned">TR Earned</div>
-        </div>
+        <div class="wstat"><div class="wstat-val" id="totalFriendsVal">0</div><div class="wstat-lbl" data-i="totalFriends">Total Friends</div></div>
+        <div class="wstat purple"><div class="wstat-val" id="weeklyFriendsVal">0</div><div class="wstat-lbl" data-i="thisWeek">This Week</div></div>
+        <div class="wstat green"><div class="wstat-val" id="friendsEarned">0</div><div class="wstat-lbl" data-i="trEarned">TR Earned</div></div>
       </div>
-      <!-- Referral Claim Card — always show if unclaimed > 0 -->
       <div class="ref-earn-card" id="refEarnCard" style="display:none">
         <div class="ref-earn-ttl" data-i="refEarnings">🤑 REFERRAL EARNINGS</div>
         <div class="ref-earn-amt" id="refEarnAmt">0 TR</div>
-        <div class="ref-earn-sub" data-i="refDesc">Pending from friends (30% share)</div>
+        <div class="ref-earn-sub" data-i="refPendingDesc">Pending from friends (30% share)</div>
         <div id="refFriendRows"></div>
         <button class="btn btn-ok" onclick="claimAllReferral()" style="width:100%;margin-top:12px;padding:13px">
           💰 <span data-i="claimAll">Claim All Earnings</span>
@@ -370,23 +363,23 @@ option{background:var(--bg2)}
       <div id="friendsList"></div>
     </div>
 
-    <!-- WALLET -->
+    <!-- ═══ WALLET ═══ -->
     <div class="tab" id="tab-wallet">
       <div class="bal-card" style="margin-bottom:12px">
         <div class="bal-label" data-i="walletBalance">WALLET BALANCE</div>
         <div class="bal-coins" id="walletCoins">0</div>
         <div class="bal-ton">TON: <span id="walletTon" style="color:var(--ton)">0.0000</span></div>
       </div>
-
       <div class="ton-note">
         💡 <b data-i="tonCoinNote">TON coins</b> <span data-i="tonCoinNoteDesc">are used for advertising and creating checks. TR coins are your task rewards.</span>
       </div>
 
-      <!-- TON Wallet Connect -->
+      <!-- TON Wallet Connect (TON Connect SDK) -->
       <div class="wallet-connect-card">
         <div class="sec-title" style="color:var(--ton);margin-bottom:12px" data-i="tonWallet">🔗 TON WALLET</div>
         <div id="walletConnectStatus"></div>
-        <div id="walletConnectForm"></div>
+        <div id="tc-btn-wrap" style="margin-top:10px"></div>
+        <div id="walletManualForm" style="margin-top:10px"></div>
       </div>
 
       <!-- Convert TR → TON -->
@@ -440,7 +433,7 @@ option{background:var(--bg2)}
         <p style="font-size:10px;color:var(--t3);text-align:center" data-i="topupMinNote">Minimum: 0.50 TON or 50 Stars</p>
       </div>
 
-      <!-- Withdraw -->
+      <!-- Withdraw TR Coins -->
       <div class="card">
         <div class="sec-title" data-i="withdrawTR">WITHDRAW TR COINS</div>
         <div class="tier-grid" id="tierGrid"></div>
@@ -448,11 +441,12 @@ option{background:var(--bg2)}
         <button class="btn btn-gold" onclick="doWithdraw()" style="width:100%" data-i="withdrawNow">Withdraw Now</button>
         <p style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px" data-i="withdrawNote">Processed within 24 hours. 0.03 TON fee deducted.</p>
       </div>
+
       <div class="sec-title" data-i="txHistory">TRANSACTION HISTORY</div>
       <div id="txList"></div>
     </div>
 
-    <!-- CHECK PAGE -->
+    <!-- ═══ CHECK ═══ -->
     <div class="tab" id="tab-check">
       <div class="check-card create">
         <div class="sec-title" style="color:var(--ok)" data-i="createCheck">🧾 CREATE TON CHECK</div>
@@ -474,7 +468,7 @@ option{background:var(--bg2)}
           <span class="conv-sfx">TON</span>
         </div>
         <div id="checkMultiWrap" style="display:none">
-          <input type="number" id="checkPeople" data-ph="numRecipients" placeholder="Number of recipients..." min="2" step="1" oninput="updateCheckPreview()" style="margin-bottom:10px">
+          <input type="number" id="checkPeople" data-ph="numRecipients" placeholder="Number of recipients..." min="2" step="1" oninput="updateCheckPreview()">
           <div style="background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.15);border-radius:var(--r);padding:10px;margin-bottom:10px;font-size:12px;color:var(--t2)">
             <span data-i="eachReceives">Each receives:</span> <b id="checkPerPerson" style="color:var(--ton)">—</b> TON
           </div>
@@ -531,11 +525,11 @@ option{background:var(--bg2)}
         </div>
         <input type="text" id="adName" data-ph="taskNamePH" placeholder="Task name...">
         <select id="adType" onchange="updateAdCostDisplay()">
-          <option value="visit" data-i-opt="visitOpt">Visit Website (+3000 TR +1 Spin)</option>
+          <option value="visit"   data-i-opt="visitOpt">Visit Website (+3000 TR +1 Spin)</option>
           <option value="channel" data-i-opt="channelOpt">Join Channel (+5000 TR +1 Spin)</option>
-          <option value="group" data-i-opt="groupOpt">Join Group (+5000 TR +1 Spin)</option>
-          <option value="game" data-i-opt="gameOpt">Play Game Bot (+5000 TR +1 Spin)</option>
-          <option value="daily" data-i-opt="dailyOpt">Daily Task (shown every day)</option>
+          <option value="group"   data-i-opt="groupOpt">Join Group (+5000 TR +1 Spin)</option>
+          <option value="game"    data-i-opt="gameOpt">Play Game Bot (+5000 TR +1 Spin)</option>
+          <option value="daily"   data-i-opt="dailyOpt">Daily Task (shown every day)</option>
         </select>
         <input type="text" id="adUrl" placeholder="Target URL (https://...)">
         <div id="adLimitWrap">
@@ -551,7 +545,7 @@ option{background:var(--bg2)}
           <input type="number" id="adDays" data-ph="numDaysPH" placeholder="Number of days (e.g. 7)..." min="1" step="1" oninput="updateAdCostDisplay()">
           <div style="font-size:11px;color:var(--t2);margin-bottom:10px" data-i="dailyCostNote">Cost: <b>5 TON per day</b></div>
         </div>
-        <div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--t2)" data-i="costLabel">Cost: <b id="adCost" style="color:var(--gold)">1.000 TON</b></div>
+        <div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--t2)"><span data-i="costLabel">Cost:</span> <b id="adCost" style="color:var(--gold)">1.000 TON</b></div>
         <button class="btn btn-gold" onclick="publishTask()" style="width:100%" data-i="publishTask">Publish Task</button>
       </div>
       <div id="adTabMy" style="display:none"><div id="myTasksList"></div></div>
@@ -571,7 +565,7 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- TOP-UP OVERLAY: xRocket -->
+  <!-- TOP-UP: xRocket -->
   <div class="overlay" id="topupXrocketOverlay" style="display:none">
     <div class="overlay-box">
       <button class="overlay-close" onclick="closeAllTopups()">✕</button>
@@ -586,7 +580,7 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- TOP-UP OVERLAY: TON Wallet -->
+  <!-- TOP-UP: TON Wallet (TON Connect) -->
   <div class="overlay" id="topupTonWalletOverlay" style="display:none">
     <div class="overlay-box">
       <button class="overlay-close" onclick="closeAllTopups()">✕</button>
@@ -595,7 +589,7 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- TOP-UP OVERLAY: Stars -->
+  <!-- TOP-UP: Stars -->
   <div class="overlay" id="topupStarsOverlay" style="display:none">
     <div class="overlay-box">
       <button class="overlay-close" onclick="closeAllTopups()">✕</button>
@@ -630,7 +624,7 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- CHECK CREATED OVERLAY -->
+  <!-- CHECK CREATED -->
   <div class="overlay" id="checkCreatedOverlay" style="display:none">
     <div class="overlay-box" style="text-align:center">
       <button class="overlay-close" onclick="closeCheckCreated()">✕</button>
@@ -645,7 +639,7 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- CLAIM CHECK OVERLAY -->
+  <!-- CLAIM CHECK -->
   <div class="overlay" id="claimCheckOverlay" style="display:none">
     <div class="overlay-box" style="text-align:center">
       <button class="overlay-close" onclick="closeClaimCheck()">✕</button>
@@ -659,81 +653,153 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- CONNECT WALLET OVERLAY -->
-  <div class="overlay" id="connectWalletOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeConnectWallet()">✕</button>
-      <div class="overlay-title" data-i="connectWallet">🔗 CONNECT TON WALLET</div>
-      <p style="font-size:13px;color:var(--t2);text-align:center;margin-bottom:16px" data-i="connectWalletDesc">Enter your TON wallet address to enable direct top-ups</p>
-      <input type="text" id="connectWalletInput" data-ph="walletAddrPH" placeholder="EQ... or UQ... wallet address">
-      <button class="btn btn-ton" onclick="confirmConnectWallet()" style="width:100%;padding:13px" data-i="connectBtn">Connect Wallet</button>
-    </div>
-  </div>
-
   <div id="toast"></div>
 </div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────
-const API = 'https://trewards-backend.onrender.com';
-const tg  = window.Telegram?.WebApp;
-const ADSGRAM_BLOCK_ID = '26241';
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const API         = 'https://trewards-backend.onrender.com';
+const TON_WALLET  = 'YOUR_TON_RECEIVING_WALLET_ADDRESS'; // ← replace with your TON address
+const tg          = window.Telegram?.WebApp;
+const ADSGRAM_ID  = '26241';
+const MONETAG_FN  = 'show_10801469';
 
-// ─── AdsGram init ─────────────────────────────────────────────
+// ─── TON Connect init ─────────────────────────────────────────────────────────
+let tonConnectUI = null;
+let tcWalletAddr = null;
+
+function initTonConnect() {
+  try {
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+      manifestUrl: `${location.origin}/tonconnect-manifest.json`,
+      buttonRootId: 'tc-btn-wrap',
+    });
+    tonConnectUI.onStatusChange(wallet => {
+      if (wallet) {
+        tcWalletAddr = wallet.account.address;
+        // Save to backend
+        if (initData) {
+          api('POST', '/api/connect-wallet', { init_data: initData, wallet_address: tcWalletAddr })
+            .then(() => {
+              if (userData) userData.ton_wallet_address = tcWalletAddr;
+              renderWalletConnectStatus();
+              toast(lang === 'ru' ? '✅ Кошелёк подключён!' : '✅ Wallet connected!', 'ok');
+            })
+            .catch(() => {});
+        } else {
+          if (userData) userData.ton_wallet_address = tcWalletAddr;
+          renderWalletConnectStatus();
+        }
+      } else {
+        tcWalletAddr = null;
+        if (userData) userData.ton_wallet_address = null;
+        renderWalletConnectStatus();
+      }
+    });
+    // Restore existing connection
+    if (tonConnectUI.wallet) {
+      tcWalletAddr = tonConnectUI.wallet.account.address;
+    }
+  } catch (e) {
+    console.warn('TON Connect init failed:', e);
+  }
+}
+
+function renderWalletConnectStatus() {
+  const statusEl = document.getElementById('walletConnectStatus');
+  const manualEl = document.getElementById('walletManualForm');
+  if (!statusEl) return;
+  const addr = tcWalletAddr || userData?.ton_wallet_address;
+  if (addr) {
+    const short = addr.length > 16 ? addr.slice(0, 8) + '...' + addr.slice(-6) : addr;
+    statusEl.innerHTML = `
+      <div class="wallet-status connected">
+        <div class="wallet-dot on"></div>
+        ${T[lang].connected}: <span style="font-family:monospace;font-size:11px;margin-left:4px">${short}</span>
+      </div>
+      <div class="wallet-addr-box">${addr}</div>`;
+    if (manualEl) manualEl.innerHTML = `
+      <button class="btn btn-err btn-sm" onclick="disconnectTonWallet()" style="width:100%">
+        🔌 ${T[lang].disconnectWallet}
+      </button>`;
+  } else {
+    statusEl.innerHTML = `
+      <div class="wallet-status disconnected">
+        <div class="wallet-dot off"></div>
+        ${T[lang].notConnected}
+      </div>
+      <p style="font-size:11px;color:var(--t2);margin:8px 0 4px">${T[lang].connectWalletDesc}</p>`;
+    if (manualEl) manualEl.innerHTML = '';
+  }
+}
+
+async function disconnectTonWallet() {
+  try {
+    if (tonConnectUI) await tonConnectUI.disconnect();
+  } catch (e) {}
+  if (initData) {
+    await api('POST', '/api/disconnect-wallet', { init_data: initData }).catch(() => {});
+  }
+  tcWalletAddr = null;
+  if (userData) userData.ton_wallet_address = null;
+  renderWalletConnectStatus();
+  toast(lang === 'ru' ? 'Кошелёк отключён' : 'Wallet disconnected', 'ok');
+}
+
+// ─── AdsGram init ─────────────────────────────────────────────────────────────
 let AdsgramController = null;
 function initAdsgram() {
   try {
     if (window.Adsgram) {
-      AdsgramController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+      AdsgramController = window.Adsgram.init({ blockId: ADSGRAM_ID });
     }
-  } catch(e) { console.warn('AdsGram init failed', e); }
+  } catch (e) { console.warn('AdsGram init failed', e); }
 }
 
-// ─── Ad platform alternation ─────────────────────────────────
+// ─── Alternate ad platform ────────────────────────────────────────────────────
 let _adPlatformIdx = 0;
 
 async function showRewardedAd() {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const useMonetag = (_adPlatformIdx % 2 === 0);
     _adPlatformIdx++;
 
-    const fallback = () => {
-      // Try the other platform
+    const timeout = setTimeout(() => tryOther(), 8000);
+
+    function tryOther() {
+      clearTimeout(timeout);
       if (useMonetag && AdsgramController) {
         AdsgramController.show().then(() => resolve(true)).catch(() => resolve(false));
-      } else if (!useMonetag && typeof show_10801469 === 'function') {
-        show_10801469().then(() => resolve(true)).catch(() => resolve(false));
+      } else if (!useMonetag && typeof window[MONETAG_FN] === 'function') {
+        window[MONETAG_FN]().then(() => resolve(true)).catch(() => resolve(false));
       } else {
         resolve(false);
       }
-    };
+    }
 
-    const timeout = setTimeout(() => { fallback(); }, 8000);
-
-    if (useMonetag && typeof show_10801469 === 'function') {
-      show_10801469()
+    if (useMonetag && typeof window[MONETAG_FN] === 'function') {
+      window[MONETAG_FN]()
         .then(() => { clearTimeout(timeout); resolve(true); })
-        .catch(() => { clearTimeout(timeout); fallback(); });
+        .catch(() => tryOther());
     } else if (!useMonetag && AdsgramController) {
       AdsgramController.show()
         .then(() => { clearTimeout(timeout); resolve(true); })
-        .catch(() => { clearTimeout(timeout); fallback(); });
+        .catch(() => tryOther());
     } else {
-      clearTimeout(timeout);
-      fallback();
+      tryOther();
     }
   });
 }
 
-// ─── Watch Ad with 10s timer ──────────────────────────────────
-let adState = {};
+// ─── Watch Ads (10s timer, unlimited) ────────────────────────────────────────
 const AD_DEF = [
-  {id:'ad1', name:'Watch & Earn',  reward:2500, dur:10},
-  {id:'ad2', name:'Bonus Ad',      reward:2500, dur:10},
+  { id: 'ad1', name: 'Watch & Earn', reward: 2500, dur: 10 },
+  { id: 'ad2', name: 'Bonus Ad',     reward: 2500, dur: 10 },
 ];
+const adState = {};
 
 function adBtnHTML(id) {
-  const s = adState[id] || {s:'idle'};
+  const s = adState[id] || { s: 'idle' };
   if (s.s === 'idle')     return `<button class="watch-btn" onclick="startWatchAd('${id}')">${T[lang].watch}</button>`;
   if (s.s === 'counting') return `<button class="watch-btn" disabled>${s.rem}s</button>`;
   if (s.s === 'ready')    return `<button class="watch-btn claimable" onclick="claimWatchAd('${id}')">${T[lang].claim}</button>`;
@@ -747,27 +813,26 @@ function refreshAdBtn(id) {
 
 async function startWatchAd(id) {
   const ad = AD_DEF.find(a => a.id === id);
-  if (!ad) return;
-  if ((adState[id] || {}).s === 'counting') return;
+  if (!ad || (adState[id] || {}).s === 'counting') return;
 
-  adState[id] = {s:'counting', rem: ad.dur};
+  adState[id] = { s: 'counting', rem: ad.dur };
   refreshAdBtn(id);
 
-  // Show ad (non-blocking — count timer regardless)
-  const useMonetag = (_adPlatformIdx % 2 === 0);
+  // Show ad (non-blocking)
+  const useMon = (_adPlatformIdx % 2 === 0);
   _adPlatformIdx++;
   try {
-    if (useMonetag && typeof show_10801469 === 'function') show_10801469().catch(()=>{});
-    else if (AdsgramController) AdsgramController.show().catch(()=>{});
-    else if (typeof show_10801469 === 'function') show_10801469().catch(()=>{});
-  } catch(e) {}
+    if (useMon && typeof window[MONETAG_FN] === 'function') window[MONETAG_FN]().catch(() => {});
+    else if (AdsgramController) AdsgramController.show().catch(() => {});
+    else if (typeof window[MONETAG_FN] === 'function') window[MONETAG_FN]().catch(() => {});
+  } catch (e) {}
 
   const iv = setInterval(() => {
     adState[id].rem--;
     refreshAdBtn(id);
     if (adState[id].rem <= 0) {
       clearInterval(iv);
-      adState[id] = {s:'ready'};
+      adState[id] = { s: 'ready' };
       refreshAdBtn(id);
     }
   }, 1000);
@@ -776,9 +841,8 @@ async function startWatchAd(id) {
 async function claimWatchAd(id) {
   const ad = AD_DEF.find(a => a.id === id);
   if (!ad || (adState[id] || {}).s !== 'ready') return;
-  adState[id] = {s:'idle'}; // unlimited — reset immediately
+  adState[id] = { s: 'idle' };
   refreshAdBtn(id);
-
   if (!initData) {
     userData.coins = (userData.coins || 0) + ad.reward;
     updateUI();
@@ -786,29 +850,29 @@ async function claimWatchAd(id) {
     return;
   }
   try {
-    const r = await api('POST', '/api/watch-ad', {init_data: initData, ad_id: id});
+    const r = await api('POST', '/api/watch-ad', { init_data: initData, ad_id: id });
     userData.coins = r.new_balance;
     updateUI();
     toast('+' + r.coins_earned.toLocaleString() + ' TR!', 'ok');
-  } catch(e) {
+  } catch (e) {
     userData.coins = (userData.coins || 0) + ad.reward;
     updateUI();
     toast('+' + ad.reward.toLocaleString() + ' TR!', 'ok');
   }
 }
 
-// ─── Every-15-taps background ad ──────────────────────────────
+// ─── Every 15 taps → background ad ───────────────────────────────────────────
 let _tapCount = 0;
 document.addEventListener('click', () => {
   _tapCount++;
   if (_tapCount % 15 === 0) showRewardedAd().catch(() => {});
 });
 
-// ─── FULL I18N (EN + RU) ──────────────────────────────────────
+// ─── i18n ─────────────────────────────────────────────────────────────────────
 const T = {
   en: {
     balance:'TR BALANCE', days:'days', spins:'spins',
-    dailyStreak:'DAILY STREAK', streakDesc:'Claim daily for +10 TR + 1 spin',
+    dailyStreak:'DAILY STREAK', streakDesc:'Claim daily for +1,000 TR + 1 spin',
     claimStreak:'Claim Streak', spinWheel:'SPIN WHEEL',
     spinsLeft:'Spins available:', spinNow:'SPIN NOW',
     quickActions:'QUICK ACTIONS', inviteFriend:'Invite Friend',
@@ -819,7 +883,8 @@ const T = {
     filterAll:'All', filterDaily:'📅 Daily', filterChannel:'Channel',
     filterGroup:'Group', filterGame:'Game', filterVisit:'Website',
     totalFriends:'Total Friends', thisWeek:'This Week', trEarned:'TR Earned',
-    refEarnings:'🤑 REFERRAL EARNINGS', refDesc:"Earn 30% of your friends' TR rewards",
+    refEarnings:'🤑 REFERRAL EARNINGS', refPendingDesc:'Pending from friends (30% share)',
+    refDesc:"Earn 30% of your friends' TR rewards",
     claimAll:'Claim All Earnings', yourLink:'YOUR REFERRAL LINK',
     copy:'Copy', inviteViaTelegram:'Invite via Telegram',
     weeklyLB:'🏆 WEEKLY LEADERBOARD', prevWeekLB:'📜 PREVIOUS WEEK',
@@ -861,34 +926,38 @@ const T = {
     checkCreated:'✅ CHECK CREATED!', yourCheckLink:'Your check link:',
     copyBtn:'📋 Copy', shareBtn:'📤 Share',
     claimCheck:'💎 CLAIM CHECK', aboutToReceive:'You are about to receive',
-    claimNow:'💰 Claim Now', connectWallet:'🔗 CONNECT TON WALLET',
-    connectWalletDesc:'Enter your TON wallet address to enable direct top-ups',
-    connectBtn:'Connect Wallet', approx:'≈',
+    claimNow:'💰 Claim Now',
+    connectWalletDesc:'Connect your TON wallet to enable direct top-ups & track payments',
+    connected:'Connected', notConnected:'No wallet connected',
+    disconnectWallet:'🔌 Disconnect Wallet',
     watchAds:'WATCH ADS', watch:'Watch', claim:'Claim', start:'Start', done:'✓',
     daily_checkin:'Daily Check-In', daily_update:'Check for Updates', daily_share:'Share with Friends',
-    connected:'Connected', notConnected:'No wallet connected',
-    connectFirst:'Connect your TON wallet first',
-    connectWalletInstr:'You need to connect your TON wallet before using direct top-up',
-    connectWalletBtn:'🔗 Connect TON Wallet',
-    receivingAddr:'Receiving address:', mustEnterComment:'⚠️ REQUIRED COMMENT / MEMO:',
-    commentWarn:'⛔ Must enter this comment or your TON will be LOST!',
-    copyAddr:'Copy Address', copyCommentID:'📋 Copy Comment ID',
-    tonAutoNote:'⚠️ TON credited automatically after 1-2 blockchain confirmations. Without correct comment, funds cannot be matched.',
+    receivingAddr:'Send TON to this address:', mustEnterComment:'⚠️ MANDATORY COMMENT/MEMO:',
+    commentWarn:'⛔ Must include this comment or your TON will be LOST!',
+    copyAddr:'📋 Copy Address', copyCommentID:'📋 Copy Comment ID',
+    tonAutoNote:'⚠️ TON is credited automatically after 1-2 blockchain confirmations. Without the exact comment your funds cannot be matched.',
     starsRate:'⭐ 65 Stars = 1 TON · Minimum 50 Stars',
-    starsOrAmount:'Enter Stars amount...',
-    starsViaBot:'ℹ️ Pay with Telegram Stars via the bot. Send /stars to @treward_ton_bot to initiate.',
-    payStarsBtn:'⭐ Pay with Stars via Bot',
-    walletAddrConnected:'Connected', walletAddrDisconnected:'No wallet connected',
-    disconnectWallet:'🔌 Disconnect Wallet',
+    starsOrAmount:'Enter Stars amount (min 50)...',
+    starsViaBot:'Send /stars to @treward_ton_bot to pay with Telegram Stars. Your balance will be credited automatically.',
+    payStarsBtn:'⭐ Pay via Telegram Bot',
     noTransactions:'No transactions yet', noFriendsYet:'No friends yet',
     noTasksAvail:'No tasks available',
     visitOpt:'Visit Website (+3000 TR +1 Spin)', channelOpt:'Join Channel (+5000 TR +1 Spin)',
     groupOpt:'Join Group (+5000 TR +1 Spin)', gameOpt:'Play Game Bot (+5000 TR +1 Spin)',
     dailyOpt:'Daily Task (shown every day)',
+    connectWalletFirst:'Please connect your TON wallet first to use direct top-up',
+    tcConnectBtn:'🔗 Connect TON Wallet',
+    payPopupTitle:'💎 TON Payment Details',
+    payBefore:'Before you pay — important!',
+    payStep1:'1. Copy your unique Comment ID below',
+    payStep2:'2. Open your TON wallet app',
+    payStep3:'3. Send TON to the address shown',
+    payStep4:'4. Paste Comment ID in the memo/comment field',
+    openWalletApp:'📱 Open Wallet to Pay',
   },
   ru: {
     balance:'TR БАЛАНС', days:'дней', spins:'вращений',
-    dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ', streakDesc:'+10 TR + 1 вращение каждый день',
+    dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ', streakDesc:'+1,000 TR + 1 вращение каждый день',
     claimStreak:'Получить бонус', spinWheel:'КОЛЕСО ФОРТУНЫ',
     spinsLeft:'Вращений:', spinNow:'КРУТИТЬ',
     quickActions:'БЫСТРЫЕ ДЕЙСТВИЯ', inviteFriend:'Пригласить',
@@ -899,7 +968,8 @@ const T = {
     filterAll:'Все', filterDaily:'📅 Ежедн.', filterChannel:'Канал',
     filterGroup:'Группа', filterGame:'Игра', filterVisit:'Сайт',
     totalFriends:'Всего друзей', thisWeek:'На этой неделе', trEarned:'TR Заработано',
-    refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ', refDesc:'Зарабатывайте 30% от наград друзей',
+    refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ', refPendingDesc:'Ожидается от друзей (30% доля)',
+    refDesc:'Зарабатывайте 30% от наград друзей',
     claimAll:'Получить всё', yourLink:'ВАША РЕФЕРАЛЬНАЯ ССЫЛКА',
     copy:'Копировать', inviteViaTelegram:'Пригласить в Telegram',
     weeklyLB:'🏆 ЕЖЕНЕДЕЛЬНЫЙ РЕЙТИНГ', prevWeekLB:'📜 ПРОШЛАЯ НЕДЕЛЯ',
@@ -941,42 +1011,46 @@ const T = {
     checkCreated:'✅ ЧЕК СОЗДАН!', yourCheckLink:'Ваша ссылка на чек:',
     copyBtn:'📋 Копировать', shareBtn:'📤 Поделиться',
     claimCheck:'💎 ПОЛУЧИТЬ ЧЕК', aboutToReceive:'Вы получите',
-    claimNow:'💰 Получить', connectWallet:'🔗 ПОДКЛЮЧИТЬ TON КОШЕЛЁК',
-    connectWalletDesc:'Введите адрес TON кошелька для прямых пополнений',
-    connectBtn:'Подключить кошелёк', approx:'≈',
+    claimNow:'💰 Получить',
+    connectWalletDesc:'Подключите TON кошелёк для прямых пополнений и отслеживания платежей',
+    connected:'Подключён', notConnected:'Кошелёк не подключён',
+    disconnectWallet:'🔌 Отключить кошелёк',
     watchAds:'СМОТРЕТЬ РЕКЛАМУ', watch:'Смотреть', claim:'Получить', start:'Начать', done:'✓',
     daily_checkin:'Ежедневная отметка', daily_update:'Проверить обновления', daily_share:'Поделиться',
-    connected:'Подключён', notConnected:'Кошелёк не подключён',
-    connectFirst:'Сначала подключите TON кошелёк',
-    connectWalletInstr:'Необходимо подключить TON кошелёк для прямого пополнения',
-    connectWalletBtn:'🔗 Подключить TON кошелёк',
-    receivingAddr:'Адрес получения:', mustEnterComment:'⚠️ ОБЯЗАТЕЛЬНЫЙ КОММЕНТАРИЙ:',
-    commentWarn:'⛔ Без этого комментария ваши TON будут потеряны!',
-    copyAddr:'Копировать адрес', copyCommentID:'📋 Копировать ID',
+    receivingAddr:'Отправьте TON на этот адрес:', mustEnterComment:'⚠️ ОБЯЗАТЕЛЬНЫЙ КОММЕНТАРИЙ:',
+    commentWarn:'⛔ Без этого комментария ваши TON будут потеряны навсегда!',
+    copyAddr:'📋 Копировать адрес', copyCommentID:'📋 Копировать ID',
     tonAutoNote:'⚠️ TON зачисляется автоматически после 1-2 подтверждений блокчейна. Без правильного комментария средства не будут найдены.',
     starsRate:'⭐ 65 Stars = 1 TON · Минимум 50 Stars',
-    starsOrAmount:'Введите количество Stars...',
-    starsViaBot:'ℹ️ Оплата Stars через бота. Отправьте /stars боту @treward_ton_bot.',
-    payStarsBtn:'⭐ Оплатить Stars через бота',
-    walletAddrConnected:'Подключён', walletAddrDisconnected:'Кошелёк не подключён',
-    disconnectWallet:'🔌 Отключить кошелёк',
+    starsOrAmount:'Введите количество Stars (мин. 50)...',
+    starsViaBot:'Отправьте /stars боту @treward_ton_bot для оплаты Stars. Баланс зачисляется автоматически.',
+    payStarsBtn:'⭐ Оплатить через Telegram бот',
     noTransactions:'Операций пока нет', noFriendsYet:'Друзей пока нет',
     noTasksAvail:'Нет доступных заданий',
     visitOpt:'Посетить сайт (+3000 TR +1 вращение)', channelOpt:'Подписаться на канал (+5000 TR +1 вращение)',
     groupOpt:'Вступить в группу (+5000 TR +1 вращение)', gameOpt:'Сыграть в игру (+5000 TR +1 вращение)',
     dailyOpt:'Ежедневное задание (показывается каждый день)',
+    connectWalletFirst:'Сначала подключите TON кошелёк для прямого пополнения',
+    tcConnectBtn:'🔗 Подключить TON кошелёк',
+    payPopupTitle:'💎 Детали оплаты TON',
+    payBefore:'Перед оплатой — важно!',
+    payStep1:'1. Скопируйте ваш уникальный Comment ID ниже',
+    payStep2:'2. Откройте ваш TON кошелёк',
+    payStep3:'3. Отправьте TON на указанный адрес',
+    payStep4:'4. Вставьте Comment ID в поле комментария/заметки',
+    openWalletApp:'📱 Открыть кошелёк для оплаты',
   }
 };
 
-// ─── STATE ────────────────────────────────────────────────────
+// ─── STATE ────────────────────────────────────────────────────────────────────
 let lang = 'en', userData = null, initData = '';
 let selectedTier = -1, pendingWithdraw = null;
-let pendingTopupAmt = 0, pendingTopupMethod = '';
+let pendingTopupAmt = 0;
 let pendingVerifyId = null, pendingVerifyUrl = null, pendingConvert = null;
 let isSpinning = false, activeFilter = 'all';
 let selectedCheckType = 'personal', newCheckLinkVal = '', pendingClaimCheckId = null;
 
-// ─── WEEK HELPERS ─────────────────────────────────────────────
+// ─── Week helpers ─────────────────────────────────────────────────────────────
 function getWeekId(d = new Date()) {
   const jan1 = new Date(d.getFullYear(), 0, 1);
   const dayOfYear = Math.floor((d - jan1) / 86400000);
@@ -986,7 +1060,7 @@ function getWeekId(d = new Date()) {
 function getPrevWeekId() { const d = new Date(); d.setDate(d.getDate() - 7); return getWeekId(d); }
 function weekLabel(wid) { if (!wid) return ''; const [y, w] = wid.split('-W'); return `Week ${w}, ${y}`; }
 
-// ─── INIT ─────────────────────────────────────────────────────
+// ─── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
   if (tg) {
     tg.ready(); tg.expand();
@@ -997,7 +1071,6 @@ async function init() {
   }
   const sl = localStorage.getItem('tr_lang');
   if (sl) setLang(sl, false);
-
   applyI18n();
   buildStreakDots(0);
   buildTierGrid();
@@ -1005,6 +1078,7 @@ async function init() {
   mountWatchAds('homeWatchAds');
 
   setTimeout(initAdsgram, 1500);
+  setTimeout(initTonConnect, 500);
 
   const sp = tg?.initDataUnsafe?.start_param;
   if (sp && sp.startsWith('c_')) {
@@ -1017,64 +1091,59 @@ async function init() {
   await Promise.all([loadTasks(), loadFriends(), loadTransactions(), loadDailyTaskStatus(), loadChecks()]);
 
   _q('currentWeekLabel').textContent = weekLabel(getWeekId());
-  _q('prevWeekLabel').textContent = weekLabel(getPrevWeekId());
-  renderWalletConnect();
+  _q('prevWeekLabel').textContent    = weekLabel(getPrevWeekId());
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 function _q(id) { return document.getElementById(id); }
 
-// ─── LANG ─────────────────────────────────────────────────────
+// ─── LANG ─────────────────────────────────────────────────────────────────────
 function toggleLang() { setLang(lang === 'en' ? 'ru' : 'en', true); }
 function setLang(l, save = true) {
   lang = l;
   _q('langBtn').textContent = l === 'en' ? 'RU' : 'EN';
   if (save) {
     localStorage.setItem('tr_lang', l);
-    if (initData) api('POST', '/api/set-language', {init_data: initData, language: l}).catch(() => {});
+    if (initData) api('POST', '/api/set-language', { init_data: initData, language: l }).catch(() => {});
   }
   applyI18n();
 }
 
 function applyI18n() {
-  // Apply data-i attributes
   document.querySelectorAll('[data-i]').forEach(el => {
     const k = el.getAttribute('data-i');
     if (T[lang][k] !== undefined) el.textContent = T[lang][k];
   });
-  // Apply placeholders
   document.querySelectorAll('[data-ph]').forEach(el => {
     const k = el.getAttribute('data-ph');
     if (T[lang][k] !== undefined) el.placeholder = T[lang][k];
   });
-  // Apply select options
   document.querySelectorAll('[data-i-opt]').forEach(el => {
     const k = el.getAttribute('data-i-opt');
     if (T[lang][k] !== undefined) el.textContent = T[lang][k];
   });
-  // Rebuild dependent UI
   buildDailyTasks(window._doneDaily || []);
   renderFiltered();
   mountWatchAds('homeWatchAds');
-  renderWalletConnect();
+  renderWalletConnectStatus();
 }
 
-// ─── USER ─────────────────────────────────────────────────────
+// ─── USER ─────────────────────────────────────────────────────────────────────
 async function loadUser(ref = null) {
   if (!initData) {
     userData = {
       id: 1, first_name: 'Dev', coins: 12500, spins: 3, streak: 2,
-      last_streak_date: null, ton_balance: 0.5,
-      language: lang, referral_link: 'https://t.me/bot?start=1',
+      last_streak_date: null, ton_balance: 0.5, language: lang,
+      referral_link: 'https://t.me/bot?start=1',
       ton_wallet_address: null, ton_comment_id: '123456'
     };
     updateUI();
     return;
   }
   try {
-    userData = await api('POST', '/api/user', {init_data: initData, referrer_id: ref, language: lang});
+    userData = await api('POST', '/api/user', { init_data: initData, referrer_id: ref, language: lang });
     updateUI();
-  } catch(e) { toast(e.message, 'err'); }
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 function updateUI() {
@@ -1086,12 +1155,14 @@ function updateUI() {
   const ton = parseFloat(userData.ton_balance || 0);
   _q('walletTon').textContent = ton.toFixed(4);
   _q('streakBadge').textContent = userData.streak || 0;
-  _q('spinsBadge').textContent = userData.spins || 0;
-  _q('spinCount').textContent = userData.spins || 0;
+  _q('spinsBadge').textContent  = userData.spins  || 0;
+  _q('spinCount').textContent   = userData.spins  || 0;
   buildStreakDots(userData.streak || 0);
   if (userData.referral_link) _q('refLink').textContent = userData.referral_link;
-  if (userData.ton_balance !== undefined) _q('adBal').textContent = ton.toFixed(4);
-
+  if (userData.ton_balance !== undefined) {
+    const ab = _q('adBal');
+    if (ab) ab.textContent = ton.toFixed(4);
+  }
   const today = new Date().toISOString().slice(0, 10);
   const sb = _q('streakBtn');
   if (userData.last_streak_date && userData.last_streak_date.slice(0, 10) === today) {
@@ -1102,51 +1173,10 @@ function updateUI() {
     sb.textContent = T[lang].claimStreak;
   }
   _q('spinBtn').disabled = (userData.spins || 0) < 1;
-  renderWalletConnect();
+  renderWalletConnectStatus();
 }
 
-// ─── WALLET CONNECT UI ────────────────────────────────────────
-function renderWalletConnect() {
-  const statusEl = _q('walletConnectStatus');
-  const formEl = _q('walletConnectForm');
-  if (!statusEl || !formEl) return;
-  const addr = userData?.ton_wallet_address;
-  if (addr) {
-    statusEl.innerHTML = `<div class="wallet-status connected"><div class="wallet-dot on"></div>${T[lang].connected}</div><div class="wallet-addr-box">${addr}</div>`;
-    formEl.innerHTML = `<button class="btn btn-err btn-sm" onclick="disconnectWallet()" style="width:100%">${T[lang].disconnectWallet}</button>`;
-  } else {
-    statusEl.innerHTML = `<div class="wallet-status disconnected"><div class="wallet-dot off"></div>${T[lang].notConnected}</div>`;
-    formEl.innerHTML = `<p style="font-size:11px;color:var(--t2);margin:8px 0 10px">${T[lang].connectWalletDesc}</p><button class="btn btn-ton" onclick="openConnectWallet()" style="width:100%">${T[lang].connectWalletBtn}</button>`;
-  }
-}
-
-function openConnectWallet() { _q('connectWalletOverlay').style.display = 'flex'; }
-function closeConnectWallet() { _q('connectWalletOverlay').style.display = 'none'; }
-
-async function confirmConnectWallet() {
-  const addr = (_q('connectWalletInput').value || '').trim();
-  if (!addr || addr.length < 10) { toast(lang === 'ru' ? 'Введите корректный адрес кошелька' : 'Enter valid wallet address', 'err'); return; }
-  if (!initData) { userData.ton_wallet_address = addr; renderWalletConnect(); toast(lang === 'ru' ? 'Кошелёк подключён!' : 'Wallet connected!', 'ok'); closeConnectWallet(); return; }
-  try {
-    await api('POST', '/api/connect-wallet', {init_data: initData, wallet_address: addr});
-    userData.ton_wallet_address = addr;
-    renderWalletConnect();
-    toast(lang === 'ru' ? 'Кошелёк подключён!' : 'Wallet connected!', 'ok');
-    closeConnectWallet();
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-async function disconnectWallet() {
-  if (!initData) { userData.ton_wallet_address = null; renderWalletConnect(); toast(lang === 'ru' ? 'Кошелёк отключён' : 'Wallet disconnected', 'ok'); return; }
-  try {
-    await api('POST', '/api/disconnect-wallet', {init_data: initData});
-    userData.ton_wallet_address = null;
-    renderWalletConnect();
-    toast(lang === 'ru' ? 'Кошелёк отключён' : 'Wallet disconnected', 'ok');
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-// ─── TABS ─────────────────────────────────────────────────────
+// ─── TABS ─────────────────────────────────────────────────────────────────────
 function goTab(t) {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
@@ -1154,13 +1184,13 @@ function goTab(t) {
   const ni = _q('nav-' + t);
   if (ni) ni.classList.add('active');
   _q('scroll').scrollTop = 0;
-  if (t === 'tasks') loadTasks();
+  if (t === 'tasks')  loadTasks();
   if (t === 'friends') loadFriends();
-  if (t === 'wallet') { loadTransactions(); renderWalletConnect(); }
-  if (t === 'check') loadChecks();
+  if (t === 'wallet') { loadTransactions(); renderWalletConnectStatus(); }
+  if (t === 'check')  loadChecks();
 }
 
-// ─── STREAK ───────────────────────────────────────────────────
+// ─── STREAK ───────────────────────────────────────────────────────────────────
 function buildStreakDots(s) {
   const c = _q('streakDots');
   c.innerHTML = '';
@@ -1181,18 +1211,17 @@ async function claimStreakWithAd() {
 async function claimStreak() {
   if (!initData) { toast('Dev mode', 'ok'); return; }
   try {
-    const r = await api('POST', '/api/claim-streak', {init_data: initData});
+    const r = await api('POST', '/api/claim-streak', { init_data: initData });
     userData.coins += r.coins_earned;
     userData.spins += r.spins_earned;
     userData.streak = r.streak;
     userData.last_streak_date = new Date().toISOString();
     updateUI();
-    toast(`+${r.coins_earned} TR +${r.spins_earned} spin!`, 'ok');
-  } catch(e) { toast(e.message, 'err'); }
+    toast(`+${r.coins_earned.toLocaleString()} TR +${r.spins_earned} spin!`, 'ok');
+  } catch (e) { toast(e.message, 'err'); }
 }
 
-// ─── SPIN WHEEL ───────────────────────────────────────────────
-// All segments equal weight
+// ─── SPIN WHEEL ───────────────────────────────────────────────────────────────
 const SEGS = [10, 50, 80, 100, 300, 500];
 const SCOL = ['#1A1200','#251800','#1A1200','#2A1C00','#1A1200','#301F00'];
 const SBRD = ['#FFB800','#FFD454','#CC9200','#FFB800','#FFD454','#CC9200'];
@@ -1225,17 +1254,15 @@ async function doSpin() {
   if ((userData?.spins || 0) < 1) { toast(lang === 'ru' ? 'Нет вращений!' : 'No spins!', 'err'); return; }
   let result, si;
   if (!initData) {
-    si = Math.floor(Math.random() * SEGS.length);
-    result = SEGS[si];
+    si = Math.floor(Math.random() * SEGS.length); result = SEGS[si];
   } else {
     try {
-      const r = await api('POST', '/api/spin', {init_data: initData});
+      const r = await api('POST', '/api/spin', { init_data: initData });
       result = r.result; si = r.segment_index;
       userData.coins = r.new_balance; userData.spins = r.remaining_spins;
-    } catch(e) { toast(e.message, 'err'); return; }
+    } catch (e) { toast(e.message, 'err'); return; }
   }
-  isSpinning = true;
-  _q('spinBtn').disabled = true;
+  isSpinning = true; _q('spinBtn').disabled = true;
   const n = SEGS.length, arc = (2 * Math.PI) / n;
   const target = wAngle + (5 + Math.random() * 2) * 2 * Math.PI + (-(si * arc + arc / 2) + Math.PI / 2) - (wAngle % (2 * Math.PI));
   const dur = 4000, t0 = performance.now(), a0 = wAngle;
@@ -1254,13 +1281,13 @@ async function doSpin() {
   requestAnimationFrame(anim);
 }
 
-// ─── DAILY TASKS ──────────────────────────────────────────────
+// ─── DAILY TASKS ──────────────────────────────────────────────────────────────
 const DT = [
-  {type:'checkin', icon:'✅', url: null},
-  {type:'update',  icon:'📢', url: 'https://t.me/treward_ton'},
-  {type:'share',   icon:'📤', url: null},
+  { type: 'checkin', icon: '✅', url: null },
+  { type: 'update',  icon: '📢', url: 'https://t.me/treward_ton' },
+  { type: 'share',   icon: '📤', url: null },
 ];
-let _dtState = {};
+const _dtState = {};
 
 async function loadDailyTaskStatus() {
   if (!initData) { buildDailyTasks([]); return; }
@@ -1268,7 +1295,7 @@ async function loadDailyTaskStatus() {
     const r = await api('GET', '/api/daily-task-status?init_data=' + encodeURIComponent(initData));
     window._doneDaily = r.completed || [];
     buildDailyTasks(r.completed || []);
-  } catch(e) { buildDailyTasks([]); }
+  } catch (e) { buildDailyTasks([]); }
 }
 
 function buildDailyTasks(done) {
@@ -1283,7 +1310,8 @@ function buildDailyTasks(done) {
     const el = document.createElement('div');
     el.className = 'task-item' + (d ? ' completed' : '');
     el.id = 'dt-' + dt.type;
-    el.innerHTML = `<div class="task-icon">${dt.icon}</div>
+    el.innerHTML = `
+      <div class="task-icon">${dt.icon}</div>
       <div class="task-info">
         <div class="task-name">${n}</div>
         <div class="task-reward">+5,000 TR +1 spin</div>
@@ -1311,10 +1339,11 @@ async function handleDT(type) {
     }
     if (type === 'share') {
       const lk = userData?.referral_link || 'https://t.me/treward_ton_bot';
-      if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent('🏆 Earn TR coins! ' + lk)}`);
+      const tx = lang === 'ru' ? '🏆 Зарабатывай TR монеты в TRewards!' : '🏆 Earn TR coins on TRewards!';
+      if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`);
       else window.open(`https://t.me/share/url?url=${encodeURIComponent(lk)}`, '_blank');
       _dtState[type] = 'ready';
-      setTimeout(async () => { await claimDT(type); }, 2000);
+      setTimeout(() => claimDT(type), 2000);
       return;
     }
   }
@@ -1329,23 +1358,23 @@ async function claimDT(type) {
     return;
   }
   try {
-    const r = await api('POST', '/api/claim-daily-task', {init_data: initData, task_type: type});
+    const r = await api('POST', '/api/claim-daily-task', { init_data: initData, task_type: type });
     userData.coins = r.new_balance;
     userData.spins = (userData.spins || 0) + r.spins_earned;
     updateUI();
-    toast(`+${r.coins_earned} TR +${r.spins_earned} spin!`, 'ok');
+    toast(`+${r.coins_earned.toLocaleString()} TR +${r.spins_earned} spin!`, 'ok');
     _dtState[type] = 'done';
     buildDailyTasks(Object.keys(_dtState).filter(k => _dtState[k] === 'done'));
-  } catch(e) { toast(e.message, 'err'); }
+  } catch (e) { toast(e.message, 'err'); }
 }
 
-// ─── TASKS + FILTER ───────────────────────────────────────────
+// ─── TASKS + FILTER ───────────────────────────────────────────────────────────
 async function loadTasks() {
   if (!initData) { window._tasks = []; renderFiltered(); return; }
   try {
     window._tasks = await api('GET', '/api/tasks?init_data=' + encodeURIComponent(initData));
     renderFiltered();
-  } catch(e) {
+  } catch (e) {
     _q('taskList').innerHTML = `<div style="text-align:center;color:var(--err);padding:20px">${e.message}</div>`;
   }
 }
@@ -1361,15 +1390,15 @@ function setFilter(f) {
 }
 
 function renderFiltered() {
-  const all = window._tasks || [];
+  const all  = window._tasks || [];
   const list = activeFilter === 'all' ? all : all.filter(t => t.type === activeFilter);
-  const el = _q('taskList');
+  const el   = _q('taskList');
   if (!el) return;
   if (!list.length) {
     el.innerHTML = `<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noTasksAvail}</div>`;
     return;
   }
-  const ico = {visit:'🌐', channel:'📢', group:'👥', game:'🎮', daily:'📅'};
+  const ico = { visit:'🌐', channel:'📢', group:'👥', game:'🎮', daily:'📅' };
   el.innerHTML = list.map(t => `
     <div class="task-item ${t.completed ? 'completed' : ''}" id="task-${t.id}">
       <div class="task-icon">${ico[t.type] || '⚡'}</div>
@@ -1407,8 +1436,7 @@ async function startTask(id, type, ue) {
       clearInterval(iv);
       btn.textContent = T[lang].claim;
       btn.disabled = false;
-      btn.style.background = '';
-      btn.style.color = '';
+      btn.style.background = ''; btn.style.color = '';
       btn.onclick = () => claimTask(id);
     }
   }, 1000);
@@ -1417,14 +1445,13 @@ async function startTask(id, type, ue) {
 async function claimTask(id) {
   if (!initData) { toast('+3000 TR!', 'ok'); return; }
   try {
-    const r = await api('POST', '/api/claim-task', {init_data: initData, task_id: id});
+    const r = await api('POST', '/api/claim-task', { init_data: initData, task_id: id });
     userData.coins = r.new_balance;
     userData.spins = (userData.spins || 0) + r.spins_earned;
-    updateUI();
-    toast(`+${r.coins_earned} TR!`, 'ok');
+    updateUI(); toast(`+${r.coins_earned} TR!`, 'ok');
     const it = _q('task-' + id);
     if (it) { it.classList.add('completed'); const b = _q('tbt-' + id); if (b) b.parentElement.innerHTML = `<span style="color:var(--ok);font-weight:700">✓</span>`; }
-  } catch(e) { toast(e.message, 'err'); }
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 function openVerifyLink() { if (pendingVerifyUrl) window.open(pendingVerifyUrl, '_blank'); }
@@ -1434,12 +1461,13 @@ async function verifyJoin() {
   if (!pendingVerifyId) return;
   if (!initData) { toast('+5000 TR!', 'ok'); closeVerify(); return; }
   try {
-    const r = await api('POST', '/api/verify-join', {init_data: initData, task_id: pendingVerifyId});
+    const r = await api('POST', '/api/verify-join', { init_data: initData, task_id: pendingVerifyId });
     userData.coins = r.new_balance;
     userData.spins = (userData.spins || 0) + r.spins_earned;
     updateUI(); toast(`+${r.coins_earned} TR!`, 'ok'); closeVerify(); loadTasks();
-  } catch(e) { toast(e.message, 'err'); }
+  } catch (e) { toast(e.message, 'err'); }
 }
+
 
 // ─── WATCH ADS ────────────────────────────────────────────────
 function mountWatchAds(containerId) {
