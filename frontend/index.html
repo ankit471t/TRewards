@@ -2,33 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>TRewards</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- Telegram WebApp -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<!-- Monetag SDK -->
 <script src='//libtl.com/sdk.js' data-zone='10801469' data-sdk='show_10801469'></script>
-<!-- AdsGram SDK -->
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
-<!-- TON Connect UI -->
 <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{
-  --bg:#0A0800;--bg2:#110D00;--bg3:#1A1400;
-  --gold:#FFB800;--gold-l:#FFD454;--gold-d:#CC9200;
-  --ton:#0098EA;--ok:#44FF88;--err:#FF4444;--purple:#A855F7;
-  --t1:#FFFFFF;--t2:#B8A060;--t3:#6B5C30;
-  --r:12px;--r2:20px;
-}
+:root{--bg:#0A0800;--bg2:#110D00;--bg3:#1A1400;--gold:#FFB800;--gold-l:#FFD454;--gold-d:#CC9200;--ton:#0098EA;--ok:#44FF88;--err:#FF4444;--purple:#A855F7;--t1:#FFF;--t2:#B8A060;--t3:#6B5C30;--r:12px;--r2:20px}
 html,body{height:100%;background:var(--bg);color:var(--t1);font-family:'Exo 2',sans-serif;overflow:hidden}
 #app{max-width:430px;margin:0 auto;height:100vh;display:flex;flex-direction:column;position:relative;overflow:hidden}
 .hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;background:var(--bg);border-bottom:1px solid rgba(255,184,0,.12);flex-shrink:0;z-index:10}
 .hdr-logo{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;background:linear-gradient(90deg,var(--gold),var(--gold-l));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .hdr-actions{display:flex;gap:8px;align-items:center}
-.lang-btn{background:rgba(255,184,0,.12);border:1px solid rgba(255,184,0,.3);color:var(--gold);padding:4px 10px;border-radius:20px;font-size:11px;font-family:'Exo 2',sans-serif;font-weight:600;cursor:pointer;letter-spacing:.5px}
+.lang-btn{background:rgba(255,184,0,.12);border:1px solid rgba(255,184,0,.3);color:var(--gold);padding:4px 10px;border-radius:20px;font-size:11px;font-family:'Exo 2',sans-serif;font-weight:600;cursor:pointer}
 .scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:12px 16px 80px}
 .scroll::-webkit-scrollbar{display:none}
 .nav{position:absolute;bottom:0;left:0;right:0;display:flex;background:var(--bg2);border-top:1px solid rgba(255,184,0,.15);z-index:10}
@@ -47,7 +36,6 @@ html,body{height:100%;background:var(--bg);color:var(--t1);font-family:'Exo 2',s
 .bal-label{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
 .bal-coins{font-family:'Orbitron',sans-serif;font-size:32px;font-weight:900;color:var(--gold-l);line-height:1}
 .bal-ton{font-size:13px;color:var(--t2);margin-top:4px}
-.bal-ton span{color:var(--ton)}
 .bal-badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .badge{display:flex;align-items:center;gap:5px;background:rgba(255,184,0,.1);border:1px solid rgba(255,184,0,.2);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--gold)}
 .streak-dots{display:flex;gap:8px;justify-content:center;margin:10px 0}
@@ -55,28 +43,24 @@ html,body{height:100%;background:var(--bg);color:var(--t1);font-family:'Exo 2',s
 .s-dot.done{background:linear-gradient(135deg,var(--gold-d),var(--gold));border-color:var(--gold);color:#000}
 .s-dot.today{border-color:var(--gold);box-shadow:0 0 10px rgba(255,184,0,.4);color:var(--gold)}
 .spin-wrap{display:flex;flex-direction:column;align-items:center;gap:12px}
-#spinCanvas{border-radius:50%;box-shadow:0 0 30px rgba(255,184,0,.25),0 0 60px rgba(255,184,0,.1)}
+#spinCanvas{border-radius:50%;box-shadow:0 0 30px rgba(255,184,0,.25)}
 .spin-ptr{width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:22px solid var(--gold);filter:drop-shadow(0 2px 4px rgba(255,184,0,.5))}
 .spin-btn{font-family:'Orbitron',sans-serif;font-weight:700;font-size:14px;padding:14px 40px;border-radius:30px;border:none;background:linear-gradient(135deg,var(--gold-d),var(--gold-l));color:#000;cursor:pointer;letter-spacing:1px;transition:all .2s;box-shadow:0 4px 20px rgba(255,184,0,.3)}
-.spin-btn:active{transform:scale(.97)}
 .spin-btn:disabled{opacity:.5;cursor:not-allowed}
 .qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .qa-item{background:var(--bg3);border:1px solid rgba(255,184,0,.15);border-radius:var(--r);padding:14px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .2s;text-align:center}
-.qa-item:active{transform:scale(.97);border-color:rgba(255,184,0,.4)}
+.qa-item:active{transform:scale(.97)}
 .qa-icon{font-size:24px}
 .qa-label{font-size:11px;font-weight:600;color:var(--t2)}
 .promo-row{display:flex;gap:8px}
 .promo-row input{flex:1;background:var(--bg3);border:1px solid rgba(255,184,0,.2);border-radius:var(--r);color:var(--t1);font-family:'Exo 2',sans-serif;font-size:14px;padding:10px 14px;outline:none}
-.promo-row input:focus{border-color:rgba(255,184,0,.5)}
 .promo-row input::placeholder{color:var(--t3)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 20px;border-radius:var(--r);border:none;font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.3px}
 .btn-gold{background:linear-gradient(135deg,var(--gold-d),var(--gold-l));color:#000}
 .btn-gold:active{transform:scale(.97)}
 .btn-outline{background:transparent;border:1px solid rgba(255,184,0,.3);color:var(--gold)}
-.btn-outline:active{background:rgba(255,184,0,.08)}
 .btn-ton{background:linear-gradient(135deg,#0070b0,var(--ton));color:#fff}
 .btn-ok{background:linear-gradient(135deg,#00a352,#44ff88);color:#000}
-.btn-purple{background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff}
 .btn-stars{background:linear-gradient(135deg,#b8660a,#ffa500);color:#fff}
 .btn-sm{padding:7px 14px;font-size:12px;border-radius:8px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -86,61 +70,50 @@ html,body{height:100%;background:var(--bg);color:var(--t1);font-family:'Exo 2',s
 .task-item.completed{opacity:.5}
 .task-icon{width:40px;height:40px;border-radius:10px;background:rgba(255,184,0,.1);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .task-info{flex:1;min-width:0}
-.task-name{font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .task-reward{font-size:11px;color:var(--gold);margin-top:2px}
 .task-btn{flex-shrink:0}
 .prog-wrap{background:rgba(255,184,0,.1);border-radius:4px;height:4px;margin-top:6px;overflow:hidden}
-.prog-bar{height:100%;background:linear-gradient(90deg,var(--gold-d),var(--gold-l));border-radius:4px;transition:width .5s linear}
-.friend-item{background:var(--bg2);border:1px solid rgba(255,184,0,.08);border-radius:var(--r);padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
-.friend-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold-d),var(--gold));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#000;flex-shrink:0}
+.prog-bar{height:100%;background:linear-gradient(90deg,var(--gold-d),var(--gold-l));border-radius:4px;transition:width .5s}
 .ref-box{background:var(--bg3);border:1px solid rgba(255,184,0,.2);border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .ref-link{flex:1;font-size:12px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:monospace}
 .tier-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
 .tier-item{background:var(--bg3);border:1px solid rgba(255,184,0,.15);border-radius:var(--r);padding:14px;cursor:pointer;transition:all .2s}
 .tier-item.selected{border-color:var(--gold);background:rgba(255,184,0,.06)}
 .tier-coins{font-family:'Orbitron',sans-serif;font-size:11px;color:var(--gold);font-weight:700}
-.tier-ton{font-size:20px;font-weight:700;color:var(--t1);margin:4px 0 2px}
+.tier-ton{font-size:20px;font-weight:700;margin:4px 0 2px}
 .tier-net{font-size:11px;color:var(--ok)}
 .tier-fee{font-size:10px;color:var(--t3)}
 .tx-item{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,184,0,.06)}
-.tx-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-right:10px}
+.tx-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-right:10px;background:rgba(255,184,0,.08)}
 .tx-info{flex:1}
 .tx-desc{font-size:12px;font-weight:500}
 .tx-date{font-size:10px;color:var(--t3);margin-top:1px}
 .tx-amt{font-size:13px;font-weight:700}
 .tx-credit{color:var(--ok)}
 .tx-debit{color:var(--err)}
-.topup-method-grid{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px}
-.topup-method-btn{display:flex;align-items:center;gap:14px;background:var(--bg3);border:1.5px solid rgba(255,184,0,.15);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:all .2s}
-.topup-method-btn:active{transform:scale(.98)}
-.topup-method-btn.xrocket{border-color:rgba(255,184,0,.25)}
-.topup-method-btn.ton-wallet{border-color:rgba(0,152,234,.25)}
-.topup-method-btn.stars{border-color:rgba(255,165,0,.25)}
-.topup-method-icon{font-size:26px;flex-shrink:0}
-.topup-method-info{flex:1}
-.topup-method-name{font-size:13px;font-weight:700;color:var(--t1)}
-.topup-method-desc{font-size:11px;color:var(--t2);margin-top:2px}
-.topup-method-arrow{color:var(--t3);font-size:16px}
-.wallet-connect-card{background:linear-gradient(135deg,#0A1520,#0D1E2E);border:1px solid rgba(0,152,234,.25);border-radius:var(--r2);padding:16px;margin-bottom:12px}
-.wallet-addr-box{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.2);border-radius:var(--r);padding:12px;margin:10px 0;word-break:break-all;font-family:monospace;font-size:11px;color:var(--ton)}
-.wallet-status{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
-.wallet-status.connected{color:var(--ok)}
-.wallet-status.disconnected{color:var(--t3)}
-.wallet-dot{width:8px;height:8px;border-radius:50%}
-.wallet-dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
-.wallet-dot.off{background:var(--t3)}
-.ton-topup-info{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.2);border-radius:var(--r);padding:14px;margin:10px 0}
-.ton-topup-addr{font-family:monospace;font-size:12px;color:var(--ton);word-break:break-all;margin:6px 0}
-.comment-id-box{background:rgba(255,184,0,.1);border:2px dashed rgba(255,184,0,.4);border-radius:var(--r);padding:14px;text-align:center;margin:10px 0}
-.comment-id-num{font-family:'Orbitron',sans-serif;font-size:32px;font-weight:900;color:var(--gold-l);letter-spacing:4px}
-.comment-id-warn{font-size:11px;color:var(--err);margin-top:4px;font-weight:600}
-.stars-rate{background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.2);border-radius:var(--r);padding:10px;text-align:center;margin-bottom:10px;font-size:12px;color:var(--t2)}
-.stars-rate b{color:#ffa500}
-.overlay{position:absolute;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;align-items:flex-end;animation:fadeIn .2s ease}
-.overlay-box{background:var(--bg2);border:1px solid rgba(255,184,0,.2);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;animation:slideUp .3s ease;max-height:90vh;overflow-y:auto}
+.tm-btn{display:flex;align-items:center;gap:14px;background:var(--bg3);border:1.5px solid rgba(255,184,0,.15);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:all .2s;margin-bottom:8px}
+.tm-btn:active{transform:scale(.98)}
+.tm-icon{font-size:26px;flex-shrink:0}
+.tm-info{flex:1}
+.tm-name{font-size:13px;font-weight:700}
+.tm-desc{font-size:11px;color:var(--t2);margin-top:2px}
+.wc-card{background:linear-gradient(135deg,#0A1520,#0D1E2E);border:1px solid rgba(0,152,234,.25);border-radius:var(--r2);padding:16px;margin-bottom:12px}
+.w-addr{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.2);border-radius:var(--r);padding:12px;margin:10px 0;word-break:break-all;font-family:monospace;font-size:11px;color:var(--ton)}
+.wst{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+.wst.on{color:var(--ok)}
+.wst.off{color:var(--t3)}
+.wdot{width:8px;height:8px;border-radius:50%}
+.wdot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.wdot.off{background:var(--t3)}
+.cid-box{background:rgba(255,184,0,.1);border:2px dashed rgba(255,184,0,.4);border-radius:var(--r);padding:14px;text-align:center;margin:10px 0}
+.cid-num{font-family:'Orbitron',sans-serif;font-size:32px;font-weight:900;color:var(--gold-l);letter-spacing:4px}
+.cid-warn{font-size:11px;color:var(--err);margin-top:4px;font-weight:600}
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;align-items:flex-end;animation:fadeIn .2s}
+.ov-box{background:var(--bg2);border:1px solid rgba(255,184,0,.2);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;animation:slideUp .3s;max-height:90vh;overflow-y:auto}
 @keyframes slideUp{from{transform:translateY(60px)}to{transform:none}}
-.overlay-title{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--gold);text-align:center;margin-bottom:16px}
-.overlay-close{position:absolute;top:16px;right:20px;width:28px;height:28px;border-radius:50%;background:rgba(255,184,0,.1);border:none;color:var(--t2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.ov-title{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--gold);text-align:center;margin-bottom:16px}
+.ov-close{position:absolute;top:16px;right:20px;width:28px;height:28px;border-radius:50%;background:rgba(255,184,0,.1);border:none;color:var(--t2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #toast{position:absolute;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(20,15,0,.95);border:1px solid rgba(255,184,0,.3);border-radius:20px;padding:10px 20px;font-size:13px;font-weight:600;z-index:200;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.ok{border-color:rgba(68,255,136,.3);color:var(--ok)}
@@ -151,57 +124,48 @@ html,body{height:100%;background:var(--bg);color:var(--t1);font-family:'Exo 2',s
 select,input[type=text],input[type=number]{background:var(--bg3);border:1px solid rgba(255,184,0,.2);border-radius:var(--r);color:var(--t1);font-family:'Exo 2',sans-serif;font-size:13px;padding:10px 12px;outline:none;width:100%;margin-bottom:10px}
 select:focus,input:focus{border-color:rgba(255,184,0,.5)}
 option{background:var(--bg2)}
-.stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,184,0,.06)}
-.stat-label{font-size:12px;color:var(--t2)}
-.stat-val{font-size:13px;font-weight:700;color:var(--t1)}
+.sr{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,184,0,.06)}
+.sr-l{font-size:12px;color:var(--t2)}
+.sr-v{font-size:13px;font-weight:700}
 .filter-row{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px}
 .filter-row::-webkit-scrollbar{display:none}
-.chip{flex-shrink:0;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;font-family:'Exo 2',sans-serif;cursor:pointer;border:1.5px solid rgba(255,184,0,.22);background:transparent;color:var(--t3);transition:all .2s;letter-spacing:.3px}
+.chip{flex-shrink:0;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid rgba(255,184,0,.22);background:transparent;color:var(--t3);transition:all .2s}
 .chip.active{background:rgba(255,184,0,.12);border-color:var(--gold);color:var(--gold)}
-.chip:active{transform:scale(.95)}
-.watch-block{background:linear-gradient(135deg,#0F0C00,#1A1400);border:1px solid rgba(255,184,0,.18);border-radius:var(--r2);padding:14px;margin-bottom:12px}
-.watch-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.watch-ttl{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.8px}
+.wb{background:linear-gradient(135deg,#0F0C00,#1A1400);border:1px solid rgba(255,184,0,.18);border-radius:var(--r2);padding:14px;margin-bottom:12px}
+.wb-ttl{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.8px}
 .ad-row{background:rgba(0,0,0,.3);border:1px solid rgba(255,184,0,.1);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.ad-tv{width:44px;height:44px;border-radius:10px;background:rgba(255,184,0,.1);border:1px solid rgba(255,184,0,.18);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.ad-tv{width:44px;height:44px;border-radius:10px;background:rgba(255,184,0,.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
 .ad-info{flex:1}
-.ad-name{font-size:13px;font-weight:600}
 .ad-rew{font-size:12px;color:var(--gold);font-weight:700;margin-top:1px}
 .ad-dur{font-size:10px;color:var(--t3);margin-top:2px}
-.watch-btn{flex-shrink:0;background:linear-gradient(135deg,var(--gold-d),var(--gold-l));color:#000;border:none;border-radius:8px;padding:9px 18px;font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;min-width:68px;text-align:center}
-.watch-btn:active{transform:scale(.97)}
-.watch-btn:disabled{opacity:.5;cursor:not-allowed}
-.watch-btn.claimable{background:linear-gradient(135deg,#00a352,#44ff88);color:#000;animation:glow .9s ease infinite alternate}
+.wb-btn{flex-shrink:0;background:linear-gradient(135deg,var(--gold-d),var(--gold-l));color:#000;border:none;border-radius:8px;padding:9px 18px;font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;cursor:pointer;min-width:68px;text-align:center}
+.wb-btn:disabled{opacity:.5;cursor:not-allowed}
+.wb-btn.claimable{background:linear-gradient(135deg,#00a352,#44ff88);color:#000;animation:glow .9s infinite alternate}
 @keyframes glow{from{box-shadow:0 0 4px rgba(68,255,136,.3)}to{box-shadow:0 0 14px rgba(68,255,136,.7)}}
-.conv-card{background:linear-gradient(135deg,#0A0F1A,#0D1520);border:1px solid rgba(0,152,234,.22);border-radius:var(--r2);padding:16px;margin-bottom:12px}
-.conv-rate{font-size:11px;color:var(--t3);text-align:center;padding:6px;background:rgba(0,152,234,.05);border-radius:8px;border:1px solid rgba(0,152,234,.1);margin-bottom:10px}
-.conv-rate b{color:var(--ton)}
-.conv-prev{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.18);border-radius:var(--r);padding:12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
-.conv-prev-lbl{font-size:11px;color:var(--t2)}
-.conv-prev-val{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700;color:var(--ton)}
-.conv-wrap{position:relative;margin-bottom:4px}
-.conv-wrap input{padding-right:36px;margin-bottom:0}
-.conv-sfx{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--gold);font-weight:700;pointer-events:none}
-.ref-earn-card{background:linear-gradient(135deg,#081408,#0D200F);border:1px solid rgba(68,255,136,.18);border-radius:var(--r2);padding:16px;margin-bottom:12px}
-.ref-earn-ttl{font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;color:var(--ok);letter-spacing:.6px;margin-bottom:10px}
-.ref-earn-amt{font-family:'Orbitron',sans-serif;font-size:28px;font-weight:900;color:var(--ok);line-height:1;margin-bottom:2px}
-.ref-earn-sub{font-size:11px;color:rgba(68,255,136,.45);margin-bottom:14px}
-.ref-fr-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(68,255,136,.07)}
-.ref-fr-row:last-child{border-bottom:none;padding-bottom:0}
-.ref-fr-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold-d),var(--gold));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#000;flex-shrink:0}
-.ref-fr-info{flex:1}
-.ref-fr-name{font-size:12px;font-weight:600}
-.ref-fr-sub{font-size:10px;color:var(--t2)}
-.ref-fr-share{font-size:12px;font-weight:700;color:var(--ok);flex-shrink:0}
+.cc{background:linear-gradient(135deg,#0A0F1A,#0D1520);border:1px solid rgba(0,152,234,.22);border-radius:var(--r2);padding:16px;margin-bottom:12px}
+.cr{font-size:11px;color:var(--t3);text-align:center;padding:6px;background:rgba(0,152,234,.05);border-radius:8px;border:1px solid rgba(0,152,234,.1);margin-bottom:10px}
+.cp{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.18);border-radius:var(--r);padding:12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.cp-l{font-size:11px;color:var(--t2)}
+.cp-v{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700;color:var(--ton)}
+.cw{position:relative;margin-bottom:4px}
+.cw input{padding-right:36px;margin-bottom:0}
+.csfx{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--gold);font-weight:700;pointer-events:none}
+.re-card{background:linear-gradient(135deg,#081408,#0D200F);border:1px solid rgba(68,255,136,.18);border-radius:var(--r2);padding:16px;margin-bottom:12px}
+.re-ttl{font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;color:var(--ok);letter-spacing:.6px;margin-bottom:10px}
+.re-amt{font-family:'Orbitron',sans-serif;font-size:28px;font-weight:900;color:var(--ok);line-height:1;margin-bottom:2px}
+.rf-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(68,255,136,.07)}
+.rf-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold-d),var(--gold));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#000;flex-shrink:0}
+.rf-info{flex:1}
+.rf-name{font-size:12px;font-weight:600}
+.rf-sub{font-size:10px;color:var(--t2)}
+.rf-share{font-size:12px;font-weight:700;color:var(--ok);flex-shrink:0}
 .lb-card{background:linear-gradient(135deg,#0D0A1A,#120E22);border:1px solid rgba(168,85,247,.22);border-radius:var(--r2);padding:16px;margin-bottom:12px}
 .lb-title{font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;color:var(--purple);letter-spacing:.8px;margin-bottom:4px}
 .lb-week{font-size:10px;color:rgba(168,85,247,.5);margin-bottom:12px}
 .lb-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(168,85,247,.08)}
 .lb-row:last-child{border-bottom:none}
 .lb-rank{width:24px;font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;color:var(--t3);flex-shrink:0;text-align:center}
-.lb-rank.gold{color:#FFD454}
-.lb-rank.silver{color:#C0C0C0}
-.lb-rank.bronze{color:#CD7F32}
+.lb-rank.gold{color:#FFD454}.lb-rank.silver{color:#C0C0C0}.lb-rank.bronze{color:#CD7F32}
 .lb-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#5b21b6,#a855f7);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
 .lb-av.me{background:linear-gradient(135deg,var(--gold-d),var(--gold));color:#000}
 .lb-info{flex:1}
@@ -209,1924 +173,503 @@ option{background:var(--bg2)}
 .lb-sub{font-size:10px;color:var(--t3)}
 .lb-cnt{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:var(--purple)}
 .lb-cnt.me{color:var(--gold)}
-.week-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
-.wstat{background:var(--bg3);border:1px solid rgba(255,184,0,.1);border-radius:var(--r);padding:10px;text-align:center}
-.wstat-val{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:var(--gold-l)}
-.wstat-lbl{font-size:10px;color:var(--t2);margin-top:2px}
-.wstat.green .wstat-val{color:var(--ok)}
-.wstat.purple .wstat-val{color:var(--purple)}
-.check-card{border-radius:var(--r2);padding:16px;margin-bottom:12px}
-.check-card.create{background:linear-gradient(135deg,#0A1A0A,#0D250D);border:1px solid rgba(68,255,136,.18)}
-.check-item{background:var(--bg3);border:1px solid rgba(168,85,247,.18);border-radius:var(--r);padding:14px;margin-bottom:8px}
-.check-item-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.check-item-amt{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--ton)}
-.check-item-type{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:700}
-.check-item-type.personal{background:rgba(168,85,247,.15);color:var(--purple);border:1px solid rgba(168,85,247,.3)}
-.check-item-type.multi{background:rgba(0,152,234,.15);color:var(--ton);border:1px solid rgba(0,152,234,.3)}
-.check-item-link{font-size:11px;color:var(--t3);font-family:monospace;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.check-item-foot{display:flex;align-items:center;justify-content:space-between}
-.check-item-status{font-size:11px;font-weight:600}
-.check-item-status.active{color:var(--ok)}
-.check-item-status.claimed{color:var(--t3)}
-.check-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.check-type-btn{border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;border:1.5px solid rgba(255,184,0,.18);background:var(--bg3);transition:all .2s}
-.check-type-btn.selected{border-color:var(--gold);background:rgba(255,184,0,.06)}
-.check-type-btn .ct-icon{font-size:22px;margin-bottom:6px}
-.check-type-btn .ct-name{font-size:12px;font-weight:700;color:var(--t1)}
-.check-type-btn .ct-desc{font-size:10px;color:var(--t3);margin-top:2px}
-.claim-check-card{background:linear-gradient(135deg,#0A1520,#0D1E2E);border:1px solid rgba(0,152,234,.3);border-radius:var(--r2);padding:24px;text-align:center;margin-bottom:12px}
-.claim-check-amt{font-family:'Orbitron',sans-serif;font-size:40px;font-weight:900;color:var(--ton);line-height:1;margin:12px 0}
-.claim-check-sub{font-size:13px;color:var(--t2)}
-.daily-section{background:linear-gradient(135deg,#0A0F1A,#0D1420);border:1px solid rgba(0,152,234,.18);border-radius:var(--r2);padding:14px;margin-bottom:12px}
-.ton-note{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.15);border-radius:10px;padding:10px 14px;font-size:11px;color:var(--t2);margin-bottom:12px}
-.ton-note b{color:var(--ton)}
-/* TON Connect button container */
-#tc-btn-wrap tc-button,#tc-btn-wrap button{width:100%!important;border-radius:var(--r)!important}
-.ton-pay-popup{background:linear-gradient(135deg,#0A1520,#0D1E2E);border:1px solid rgba(0,152,234,.3);border-radius:var(--r2);padding:20px;text-align:center;margin-bottom:12px}
+.ws{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.wsi{background:var(--bg3);border:1px solid rgba(255,184,0,.1);border-radius:var(--r);padding:10px;text-align:center}
+.wsv{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:var(--gold-l)}
+.wsl{font-size:10px;color:var(--t2);margin-top:2px}
+.wsi.green .wsv{color:var(--ok)}
+.wsi.purple .wsv{color:var(--purple)}
+.chk-card{border-radius:var(--r2);padding:16px;margin-bottom:12px}
+.chk-card.create{background:linear-gradient(135deg,#0A1A0A,#0D250D);border:1px solid rgba(68,255,136,.18)}
+.chk-item{background:var(--bg3);border:1px solid rgba(168,85,247,.18);border-radius:var(--r);padding:14px;margin-bottom:8px}
+.chk-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.chk-amt{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--ton)}
+.chk-type{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:700}
+.chk-type.personal{background:rgba(168,85,247,.15);color:var(--purple);border:1px solid rgba(168,85,247,.3)}
+.chk-type.multi{background:rgba(0,152,234,.15);color:var(--ton);border:1px solid rgba(0,152,234,.3)}
+.chk-link{font-size:11px;color:var(--t3);font-family:monospace;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chk-foot{display:flex;align-items:center;justify-content:space-between}
+.chk-st{font-size:11px;font-weight:600}
+.chk-st.active{color:var(--ok)}
+.chk-st.claimed{color:var(--t3)}
+.ct-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.ct-btn{border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;border:1.5px solid rgba(255,184,0,.18);background:var(--bg3);transition:all .2s}
+.ct-btn.selected{border-color:var(--gold);background:rgba(255,184,0,.06)}
+.ct-icon{font-size:22px;margin-bottom:6px}
+.ct-name{font-size:12px;font-weight:700}
+.ct-desc{font-size:10px;color:var(--t3);margin-top:2px}
+.clm-card{background:linear-gradient(135deg,#0A1520,#0D1E2E);border:1px solid rgba(0,152,234,.3);border-radius:var(--r2);padding:24px;text-align:center;margin-bottom:12px}
+.clm-amt{font-family:'Orbitron',sans-serif;font-size:40px;font-weight:900;color:var(--ton);line-height:1;margin:12px 0}
+.clm-sub{font-size:13px;color:var(--t2)}
+.ds{background:linear-gradient(135deg,#0A0F1A,#0D1420);border:1px solid rgba(0,152,234,.18);border-radius:var(--r2);padding:14px;margin-bottom:12px}
+.tn{background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.15);border-radius:10px;padding:10px 14px;font-size:11px;color:var(--t2);margin-bottom:12px}
 </style>
 </head>
 <body>
 <div id="app">
-
-  <div class="hdr">
-    <div class="hdr-logo">TR<span style="color:#fff;font-size:14px">ewards</span></div>
-    <div class="hdr-actions">
-      <button class="lang-btn" id="langBtn" onclick="toggleLang()">RU</button>
-      <button class="btn btn-outline btn-sm" onclick="openAd()">+ <span data-i="adTask">TASK</span></button>
-    </div>
+<div class="hdr">
+  <div class="hdr-logo">TR<span style="color:#fff;font-size:14px">ewards</span></div>
+  <div class="hdr-actions">
+    <button class="lang-btn" id="langBtn" onclick="toggleLang()">RU</button>
+    <button class="btn btn-outline btn-sm" onclick="openAd()">+ <span data-i="adTask">TASK</span></button>
   </div>
-
-  <div class="scroll" id="scroll">
-
-    <!-- ═══ HOME ═══ -->
-    <div class="tab active" id="tab-home">
-      <div class="bal-card">
-        <div class="bal-label" data-i="balance">TR BALANCE</div>
-        <div class="bal-coins" id="balCoins">0</div>
-        <div class="bal-ton">≈ <span id="balTon">0.0000</span> TON</div>
-        <div class="bal-badges">
-          <div class="badge">🔥 <span id="streakBadge">0</span> <span data-i="days">days</span></div>
-          <div class="badge">🎰 <span id="spinsBadge">0</span> <span data-i="spins">spins</span></div>
-        </div>
-      </div>
-      <div id="homeWatchAds"></div>
-      <div class="card">
-        <div class="sec-title" data-i="dailyStreak">DAILY STREAK</div>
-        <div class="streak-dots" id="streakDots"></div>
-        <p style="font-size:11px;color:var(--t2);text-align:center;margin:4px 0 12px" data-i="streakDesc">Claim daily for +1,000 TR + 1 spin</p>
-        <button class="btn btn-gold" id="streakBtn" onclick="claimStreakWithAd()" style="width:100%" data-i="claimStreak">Claim Streak</button>
-      </div>
-      <div class="card">
-        <div class="sec-title" data-i="spinWheel">SPIN WHEEL</div>
-        <div class="spin-wrap">
-          <div class="spin-ptr"></div>
-          <canvas id="spinCanvas" width="260" height="260"></canvas>
-          <div style="font-size:12px;color:var(--t2)"><span data-i="spinsLeft">Spins available:</span> <b id="spinCount">0</b></div>
-          <button class="btn spin-btn" id="spinBtn" onclick="doSpin()" data-i="spinNow">SPIN NOW</button>
-        </div>
-      </div>
-      <div class="sec-title" data-i="quickActions">QUICK ACTIONS</div>
-      <div class="qa-grid">
-        <div class="qa-item" onclick="goTab('friends')"><div class="qa-icon">👥</div><div class="qa-label" data-i="inviteFriend">Invite Friend</div></div>
-        <div class="qa-item" onclick="goTab('wallet')"><div class="qa-icon">💸</div><div class="qa-label" data-i="withdraw">Withdraw</div></div>
-        <div class="qa-item" onclick="goTab('tasks')"><div class="qa-icon">⚡</div><div class="qa-label" data-i="earnMore">Earn More</div></div>
-        <div class="qa-item" onclick="goTab('check')"><div class="qa-icon">🧾</div><div class="qa-label" data-i="tonCheck">TON Check</div></div>
-      </div>
-      <div class="card">
-        <div class="sec-title" data-i="promoCode">PROMO CODE</div>
-        <div class="promo-row">
-          <input type="text" id="promoInput" placeholder="Enter code..." data-ph="enterCode">
-          <button class="btn btn-gold" onclick="redeemPromoWithAd()" data-i="redeem">Redeem</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ TASKS ═══ -->
-    <div class="tab" id="tab-tasks">
-      <div class="filter-row" id="filterRow">
-        <button class="chip active" data-f="all"     onclick="setFilter('all')"     data-i="filterAll">All</button>
-        <button class="chip"        data-f="daily"   onclick="setFilter('daily')"   data-i="filterDaily">📅 Daily</button>
-        <button class="chip"        data-f="channel" onclick="setFilter('channel')" data-i="filterChannel">Channel</button>
-        <button class="chip"        data-f="group"   onclick="setFilter('group')"   data-i="filterGroup">Group</button>
-        <button class="chip"        data-f="game"    onclick="setFilter('game')"    data-i="filterGame">Game</button>
-        <button class="chip"        data-f="visit"   onclick="setFilter('visit')"   data-i="filterVisit">Website</button>
-      </div>
-      <div id="dailyTaskPanel" style="display:none">
-        <div class="daily-section">
-          <div class="sec-title" style="color:var(--ton)" data-i="dailyTasks">📅 DAILY TASKS</div>
-          <p style="font-size:11px;color:var(--t2);margin-bottom:10px" data-i="dailyTaskDesc">+5,000 TR + 1 spin each (resets daily)</p>
-          <div id="dailyTaskList"></div>
-        </div>
-      </div>
-      <div id="taskListWrap">
-        <div class="sec-title" data-i="tasksTitle">ADVERTISER TASKS</div>
-        <div id="taskList"><div style="text-align:center;color:var(--t3);padding:30px 0" data-i="loading">Loading...</div></div>
-      </div>
-    </div>
-
-    <!-- ═══ FRIENDS ═══ -->
-    <div class="tab" id="tab-friends">
-      <div class="week-stats">
-        <div class="wstat"><div class="wstat-val" id="totalFriendsVal">0</div><div class="wstat-lbl" data-i="totalFriends">Total Friends</div></div>
-        <div class="wstat purple"><div class="wstat-val" id="weeklyFriendsVal">0</div><div class="wstat-lbl" data-i="thisWeek">This Week</div></div>
-        <div class="wstat green"><div class="wstat-val" id="friendsEarned">0</div><div class="wstat-lbl" data-i="trEarned">TR Earned</div></div>
-      </div>
-      <div class="ref-earn-card" id="refEarnCard" style="display:none">
-        <div class="ref-earn-ttl" data-i="refEarnings">🤑 REFERRAL EARNINGS</div>
-        <div class="ref-earn-amt" id="refEarnAmt">0 TR</div>
-        <div class="ref-earn-sub" data-i="refPendingDesc">Pending from friends (30% share)</div>
-        <div id="refFriendRows"></div>
-        <button class="btn btn-ok" onclick="claimAllReferral()" style="width:100%;margin-top:12px;padding:13px">
-          💰 <span data-i="claimAll">Claim All Earnings</span>
-        </button>
-      </div>
-      <div class="card">
-        <div class="sec-title" data-i="yourLink">YOUR REFERRAL LINK</div>
-        <div class="ref-box">
-          <div class="ref-link" id="refLink">Loading...</div>
-          <button class="btn btn-outline btn-sm" onclick="copyRef()" data-i="copy">Copy</button>
-        </div>
-        <button class="btn btn-gold" onclick="shareRef()" style="width:100%">📤 <span data-i="inviteViaTelegram">Invite via Telegram</span></button>
-        <p style="font-size:11px;color:var(--t2);text-align:center;margin-top:8px" data-i="refDesc">Earn 30% of your friends' TR rewards</p>
-      </div>
-      <div class="lb-card">
-        <div class="lb-title" data-i="weeklyLB">🏆 WEEKLY LEADERBOARD</div>
-        <div class="lb-week" id="currentWeekLabel">Week —</div>
-        <div id="weeklyLeaderboard"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="loading">Loading...</div></div>
-      </div>
-      <div class="lb-card" style="border-color:rgba(255,184,0,.15)">
-        <div class="lb-title" style="color:var(--t2)" data-i="prevWeekLB">📜 PREVIOUS WEEK</div>
-        <div class="lb-week" id="prevWeekLabel">Week —</div>
-        <div id="prevWeeklyLeaderboard"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noData">No data</div></div>
-      </div>
-      <div class="sec-title" data-i="yourFriends">YOUR FRIENDS</div>
-      <div id="friendsList"></div>
-    </div>
-
-    <!-- ═══ WALLET ═══ -->
-    <div class="tab" id="tab-wallet">
-      <div class="bal-card" style="margin-bottom:12px">
-        <div class="bal-label" data-i="walletBalance">WALLET BALANCE</div>
-        <div class="bal-coins" id="walletCoins">0</div>
-        <div class="bal-ton">TON: <span id="walletTon" style="color:var(--ton)">0.0000</span></div>
-      </div>
-      <div class="ton-note">
-        💡 <b data-i="tonCoinNote">TON coins</b> <span data-i="tonCoinNoteDesc">are used for advertising and creating checks. TR coins are your task rewards.</span>
-      </div>
-
-      <!-- TON Wallet Connect (TON Connect SDK) -->
-      <div class="wallet-connect-card">
-        <div class="sec-title" style="color:var(--ton);margin-bottom:12px" data-i="tonWallet">🔗 TON WALLET</div>
-        <div id="walletConnectStatus"></div>
-        <div id="tc-btn-wrap" style="margin-top:10px"></div>
-        <div id="walletManualForm" style="margin-top:10px"></div>
-      </div>
-
-      <!-- Convert TR → TON -->
-      <div class="conv-card">
-        <div class="sec-title" style="color:var(--ton)" data-i="convertTitle">⇄ CONVERT TR → TON</div>
-        <div class="conv-rate"><b>1,000,000 TR</b> = <b>0.15 TON</b></div>
-        <div class="conv-prev">
-          <span class="conv-prev-lbl" data-i="youReceive">You receive</span>
-          <div class="conv-prev-val"><span id="convPrev">0.0000</span> <span style="font-size:12px;color:var(--t2)">TON</span></div>
-        </div>
-        <div class="conv-wrap">
-          <input type="number" id="convAmt" data-ph="enterTR" placeholder="Enter TR amount..." min="1000000" step="100000" oninput="updateConvPrev()" style="margin-bottom:0">
-          <span class="conv-sfx">TR</span>
-        </div>
-        <div style="font-size:10px;color:var(--t3);text-align:center;margin:4px 0 10px" data-i="minConvert">Minimum: 1,000,000 TR</div>
-        <button class="btn btn-ton" onclick="doConvert()" style="width:100%;padding:12px" data-i="convertNow">Convert Now</button>
-      </div>
-
-      <!-- Top Up TON -->
-      <div class="card">
-        <div class="sec-title" data-i="topUpTON">TOP UP TON</div>
-        <div style="margin-bottom:12px">
-          <input type="number" id="topupTonAmt" data-ph="amountTON" placeholder="Amount in TON..." min="0.5" step="0.1" style="margin:0">
-        </div>
-        <div class="topup-method-grid">
-          <div class="topup-method-btn xrocket" onclick="topUp('xrocket')">
-            <div class="topup-method-icon">🚀</div>
-            <div class="topup-method-info">
-              <div class="topup-method-name">xRocket Pay</div>
-              <div class="topup-method-desc" data-i="xrocketDesc">Pay with TON via xRocket</div>
-            </div>
-            <div class="topup-method-arrow">›</div>
-          </div>
-          <div class="topup-method-btn ton-wallet" onclick="topUp('ton_wallet')">
-            <div class="topup-method-icon">💎</div>
-            <div class="topup-method-info">
-              <div class="topup-method-name" data-i="tonWalletMethod">TON Wallet</div>
-              <div class="topup-method-desc" data-i="tonWalletDesc">Direct TON transfer</div>
-            </div>
-            <div class="topup-method-arrow">›</div>
-          </div>
-          <div class="topup-method-btn stars" onclick="topUp('stars')">
-            <div class="topup-method-icon">⭐</div>
-            <div class="topup-method-info">
-              <div class="topup-method-name" data-i="starsMethod">Telegram Stars</div>
-              <div class="topup-method-desc" data-i="starsDesc">65 Stars = 1 TON</div>
-            </div>
-            <div class="topup-method-arrow">›</div>
-          </div>
-        </div>
-        <p style="font-size:10px;color:var(--t3);text-align:center" data-i="topupMinNote">Minimum: 0.50 TON or 50 Stars</p>
-      </div>
-
-      <!-- Withdraw TR Coins -->
-      <div class="card">
-        <div class="sec-title" data-i="withdrawTR">WITHDRAW TR COINS</div>
-        <div class="tier-grid" id="tierGrid"></div>
-        <input type="text" id="walletAddr" data-ph="walletAddrPH" placeholder="TON wallet address (EQ...)" style="margin-bottom:10px">
-        <button class="btn btn-gold" onclick="doWithdraw()" style="width:100%" data-i="withdrawNow">Withdraw Now</button>
-        <p style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px" data-i="withdrawNote">Processed within 24 hours. 0.03 TON fee deducted.</p>
-      </div>
-
-      <div class="sec-title" data-i="txHistory">TRANSACTION HISTORY</div>
-      <div id="txList"></div>
-    </div>
-
-    <!-- ═══ CHECK ═══ -->
-    <div class="tab" id="tab-check">
-      <div class="check-card create">
-        <div class="sec-title" style="color:var(--ok)" data-i="createCheck">🧾 CREATE TON CHECK</div>
-        <p style="font-size:11px;color:var(--t2);margin-bottom:14px" data-i="createCheckDesc">Create a TON check that others can claim</p>
-        <div class="check-type-grid">
-          <div class="check-type-btn selected" id="ct-personal" onclick="selectCheckType('personal')">
-            <div class="ct-icon">👤</div>
-            <div class="ct-name" data-i="personal">Personal</div>
-            <div class="ct-desc" data-i="personalDesc">Only 1 person claims</div>
-          </div>
-          <div class="check-type-btn" id="ct-multi" onclick="selectCheckType('multi')">
-            <div class="ct-icon">👥</div>
-            <div class="ct-name" data-i="multiple">Multiple</div>
-            <div class="ct-desc" data-i="multipleDesc">Split among many</div>
-          </div>
-        </div>
-        <div class="conv-wrap" style="margin-bottom:10px">
-          <input type="number" id="checkAmt" data-ph="amountTON" placeholder="Amount in TON..." min="0.01" step="0.01" oninput="updateCheckPreview()" style="margin-bottom:0">
-          <span class="conv-sfx">TON</span>
-        </div>
-        <div id="checkMultiWrap" style="display:none">
-          <input type="number" id="checkPeople" data-ph="numRecipients" placeholder="Number of recipients..." min="2" step="1" oninput="updateCheckPreview()">
-          <div style="background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.15);border-radius:var(--r);padding:10px;margin-bottom:10px;font-size:12px;color:var(--t2)">
-            <span data-i="eachReceives">Each receives:</span> <b id="checkPerPerson" style="color:var(--ton)">—</b> TON
-          </div>
-        </div>
-        <div style="background:rgba(68,255,136,.08);border:1px solid rgba(68,255,136,.12);border-radius:var(--r);padding:10px;margin-bottom:12px;font-size:11px;color:var(--t2)" data-i="checkTip">
-          💡 TON will be deducted from your balance. New users claiming your check become your referrals!
-        </div>
-        <button class="btn btn-ok" onclick="createCheck()" style="width:100%;padding:13px" data-i="createCheckBtn">🧾 Create Check</button>
-      </div>
-      <div class="sec-title" data-i="myChecks">MY CHECKS</div>
-      <div id="myChecksList"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noChecksYet">No checks created yet</div></div>
-      <div class="sec-title" style="color:var(--ton)" data-i="receivedChecks">RECEIVED CHECKS</div>
-      <div id="receivedChecksList"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noChecksClaim">No checks to claim</div></div>
-    </div>
-
-  </div><!-- /scroll -->
-
-  <nav class="nav">
-    <div class="nav-item active" id="nav-home" onclick="goTab('home')">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" stroke="#888" stroke-width="1.8"/><path d="M9 21V12h6v9" stroke="#888" stroke-width="1.8"/></svg>
-      <span data-i="navHome">Home</span>
-    </div>
-    <div class="nav-item" id="nav-tasks" onclick="goTab('tasks')">
-      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="#888" stroke-width="1.8"/><path d="M8 12h8M8 8h8M8 16h5" stroke="#888" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span data-i="navTasks">Tasks</span>
-    </div>
-    <div class="nav-item" id="nav-check" onclick="goTab('check')">
-      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#888" stroke-width="1.8"/><path d="M3 10h18M8 15h2M14 15h3" stroke="#888" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span data-i="navCheck">Check</span>
-    </div>
-    <div class="nav-item" id="nav-friends" onclick="goTab('friends')">
-      <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="#888" stroke-width="1.8"/><path d="M3 20c0-4 3-6 6-6s6 2 6 6" stroke="#888" stroke-width="1.8"/><circle cx="17" cy="8" r="2.5" stroke="#888" stroke-width="1.8"/><path d="M21 20c0-3-2-5-4-5" stroke="#888" stroke-width="1.8"/></svg>
-      <span data-i="navFriends">Friends</span>
-    </div>
-    <div class="nav-item" id="nav-wallet" onclick="goTab('wallet')">
-      <svg viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="15" rx="3" stroke="#888" stroke-width="1.8"/><path d="M2 10h20" stroke="#888" stroke-width="1.8"/><circle cx="16" cy="15" r="1.5" fill="#888"/></svg>
-      <span data-i="navWallet">Wallet</span>
-    </div>
-  </nav>
-
-  <!-- AD PANEL -->
-  <div class="overlay" id="adOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeAd()">✕</button>
-      <div class="overlay-title" data-i="advertise">ADVERTISE</div>
-      <div class="adt">
-        <div class="adt-item active" onclick="switchAdTab('add')" data-i="addTask">Add Task</div>
-        <div class="adt-item" onclick="switchAdTab('my')" data-i="myTasks">My Tasks</div>
-      </div>
-      <div id="adTabAdd">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-          <span style="font-size:12px;color:var(--t2)" data-i="tonBalLabel">TON Balance:</span>
-          <span style="font-size:15px;font-weight:700;color:var(--ton)"><span id="adBal">0.0000</span> TON</span>
-        </div>
-        <input type="text" id="adName" data-ph="taskNamePH" placeholder="Task name...">
-        <select id="adType" onchange="updateAdCostDisplay()">
-          <option value="visit"   data-i-opt="visitOpt">Visit Website (+3000 TR +1 Spin)</option>
-          <option value="channel" data-i-opt="channelOpt">Join Channel (+5000 TR +1 Spin)</option>
-          <option value="group"   data-i-opt="groupOpt">Join Group (+5000 TR +1 Spin)</option>
-          <option value="game"    data-i-opt="gameOpt">Play Game Bot (+5000 TR +1 Spin)</option>
-          <option value="daily"   data-i-opt="dailyOpt">Daily Task (shown every day)</option>
-        </select>
-        <input type="text" id="adUrl" placeholder="Target URL (https://...)">
-        <div id="adLimitWrap">
-          <select id="adLimit" onchange="updateAdCostDisplay()">
-            <option value="500">500 completions — 0.5 TON</option>
-            <option value="1000" selected>1000 completions — 1 TON</option>
-            <option value="2000">2000 completions — 2 TON</option>
-            <option value="5000">5000 completions — 5 TON</option>
-            <option value="10000">10000 completions — 10 TON</option>
-          </select>
-        </div>
-        <div id="adDailyWrap" style="display:none">
-          <input type="number" id="adDays" data-ph="numDaysPH" placeholder="Number of days (e.g. 7)..." min="1" step="1" oninput="updateAdCostDisplay()">
-          <div style="font-size:11px;color:var(--t2);margin-bottom:10px" data-i="dailyCostNote">Cost: <b>5 TON per day</b></div>
-        </div>
-        <div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--t2)"><span data-i="costLabel">Cost:</span> <b id="adCost" style="color:var(--gold)">1.000 TON</b></div>
-        <button class="btn btn-gold" onclick="publishTask()" style="width:100%" data-i="publishTask">Publish Task</button>
-      </div>
-      <div id="adTabMy" style="display:none"><div id="myTasksList"></div></div>
-    </div>
-  </div>
-
-  <!-- CONFIRM WITHDRAW -->
-  <div class="overlay" id="confirmOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeConfirm()">✕</button>
-      <div class="overlay-title" data-i="confirmWithdraw">CONFIRM WITHDRAWAL</div>
-      <div id="confirmBody"></div>
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn btn-outline" onclick="closeConfirm()" style="flex:1" data-i="cancel">Cancel</button>
-        <button class="btn btn-gold" onclick="confirmWithdraw()" style="flex:1" data-i="confirm">Confirm</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- TOP-UP: xRocket -->
-  <div class="overlay" id="topupXrocketOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeAllTopups()">✕</button>
-      <div class="overlay-title">🚀 XROCKET PAY</div>
-      <div style="font-size:13px;color:var(--t2);text-align:center;margin-bottom:8px" data-i="xrocketAmtLabel">Amount:</div>
-      <div style="font-size:20px;font-weight:700;color:var(--ton);text-align:center;margin-bottom:4px"><span id="xrocketAmt">0</span> TON</div>
-      <div style="font-size:11px;color:var(--t3);text-align:center;margin-bottom:16px" data-i="xrocketMinNote">Minimum: 0.50 TON</div>
-      <div style="background:rgba(255,184,0,.08);border:1px solid rgba(255,184,0,.15);border-radius:var(--r);padding:12px;margin-bottom:14px;font-size:12px;color:var(--t2)" data-i="xrocketInfo">
-        ✅ 1 TON = 1 TON credited automatically after payment confirmation.
-      </div>
-      <button class="btn btn-gold" onclick="confirmXrocketTopup()" style="width:100%;padding:14px" data-i="openXrocket">Open xRocket Pay</button>
-    </div>
-  </div>
-
-  <!-- TOP-UP: TON Wallet (TON Connect) -->
-  <div class="overlay" id="topupTonWalletOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeAllTopups()">✕</button>
-      <div class="overlay-title">💎 TON WALLET TOP-UP</div>
-      <div id="tonWalletTopupContent"></div>
-    </div>
-  </div>
-
-  <!-- TOP-UP: Stars -->
-  <div class="overlay" id="topupStarsOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeAllTopups()">✕</button>
-      <div class="overlay-title">⭐ TELEGRAM STARS</div>
-      <div id="starsTopupContent"></div>
-    </div>
-  </div>
-
-  <!-- VERIFY JOIN -->
-  <div class="overlay" id="verifyOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeVerify()">✕</button>
-      <div class="overlay-title" data-i="verifyTitle">VERIFY MEMBERSHIP</div>
-      <p style="font-size:13px;color:var(--t2);text-align:center;margin-bottom:20px" data-i="verifyDesc">Join the channel/group then tap I've Joined</p>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <button class="btn btn-outline" onclick="openVerifyLink()" data-i="openLink">Open Link</button>
-        <button class="btn btn-gold" onclick="verifyJoin()" data-i="iJoined">✅ I've Joined</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- CONVERT CONFIRM -->
-  <div class="overlay" id="convOverlay" style="display:none">
-    <div class="overlay-box">
-      <button class="overlay-close" onclick="closeConvert()">✕</button>
-      <div class="overlay-title" data-i="confirmConvert">CONFIRM CONVERT</div>
-      <div id="convConfirmBody"></div>
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn btn-outline" onclick="closeConvert()" style="flex:1" data-i="cancel">Cancel</button>
-        <button class="btn btn-ton" onclick="confirmConvert()" style="flex:1" data-i="confirm">Confirm</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- CHECK CREATED -->
-  <div class="overlay" id="checkCreatedOverlay" style="display:none">
-    <div class="overlay-box" style="text-align:center">
-      <button class="overlay-close" onclick="closeCheckCreated()">✕</button>
-      <div class="overlay-title" data-i="checkCreated">✅ CHECK CREATED!</div>
-      <div style="font-size:40px;margin:12px 0">🧾</div>
-      <div style="font-size:13px;color:var(--t2);margin-bottom:8px" data-i="yourCheckLink">Your check link:</div>
-      <div id="newCheckLink" style="background:var(--bg3);border:1px solid rgba(255,184,0,.2);border-radius:var(--r);padding:12px;font-family:monospace;font-size:11px;color:var(--gold);word-break:break-all;margin-bottom:16px"></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-outline" onclick="copyCheckLink()" style="flex:1" data-i="copyBtn">📋 Copy</button>
-        <button class="btn btn-gold" onclick="shareCheckLink()" style="flex:1" data-i="shareBtn">📤 Share</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- CLAIM CHECK -->
-  <div class="overlay" id="claimCheckOverlay" style="display:none">
-    <div class="overlay-box" style="text-align:center">
-      <button class="overlay-close" onclick="closeClaimCheck()">✕</button>
-      <div class="overlay-title" data-i="claimCheck">💎 CLAIM CHECK</div>
-      <div class="claim-check-card">
-        <div class="claim-check-sub" data-i="aboutToReceive">You are about to receive</div>
-        <div class="claim-check-amt" id="claimCheckAmt">0 TON</div>
-        <div class="claim-check-sub" id="claimCheckInfo">Personal check</div>
-      </div>
-      <button class="btn btn-ton" onclick="confirmClaimCheck()" style="width:100%;padding:14px;font-size:15px" data-i="claimNow">💰 Claim Now</button>
-    </div>
-  </div>
-
-  <div id="toast"></div>
 </div>
-
+<div class="scroll" id="scroll">
+<!-- HOME -->
+<div class="tab active" id="tab-home">
+  <div class="bal-card">
+    <div class="bal-label" data-i="balance">TR BALANCE</div>
+    <div class="bal-coins" id="balCoins">0</div>
+    <div class="bal-ton">≈ <span id="balTon">0.0000</span> TON</div>
+    <div class="bal-badges">
+      <div class="badge">🔥 <span id="streakBadge">0</span> <span data-i="days">days</span></div>
+      <div class="badge">🎰 <span id="spinsBadge">0</span> <span data-i="spins">spins</span></div>
+    </div>
+  </div>
+  <div id="homeWatchAds"></div>
+  <div class="card">
+    <div class="sec-title" data-i="dailyStreak">DAILY STREAK</div>
+    <div class="streak-dots" id="streakDots"></div>
+    <p style="font-size:11px;color:var(--t2);text-align:center;margin:4px 0 12px" data-i="streakDesc">Claim daily for +1,000 TR + 1 spin</p>
+    <button class="btn btn-gold" id="streakBtn" onclick="claimStreakWithAd()" style="width:100%" data-i="claimStreak">Claim Streak</button>
+  </div>
+  <div class="card">
+    <div class="sec-title" data-i="spinWheel">SPIN WHEEL</div>
+    <div class="spin-wrap">
+      <div class="spin-ptr"></div>
+      <canvas id="spinCanvas" width="260" height="260"></canvas>
+      <div style="font-size:12px;color:var(--t2)"><span data-i="spinsLeft">Spins available:</span> <b id="spinCount">0</b></div>
+      <button class="btn spin-btn" id="spinBtn" onclick="doSpin()" data-i="spinNow">SPIN NOW</button>
+    </div>
+  </div>
+  <div class="sec-title" data-i="quickActions">QUICK ACTIONS</div>
+  <div class="qa-grid">
+    <div class="qa-item" onclick="goTab('friends')"><div class="qa-icon">👥</div><div class="qa-label" data-i="inviteFriend">Invite Friend</div></div>
+    <div class="qa-item" onclick="goTab('wallet')"><div class="qa-icon">💸</div><div class="qa-label" data-i="withdraw">Withdraw</div></div>
+    <div class="qa-item" onclick="goTab('tasks')"><div class="qa-icon">⚡</div><div class="qa-label" data-i="earnMore">Earn More</div></div>
+    <div class="qa-item" onclick="goTab('check')"><div class="qa-icon">🧾</div><div class="qa-label" data-i="tonCheck">TON Check</div></div>
+  </div>
+  <div class="card">
+    <div class="sec-title" data-i="promoCode">PROMO CODE</div>
+    <div class="promo-row">
+      <input type="text" id="promoInput" placeholder="Enter code..." data-ph="enterCode">
+      <button class="btn btn-gold" onclick="redeemPromoWithAd()" data-i="redeem">Redeem</button>
+    </div>
+  </div>
+</div>
+<!-- TASKS -->
+<div class="tab" id="tab-tasks">
+  <div class="filter-row">
+    <button class="chip active" data-f="all" onclick="setFilter('all')" data-i="filterAll">All</button>
+    <button class="chip" data-f="daily" onclick="setFilter('daily')" data-i="filterDaily">📅 Daily</button>
+    <button class="chip" data-f="channel" onclick="setFilter('channel')" data-i="filterChannel">Channel</button>
+    <button class="chip" data-f="group" onclick="setFilter('group')" data-i="filterGroup">Group</button>
+    <button class="chip" data-f="game" onclick="setFilter('game')" data-i="filterGame">Game</button>
+    <button class="chip" data-f="visit" onclick="setFilter('visit')" data-i="filterVisit">Website</button>
+  </div>
+  <div id="dailyTaskPanel" style="display:none">
+    <div class="ds">
+      <div class="sec-title" style="color:var(--ton)" data-i="dailyTasks">📅 DAILY TASKS</div>
+      <p style="font-size:11px;color:var(--t2);margin-bottom:10px" data-i="dailyTaskDesc">+5,000 TR + 1 spin each (resets daily)</p>
+      <div id="dailyTaskList"></div>
+    </div>
+  </div>
+  <div id="taskListWrap">
+    <div class="sec-title" data-i="tasksTitle">ADVERTISER TASKS</div>
+    <div id="taskList"><div style="text-align:center;color:var(--t3);padding:30px 0" data-i="loading">Loading...</div></div>
+  </div>
+</div>
+<!-- FRIENDS -->
+<div class="tab" id="tab-friends">
+  <div class="ws">
+    <div class="wsi"><div class="wsv" id="totalFriendsVal">0</div><div class="wsl" data-i="totalFriends">Total Friends</div></div>
+    <div class="wsi purple"><div class="wsv" id="weeklyFriendsVal">0</div><div class="wsl" data-i="thisWeek">This Week</div></div>
+    <div class="wsi green"><div class="wsv" id="friendsEarned">0</div><div class="wsl" data-i="trEarned">TR Earned</div></div>
+  </div>
+  <div class="re-card" id="refEarnCard" style="display:none">
+    <div class="re-ttl" data-i="refEarnings">🤑 REFERRAL EARNINGS</div>
+    <div class="re-amt" id="refEarnAmt">0 TR</div>
+    <div style="font-size:11px;color:rgba(68,255,136,.45);margin-bottom:14px" data-i="refPendingDesc">Pending from friends (30% share)</div>
+    <div id="refFriendRows"></div>
+    <button class="btn btn-ok" onclick="claimAllReferral()" style="width:100%;margin-top:12px;padding:13px">💰 <span data-i="claimAll">Claim All Earnings</span></button>
+  </div>
+  <div class="card">
+    <div class="sec-title" data-i="yourLink">YOUR REFERRAL LINK</div>
+    <div class="ref-box"><div class="ref-link" id="refLink">Loading...</div><button class="btn btn-outline btn-sm" onclick="copyRef()" data-i="copy">Copy</button></div>
+    <button class="btn btn-gold" onclick="shareRef()" style="width:100%">📤 <span data-i="inviteViaTelegram">Invite via Telegram</span></button>
+    <p style="font-size:11px;color:var(--t2);text-align:center;margin-top:8px" data-i="refDesc">Earn 30% of your friends' TR rewards</p>
+  </div>
+  <div class="lb-card">
+    <div class="lb-title" data-i="weeklyLB">🏆 WEEKLY LEADERBOARD</div>
+    <div class="lb-week" id="currentWeekLabel">Week —</div>
+    <div id="weeklyLeaderboard"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="loading">Loading...</div></div>
+  </div>
+  <div class="lb-card" style="border-color:rgba(255,184,0,.15)">
+    <div class="lb-title" style="color:var(--t2)" data-i="prevWeekLB">📜 PREVIOUS WEEK</div>
+    <div class="lb-week" id="prevWeekLabel">Week —</div>
+    <div id="prevWeeklyLeaderboard"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noData">No data</div></div>
+  </div>
+  <div class="sec-title" data-i="yourFriends">YOUR FRIENDS</div>
+  <div id="friendsList"></div>
+</div>
+<!-- WALLET -->
+<div class="tab" id="tab-wallet">
+  <div class="bal-card" style="margin-bottom:12px">
+    <div class="bal-label" data-i="walletBalance">WALLET BALANCE</div>
+    <div class="bal-coins" id="walletCoins">0</div>
+    <div class="bal-ton">TON: <span id="walletTon" style="color:var(--ton)">0.0000</span></div>
+  </div>
+  <div class="tn">💡 <b data-i="tonCoinNote">TON coins</b> <span data-i="tonCoinNoteDesc">are used for advertising and creating checks. TR coins are your task rewards.</span></div>
+  <div class="wc-card">
+    <div class="sec-title" style="color:var(--ton);margin-bottom:12px" data-i="tonWallet">🔗 TON WALLET</div>
+    <div id="walletConnectStatus"></div>
+    <div id="tc-btn-wrap" style="margin-top:10px"></div>
+    <div id="walletManualForm" style="margin-top:8px"></div>
+  </div>
+  <div class="cc">
+    <div class="sec-title" style="color:var(--ton)" data-i="convertTitle">⇄ CONVERT TR → TON</div>
+    <div class="cr"><b>1,000,000 TR</b> = <b style="color:var(--ton)">0.15 TON</b></div>
+    <div class="cp"><span class="cp-l" data-i="youReceive">You receive</span><div class="cp-v"><span id="convPrev">0.0000</span> <span style="font-size:12px;color:var(--t2)">TON</span></div></div>
+    <div class="cw"><input type="number" id="convAmt" placeholder="Enter TR amount..." min="1000000" step="100000" oninput="updateConvPrev()" style="margin-bottom:0"><span class="csfx">TR</span></div>
+    <div style="font-size:10px;color:var(--t3);text-align:center;margin:4px 0 10px" data-i="minConvert">Minimum: 1,000,000 TR</div>
+    <button class="btn btn-ton" onclick="doConvert()" style="width:100%;padding:12px" data-i="convertNow">Convert Now</button>
+  </div>
+  <div class="card">
+    <div class="sec-title" data-i="topUpTON">TOP UP TON</div>
+    <input type="number" id="topupTonAmt" placeholder="Amount in TON..." min="0.5" step="0.1" style="margin-bottom:12px">
+    <div class="tm-btn" style="border-color:rgba(255,184,0,.25)" onclick="topUp('xrocket')"><div class="tm-icon">🚀</div><div class="tm-info"><div class="tm-name">xRocket Pay</div><div class="tm-desc" data-i="xrocketDesc">Pay with TON via xRocket</div></div><div style="color:var(--t3);font-size:16px">›</div></div>
+    <div class="tm-btn" style="border-color:rgba(0,152,234,.25)" onclick="topUp('ton_wallet')"><div class="tm-icon">💎</div><div class="tm-info"><div class="tm-name" data-i="tonWalletMethod">TON Wallet</div><div class="tm-desc" data-i="tonWalletDesc">Direct TON transfer</div></div><div style="color:var(--t3);font-size:16px">›</div></div>
+    <div class="tm-btn" style="border-color:rgba(255,165,0,.25)" onclick="topUp('stars')"><div class="tm-icon">⭐</div><div class="tm-info"><div class="tm-name" data-i="starsMethod">Telegram Stars</div><div class="tm-desc" data-i="starsDesc">65 Stars = 1 TON</div></div><div style="color:var(--t3);font-size:16px">›</div></div>
+    <p style="font-size:10px;color:var(--t3);text-align:center" data-i="topupMinNote">Minimum: 0.50 TON or 50 Stars</p>
+  </div>
+  <div class="card">
+    <div class="sec-title" data-i="withdrawTR">WITHDRAW TR COINS</div>
+    <div class="tier-grid" id="tierGrid"></div>
+    <input type="text" id="walletAddr" placeholder="TON wallet address (EQ...)" data-ph="walletAddrPH" style="margin-bottom:10px">
+    <button class="btn btn-gold" onclick="doWithdraw()" style="width:100%" data-i="withdrawNow">Withdraw Now</button>
+    <p style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px" data-i="withdrawNote">Processed within 24 hours. 0.03 TON fee.</p>
+  </div>
+  <div class="sec-title" data-i="txHistory">TRANSACTION HISTORY</div>
+  <div id="txList"></div>
+</div>
+<!-- CHECK -->
+<div class="tab" id="tab-check">
+  <div class="chk-card create">
+    <div class="sec-title" style="color:var(--ok)" data-i="createCheck">🧾 CREATE TON CHECK</div>
+    <p style="font-size:11px;color:var(--t2);margin-bottom:14px" data-i="createCheckDesc">Create a TON check that others can claim</p>
+    <div class="ct-grid">
+      <div class="ct-btn selected" id="ct-personal" onclick="selectCheckType('personal')"><div class="ct-icon">👤</div><div class="ct-name" data-i="personal">Personal</div><div class="ct-desc" data-i="personalDesc">Only 1 person claims</div></div>
+      <div class="ct-btn" id="ct-multi" onclick="selectCheckType('multi')"><div class="ct-icon">👥</div><div class="ct-name" data-i="multiple">Multiple</div><div class="ct-desc" data-i="multipleDesc">Split among many</div></div>
+    </div>
+    <div class="cw" style="margin-bottom:10px"><input type="number" id="checkAmt" placeholder="Amount in TON..." min="0.01" step="0.01" oninput="updateCheckPreview()" style="margin-bottom:0"><span class="csfx">TON</span></div>
+    <div id="checkMultiWrap" style="display:none">
+      <input type="number" id="checkPeople" placeholder="Number of recipients..." min="2" step="1" oninput="updateCheckPreview()">
+      <div style="background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.15);border-radius:var(--r);padding:10px;margin-bottom:10px;font-size:12px;color:var(--t2)"><span data-i="eachReceives">Each receives:</span> <b id="checkPerPerson" style="color:var(--ton)">—</b> TON</div>
+    </div>
+    <div style="background:rgba(68,255,136,.08);border:1px solid rgba(68,255,136,.12);border-radius:var(--r);padding:10px;margin-bottom:12px;font-size:11px;color:var(--t2)" data-i="checkTip">💡 TON deducted from balance. New claimers become your referrals!</div>
+    <button class="btn btn-ok" onclick="createCheck()" style="width:100%;padding:13px" data-i="createCheckBtn">🧾 Create Check</button>
+  </div>
+  <div class="sec-title" data-i="myChecks">MY CHECKS</div>
+  <div id="myChecksList"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noChecksYet">No checks created yet</div></div>
+  <div class="sec-title" style="color:var(--ton)" data-i="receivedChecks">RECEIVED CHECKS</div>
+  <div id="receivedChecksList"><div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noChecksClaim">No checks to claim</div></div>
+</div>
+</div><!-- /scroll -->
+<nav class="nav">
+  <div class="nav-item active" id="nav-home" onclick="goTab('home')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" stroke="#888" stroke-width="1.8"/><path d="M9 21V12h6v9" stroke="#888" stroke-width="1.8"/></svg><span data-i="navHome">Home</span></div>
+  <div class="nav-item" id="nav-tasks" onclick="goTab('tasks')"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="#888" stroke-width="1.8"/><path d="M8 12h8M8 8h8M8 16h5" stroke="#888" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i="navTasks">Tasks</span></div>
+  <div class="nav-item" id="nav-check" onclick="goTab('check')"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#888" stroke-width="1.8"/><path d="M3 10h18M8 15h2M14 15h3" stroke="#888" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i="navCheck">Check</span></div>
+  <div class="nav-item" id="nav-friends" onclick="goTab('friends')"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="#888" stroke-width="1.8"/><path d="M3 20c0-4 3-6 6-6s6 2 6 6" stroke="#888" stroke-width="1.8"/><circle cx="17" cy="8" r="2.5" stroke="#888" stroke-width="1.8"/><path d="M21 20c0-3-2-5-4-5" stroke="#888" stroke-width="1.8"/></svg><span data-i="navFriends">Friends</span></div>
+  <div class="nav-item" id="nav-wallet" onclick="goTab('wallet')"><svg viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="15" rx="3" stroke="#888" stroke-width="1.8"/><path d="M2 10h20" stroke="#888" stroke-width="1.8"/><circle cx="16" cy="15" r="1.5" fill="#888"/></svg><span data-i="navWallet">Wallet</span></div>
+</nav>
+<!-- OVERLAYS -->
+<div class="overlay" id="adOverlay" style="display:none"><div class="ov-box"><button class="ov-close" onclick="closeAd()">✕</button><div class="ov-title" data-i="advertise">ADVERTISE</div><div class="adt"><div class="adt-item active" onclick="switchAdTab('add')" data-i="addTask">Add Task</div><div class="adt-item" onclick="switchAdTab('my')" data-i="myTasks">My Tasks</div></div><div id="adTabAdd"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:12px;color:var(--t2)" data-i="tonBalLabel">TON Balance:</span><span style="font-size:15px;font-weight:700;color:var(--ton)"><span id="adBal">0.0000</span> TON</span></div><input type="text" id="adName" placeholder="Task name..." data-ph="taskNamePH"><select id="adType" onchange="updateAdCostDisplay()"><option value="visit" data-i-opt="visitOpt">Visit Website (+3000 TR)</option><option value="channel" data-i-opt="channelOpt">Join Channel (+5000 TR)</option><option value="group" data-i-opt="groupOpt">Join Group (+5000 TR)</option><option value="game" data-i-opt="gameOpt">Play Game (+5000 TR)</option><option value="daily" data-i-opt="dailyOpt">Daily Task</option></select><input type="text" id="adUrl" placeholder="Target URL (https://...)"><div id="adLimitWrap"><select id="adLimit" onchange="updateAdCostDisplay()"><option value="500">500 completions — 0.5 TON</option><option value="1000" selected>1000 completions — 1 TON</option><option value="2000">2000 completions — 2 TON</option><option value="5000">5000 completions — 5 TON</option><option value="10000">10000 completions — 10 TON</option></select></div><div id="adDailyWrap" style="display:none"><input type="number" id="adDays" placeholder="Number of days..." min="1" step="1" oninput="updateAdCostDisplay()"><div style="font-size:11px;color:var(--t2);margin-bottom:10px" data-i="dailyCostNote">Cost: 5 TON per day</div></div><div style="background:var(--bg3);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--t2)"><span data-i="costLabel">Cost:</span> <b id="adCost" style="color:var(--gold)">1.000 TON</b></div><button class="btn btn-gold" onclick="publishTask()" style="width:100%" data-i="publishTask">Publish Task</button></div><div id="adTabMy" style="display:none"><div id="myTasksList"></div></div></div></div>
+<div class="overlay" id="confirmOverlay" style="display:none"><div class="ov-box"><button class="ov-close" onclick="closeConfirm()">✕</button><div class="ov-title" data-i="confirmWithdraw">CONFIRM WITHDRAWAL</div><div id="confirmBody"></div><div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-outline" onclick="closeConfirm()" style="flex:1" data-i="cancel">Cancel</button><button class="btn btn-gold" onclick="confirmWithdraw()" style="flex:1" data-i="confirm">Confirm</button></div></div></div>
+<div class="overlay" id="topupXrocketOverlay" style="display:none"><div class="ov-box"><button class="ov-close" onclick="closeAllTopups()">✕</button><div class="ov-title">🚀 XROCKET PAY</div><div style="font-size:20px;font-weight:700;color:var(--ton);text-align:center;margin-bottom:16px"><span id="xrocketAmt">0</span> TON</div><div style="background:rgba(255,184,0,.08);border:1px solid rgba(255,184,0,.15);border-radius:var(--r);padding:12px;margin-bottom:14px;font-size:12px;color:var(--t2)" data-i="xrocketInfo">✅ 1 TON = 1 TON credited automatically after payment confirmation.</div><button class="btn btn-gold" onclick="confirmXrocketTopup()" style="width:100%;padding:14px" data-i="openXrocket">Open xRocket Pay</button></div></div>
+<div class="overlay" id="topupTonWalletOverlay" style="display:none"><div class="ov-box"><button class="ov-close" onclick="closeAllTopups()">✕</button><div class="ov-title">💎 TON WALLET TOP-UP</div><div id="tonWalletTopupContent"></div></div></div>
+<div class="overlay" id="topupStarsOverlay" style="display:none"><div class="ov-box"><button class="ov-close" onclick="closeAllTopups()">✕</button><div class="ov-title">⭐ TELEGRAM STARS</div><div id="starsTopupContent"></div></div></div>
+<div class="overlay" id="verifyOverlay" style="display:none"><div class="ov-box"><button class="ov-close" onclick="closeVerify()">✕</button><div class="ov-title" data-i="verifyTitle">VERIFY MEMBERSHIP</div><p style="font-size:13px;color:var(--t2);text-align:center;margin-bottom:20px" data-i="verifyDesc">Join the channel/group then tap I've Joined</p><div style="display:flex;flex-direction:column;gap:10px"><button class="btn btn-outline" onclick="openVerifyLink()" data-i="openLink">Open Link</button><button class="btn btn-gold" onclick="verifyJoin()" data-i="iJoined">✅ I've Joined</button></div></div></div>
+<div class="overlay" id="convOverlay" style="display:none"><div class="ov-box"><button class="ov-close" onclick="closeConvert()">✕</button><div class="ov-title" data-i="confirmConvert">CONFIRM CONVERT</div><div id="convConfirmBody"></div><div style="display:flex;gap:8px;margin-top:16px"><button class="btn btn-outline" onclick="closeConvert()" style="flex:1" data-i="cancel">Cancel</button><button class="btn btn-ton" onclick="confirmConvert()" style="flex:1" data-i="confirm">Confirm</button></div></div></div>
+<div class="overlay" id="checkCreatedOverlay" style="display:none"><div class="ov-box" style="text-align:center"><button class="ov-close" onclick="closeCheckCreated()">✕</button><div class="ov-title" data-i="checkCreated">✅ CHECK CREATED!</div><div style="font-size:40px;margin:12px 0">🧾</div><div style="font-size:13px;color:var(--t2);margin-bottom:8px" data-i="yourCheckLink">Your check link:</div><div id="newCheckLink" style="background:var(--bg3);border:1px solid rgba(255,184,0,.2);border-radius:var(--r);padding:12px;font-family:monospace;font-size:11px;color:var(--gold);word-break:break-all;margin-bottom:16px"></div><div style="display:flex;gap:8px"><button class="btn btn-outline" onclick="copyCheckLink()" style="flex:1" data-i="copyBtn">📋 Copy</button><button class="btn btn-gold" onclick="shareCheckLink()" style="flex:1" data-i="shareBtn">📤 Share</button></div></div></div>
+<div class="overlay" id="claimCheckOverlay" style="display:none"><div class="ov-box" style="text-align:center"><button class="ov-close" onclick="closeClaimCheck()">✕</button><div class="ov-title" data-i="claimCheck">💎 CLAIM CHECK</div><div class="clm-card"><div class="clm-sub" data-i="aboutToReceive">You are about to receive</div><div class="clm-amt" id="claimCheckAmt">0 TON</div><div class="clm-sub" id="claimCheckInfo">Personal check</div></div><button class="btn btn-ton" onclick="confirmClaimCheck()" style="width:100%;padding:14px;font-size:15px" data-i="claimNow">💰 Claim Now</button></div></div>
+<div id="toast"></div>
+</div>
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-const API         = 'https://trewards-backend.onrender.com';
-const TON_WALLET  = 'YOUR_TON_RECEIVING_WALLET_ADDRESS'; // ← replace with your TON address
-const tg          = window.Telegram?.WebApp;
-const ADSGRAM_ID  = '26241';
-const MONETAG_FN  = 'show_10801469';
+const API='https://trewards-backend.onrender.com';
+const TON_WALLET='YOUR_TON_RECEIVING_WALLET_ADDRESS';
+const tg=window.Telegram?.WebApp;
+const ADSGRAM_ID='26241';
+const MONETAG_FN='show_10801469';
 
-// ─── TON Connect init ─────────────────────────────────────────────────────────
-let tonConnectUI = null;
-let tcWalletAddr = null;
-
-function initTonConnect() {
-  try {
-    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-      manifestUrl: `${location.origin}/tonconnect-manifest.json`,
-      buttonRootId: 'tc-btn-wrap',
+// ── TON Connect ───────────────────────────────────────────────────────────────
+let tonConnectUI=null,tcWalletAddr=null;
+function initTonConnect(){
+  try{
+    tonConnectUI=new TON_CONNECT_UI.TonConnectUI({manifestUrl:location.origin+'/tonconnect-manifest.json',buttonRootId:'tc-btn-wrap'});
+    tonConnectUI.onStatusChange(w=>{
+      if(w){
+        tcWalletAddr=w.account.address;
+        if(initData)api('POST','/api/connect-wallet',{init_data:initData,wallet_address:tcWalletAddr})
+          .then(()=>{if(userData)userData.ton_wallet_address=tcWalletAddr;renderWCS();toast(lang==='ru'?'✅ Кошелёк подключён!':'✅ Wallet connected!','ok');})
+          .catch(()=>{});
+        else{if(userData)userData.ton_wallet_address=tcWalletAddr;renderWCS();}
+      }else{tcWalletAddr=null;if(userData)userData.ton_wallet_address=null;renderWCS();}
     });
-    tonConnectUI.onStatusChange(wallet => {
-      if (wallet) {
-        tcWalletAddr = wallet.account.address;
-        // Save to backend
-        if (initData) {
-          api('POST', '/api/connect-wallet', { init_data: initData, wallet_address: tcWalletAddr })
-            .then(() => {
-              if (userData) userData.ton_wallet_address = tcWalletAddr;
-              renderWalletConnectStatus();
-              toast(lang === 'ru' ? '✅ Кошелёк подключён!' : '✅ Wallet connected!', 'ok');
-            })
-            .catch(() => {});
-        } else {
-          if (userData) userData.ton_wallet_address = tcWalletAddr;
-          renderWalletConnectStatus();
-        }
-      } else {
-        tcWalletAddr = null;
-        if (userData) userData.ton_wallet_address = null;
-        renderWalletConnectStatus();
-      }
-    });
-    // Restore existing connection
-    if (tonConnectUI.wallet) {
-      tcWalletAddr = tonConnectUI.wallet.account.address;
-    }
-  } catch (e) {
-    console.warn('TON Connect init failed:', e);
+    if(tonConnectUI.wallet)tcWalletAddr=tonConnectUI.wallet.account.address;
+  }catch(e){console.warn('TON Connect:',e);}
+}
+function renderWCS(){
+  const s=_q('walletConnectStatus'),m=_q('walletManualForm');if(!s)return;
+  const addr=tcWalletAddr||userData?.ton_wallet_address;
+  if(addr){
+    const sh=addr.length>16?addr.slice(0,8)+'...'+addr.slice(-6):addr;
+    s.innerHTML=`<div class="wst on"><div class="wdot on"></div>${T[lang].connected}: <span style="font-family:monospace;font-size:11px;margin-left:4px">${sh}</span></div><div class="w-addr">${addr}</div>`;
+    if(m)m.innerHTML=`<button class="btn btn-err btn-sm" onclick="disconnectTonWallet()" style="width:100%">🔌 ${T[lang].disconnectWallet}</button>`;
+  }else{
+    s.innerHTML=`<div class="wst off"><div class="wdot off"></div>${T[lang].notConnected}</div><p style="font-size:11px;color:var(--t2);margin:8px 0 4px">${T[lang].connectWalletDesc}</p>`;
+    if(m)m.innerHTML='';
   }
 }
-
-function renderWalletConnectStatus() {
-  const statusEl = document.getElementById('walletConnectStatus');
-  const manualEl = document.getElementById('walletManualForm');
-  if (!statusEl) return;
-  const addr = tcWalletAddr || userData?.ton_wallet_address;
-  if (addr) {
-    const short = addr.length > 16 ? addr.slice(0, 8) + '...' + addr.slice(-6) : addr;
-    statusEl.innerHTML = `
-      <div class="wallet-status connected">
-        <div class="wallet-dot on"></div>
-        ${T[lang].connected}: <span style="font-family:monospace;font-size:11px;margin-left:4px">${short}</span>
-      </div>
-      <div class="wallet-addr-box">${addr}</div>`;
-    if (manualEl) manualEl.innerHTML = `
-      <button class="btn btn-err btn-sm" onclick="disconnectTonWallet()" style="width:100%">
-        🔌 ${T[lang].disconnectWallet}
-      </button>`;
-  } else {
-    statusEl.innerHTML = `
-      <div class="wallet-status disconnected">
-        <div class="wallet-dot off"></div>
-        ${T[lang].notConnected}
-      </div>
-      <p style="font-size:11px;color:var(--t2);margin:8px 0 4px">${T[lang].connectWalletDesc}</p>`;
-    if (manualEl) manualEl.innerHTML = '';
-  }
+async function disconnectTonWallet(){
+  try{if(tonConnectUI)await tonConnectUI.disconnect();}catch(e){}
+  if(initData)await api('POST','/api/disconnect-wallet',{init_data:initData}).catch(()=>{});
+  tcWalletAddr=null;if(userData)userData.ton_wallet_address=null;renderWCS();
+  toast(lang==='ru'?'Кошелёк отключён':'Wallet disconnected','ok');
 }
 
-async function disconnectTonWallet() {
-  try {
-    if (tonConnectUI) await tonConnectUI.disconnect();
-  } catch (e) {}
-  if (initData) {
-    await api('POST', '/api/disconnect-wallet', { init_data: initData }).catch(() => {});
-  }
-  tcWalletAddr = null;
-  if (userData) userData.ton_wallet_address = null;
-  renderWalletConnectStatus();
-  toast(lang === 'ru' ? 'Кошелёк отключён' : 'Wallet disconnected', 'ok');
-}
-
-// ─── AdsGram init ─────────────────────────────────────────────────────────────
-let AdsgramController = null;
-function initAdsgram() {
-  try {
-    if (window.Adsgram) {
-      AdsgramController = window.Adsgram.init({ blockId: ADSGRAM_ID });
-    }
-  } catch (e) { console.warn('AdsGram init failed', e); }
-}
-
-// ─── Alternate ad platform ────────────────────────────────────────────────────
-let _adPlatformIdx = 0;
-
-async function showRewardedAd() {
-  return new Promise(resolve => {
-    const useMonetag = (_adPlatformIdx % 2 === 0);
-    _adPlatformIdx++;
-
-    const timeout = setTimeout(() => tryOther(), 8000);
-
-    function tryOther() {
-      clearTimeout(timeout);
-      if (useMonetag && AdsgramController) {
-        AdsgramController.show().then(() => resolve(true)).catch(() => resolve(false));
-      } else if (!useMonetag && typeof window[MONETAG_FN] === 'function') {
-        window[MONETAG_FN]().then(() => resolve(true)).catch(() => resolve(false));
-      } else {
-        resolve(false);
-      }
-    }
-
-    if (useMonetag && typeof window[MONETAG_FN] === 'function') {
-      window[MONETAG_FN]()
-        .then(() => { clearTimeout(timeout); resolve(true); })
-        .catch(() => tryOther());
-    } else if (!useMonetag && AdsgramController) {
-      AdsgramController.show()
-        .then(() => { clearTimeout(timeout); resolve(true); })
-        .catch(() => tryOther());
-    } else {
-      tryOther();
-    }
+// ── Ads ───────────────────────────────────────────────────────────────────────
+let AdsgramController=null;
+function initAdsgram(){try{if(window.Adsgram)AdsgramController=window.Adsgram.init({blockId:ADSGRAM_ID});}catch(e){}}
+let _adIdx=0;
+async function showRewardedAd(){
+  return new Promise(resolve=>{
+    const useMon=(_adIdx%2===0);_adIdx++;
+    const timer=setTimeout(()=>tryOther(),8000);
+    function tryOther(){clearTimeout(timer);if(useMon&&AdsgramController)AdsgramController.show().then(()=>resolve(true)).catch(()=>resolve(false));else if(!useMon&&typeof window[MONETAG_FN]==='function')window[MONETAG_FN]().then(()=>resolve(true)).catch(()=>resolve(false));else resolve(false);}
+    if(useMon&&typeof window[MONETAG_FN]==='function')window[MONETAG_FN]().then(()=>{clearTimeout(timer);resolve(true);}).catch(()=>tryOther());
+    else if(!useMon&&AdsgramController)AdsgramController.show().then(()=>{clearTimeout(timer);resolve(true);}).catch(()=>tryOther());
+    else tryOther();
   });
 }
-
-// ─── Watch Ads (10s timer, unlimited) ────────────────────────────────────────
-const AD_DEF = [
-  { id: 'ad1', name: 'Watch & Earn', reward: 2500, dur: 10 },
-  { id: 'ad2', name: 'Bonus Ad',     reward: 2500, dur: 10 },
-];
-const adState = {};
-
-function adBtnHTML(id) {
-  const s = adState[id] || { s: 'idle' };
-  if (s.s === 'idle')     return `<button class="watch-btn" onclick="startWatchAd('${id}')">${T[lang].watch}</button>`;
-  if (s.s === 'counting') return `<button class="watch-btn" disabled>${s.rem}s</button>`;
-  if (s.s === 'ready')    return `<button class="watch-btn claimable" onclick="claimWatchAd('${id}')">${T[lang].claim}</button>`;
-  return '';
+const AD_DEF=[{id:'ad1',name:'Watch & Earn',reward:2500,dur:10},{id:'ad2',name:'Bonus Ad',reward:2500,dur:10}];
+const adState={};
+function adBtnHTML(id){const s=adState[id]||{s:'idle'};if(s.s==='idle')return`<button class="wb-btn" onclick="startWatchAd('${id}')">${T[lang].watch}</button>`;if(s.s==='counting')return`<button class="wb-btn" disabled>${s.rem}s</button>`;if(s.s==='ready')return`<button class="wb-btn claimable" onclick="claimWatchAd('${id}')">${T[lang].claim}</button>`;return'';}
+function refreshAdBtn(id){const w=_q('adwrap-'+id);if(w)w.innerHTML=adBtnHTML(id);}
+async function startWatchAd(id){
+  const ad=AD_DEF.find(a=>a.id===id);if(!ad||(adState[id]||{}).s==='counting')return;
+  adState[id]={s:'counting',rem:ad.dur};refreshAdBtn(id);
+  const useMon=(_adIdx%2===0);_adIdx++;
+  try{if(useMon&&typeof window[MONETAG_FN]==='function')window[MONETAG_FN]().catch(()=>{});else if(AdsgramController)AdsgramController.show().catch(()=>{});}catch(e){}
+  const iv=setInterval(()=>{adState[id].rem--;refreshAdBtn(id);if(adState[id].rem<=0){clearInterval(iv);adState[id]={s:'ready'};refreshAdBtn(id);}},1000);
 }
-
-function refreshAdBtn(id) {
-  const w = document.getElementById('adwrap-' + id);
-  if (w) w.innerHTML = adBtnHTML(id);
+async function claimWatchAd(id){
+  const ad=AD_DEF.find(a=>a.id===id);if(!ad||(adState[id]||{}).s!=='ready')return;
+  adState[id]={s:'idle'};refreshAdBtn(id);
+  if(!initData){userData.coins=(userData.coins||0)+ad.reward;updateUI();toast('+'+ad.reward.toLocaleString()+' TR!','ok');return;}
+  try{const r=await api('POST','/api/watch-ad',{init_data:initData,ad_id:id});userData.coins=r.new_balance;updateUI();toast('+'+r.coins_earned.toLocaleString()+' TR!','ok');}
+  catch(e){userData.coins=(userData.coins||0)+ad.reward;updateUI();toast('+'+ad.reward.toLocaleString()+' TR!','ok');}
 }
+let _tapCount=0;document.addEventListener('click',()=>{_tapCount++;if(_tapCount%15===0)showRewardedAd().catch(()=>{});});
 
-async function startWatchAd(id) {
-  const ad = AD_DEF.find(a => a.id === id);
-  if (!ad || (adState[id] || {}).s === 'counting') return;
-
-  adState[id] = { s: 'counting', rem: ad.dur };
-  refreshAdBtn(id);
-
-  // Show ad (non-blocking)
-  const useMon = (_adPlatformIdx % 2 === 0);
-  _adPlatformIdx++;
-  try {
-    if (useMon && typeof window[MONETAG_FN] === 'function') window[MONETAG_FN]().catch(() => {});
-    else if (AdsgramController) AdsgramController.show().catch(() => {});
-    else if (typeof window[MONETAG_FN] === 'function') window[MONETAG_FN]().catch(() => {});
-  } catch (e) {}
-
-  const iv = setInterval(() => {
-    adState[id].rem--;
-    refreshAdBtn(id);
-    if (adState[id].rem <= 0) {
-      clearInterval(iv);
-      adState[id] = { s: 'ready' };
-      refreshAdBtn(id);
-    }
-  }, 1000);
-}
-
-async function claimWatchAd(id) {
-  const ad = AD_DEF.find(a => a.id === id);
-  if (!ad || (adState[id] || {}).s !== 'ready') return;
-  adState[id] = { s: 'idle' };
-  refreshAdBtn(id);
-  if (!initData) {
-    userData.coins = (userData.coins || 0) + ad.reward;
-    updateUI();
-    toast('+' + ad.reward.toLocaleString() + ' TR!', 'ok');
-    return;
-  }
-  try {
-    const r = await api('POST', '/api/watch-ad', { init_data: initData, ad_id: id });
-    userData.coins = r.new_balance;
-    updateUI();
-    toast('+' + r.coins_earned.toLocaleString() + ' TR!', 'ok');
-  } catch (e) {
-    userData.coins = (userData.coins || 0) + ad.reward;
-    updateUI();
-    toast('+' + ad.reward.toLocaleString() + ' TR!', 'ok');
-  }
-}
-
-// ─── Every 15 taps → background ad ───────────────────────────────────────────
-let _tapCount = 0;
-document.addEventListener('click', () => {
-  _tapCount++;
-  if (_tapCount % 15 === 0) showRewardedAd().catch(() => {});
-});
-
-// ─── i18n ─────────────────────────────────────────────────────────────────────
-const T = {
-  en: {
-    balance:'TR BALANCE', days:'days', spins:'spins',
-    dailyStreak:'DAILY STREAK', streakDesc:'Claim daily for +1,000 TR + 1 spin',
-    claimStreak:'Claim Streak', spinWheel:'SPIN WHEEL',
-    spinsLeft:'Spins available:', spinNow:'SPIN NOW',
-    quickActions:'QUICK ACTIONS', inviteFriend:'Invite Friend',
-    withdraw:'Withdraw', earnMore:'Earn More', tonCheck:'TON Check',
-    promoCode:'PROMO CODE', enterCode:'Enter code...', redeem:'Redeem',
-    dailyTasks:'📅 DAILY TASKS', dailyTaskDesc:'+5,000 TR + 1 spin each (resets daily)',
-    tasksTitle:'ADVERTISER TASKS', loading:'Loading...',
-    filterAll:'All', filterDaily:'📅 Daily', filterChannel:'Channel',
-    filterGroup:'Group', filterGame:'Game', filterVisit:'Website',
-    totalFriends:'Total Friends', thisWeek:'This Week', trEarned:'TR Earned',
-    refEarnings:'🤑 REFERRAL EARNINGS', refPendingDesc:'Pending from friends (30% share)',
-    refDesc:"Earn 30% of your friends' TR rewards",
-    claimAll:'Claim All Earnings', yourLink:'YOUR REFERRAL LINK',
-    copy:'Copy', inviteViaTelegram:'Invite via Telegram',
-    weeklyLB:'🏆 WEEKLY LEADERBOARD', prevWeekLB:'📜 PREVIOUS WEEK',
-    noData:'No data', yourFriends:'YOUR FRIENDS',
-    walletBalance:'WALLET BALANCE',
-    tonCoinNote:'TON coins', tonCoinNoteDesc:'are used for advertising and creating checks. TR coins are your task rewards.',
-    tonWallet:'🔗 TON WALLET', convertTitle:'⇄ CONVERT TR → TON',
-    youReceive:'You receive', enterTR:'Enter TR amount...',
-    minConvert:'Minimum: 1,000,000 TR', convertNow:'Convert Now',
-    topUpTON:'TOP UP TON', amountTON:'Amount in TON...',
-    xrocketDesc:'Pay with TON via xRocket', tonWalletMethod:'TON Wallet',
-    tonWalletDesc:'Direct TON transfer', starsMethod:'Telegram Stars',
-    starsDesc:'65 Stars = 1 TON', topupMinNote:'Minimum: 0.50 TON or 50 Stars',
-    withdrawTR:'WITHDRAW TR COINS', walletAddrPH:'TON wallet address (EQ...)',
-    withdrawNow:'Withdraw Now', withdrawNote:'Processed within 24 hours. 0.03 TON fee deducted.',
-    txHistory:'TRANSACTION HISTORY',
-    createCheck:'🧾 CREATE TON CHECK', createCheckDesc:'Create a TON check that others can claim',
-    personal:'Personal', personalDesc:'Only 1 person claims',
-    multiple:'Multiple', multipleDesc:'Split among many',
-    numRecipients:'Number of recipients...',
-    eachReceives:'Each receives:',
-    checkTip:'💡 TON will be deducted from your balance. New users claiming your check become your referrals!',
-    createCheckBtn:'🧾 Create Check', myChecks:'MY CHECKS',
-    noChecksYet:'No checks created yet', receivedChecks:'RECEIVED CHECKS',
-    noChecksClaim:'No checks to claim',
-    navHome:'Home', navTasks:'Tasks', navCheck:'Check',
-    navFriends:'Friends', navWallet:'Wallet',
-    adTask:'TASK', advertise:'ADVERTISE', addTask:'Add Task', myTasks:'My Tasks',
-    tonBalLabel:'TON Balance:', taskNamePH:'Task name...',
-    dailyCostNote:'Cost: 5 TON per day', costLabel:'Cost:',
-    numDaysPH:'Number of days (e.g. 7)...', publishTask:'Publish Task',
-    confirmWithdraw:'CONFIRM WITHDRAWAL', cancel:'Cancel', confirm:'Confirm',
-    xrocketAmtLabel:'Amount:', xrocketMinNote:'Minimum: 0.50 TON',
-    xrocketInfo:'✅ 1 TON = 1 TON credited automatically after payment confirmation.',
-    openXrocket:'Open xRocket Pay',
-    verifyTitle:'VERIFY MEMBERSHIP', verifyDesc:"Join the channel/group then tap I've Joined",
-    openLink:'Open Link', iJoined:"✅ I've Joined",
-    confirmConvert:'CONFIRM CONVERT',
-    checkCreated:'✅ CHECK CREATED!', yourCheckLink:'Your check link:',
-    copyBtn:'📋 Copy', shareBtn:'📤 Share',
-    claimCheck:'💎 CLAIM CHECK', aboutToReceive:'You are about to receive',
-    claimNow:'💰 Claim Now',
-    connectWalletDesc:'Connect your TON wallet to enable direct top-ups & track payments',
-    connected:'Connected', notConnected:'No wallet connected',
-    disconnectWallet:'🔌 Disconnect Wallet',
-    watchAds:'WATCH ADS', watch:'Watch', claim:'Claim', start:'Start', done:'✓',
-    daily_checkin:'Daily Check-In', daily_update:'Check for Updates', daily_share:'Share with Friends',
-    receivingAddr:'Send TON to this address:', mustEnterComment:'⚠️ MANDATORY COMMENT/MEMO:',
-    commentWarn:'⛔ Must include this comment or your TON will be LOST!',
-    copyAddr:'📋 Copy Address', copyCommentID:'📋 Copy Comment ID',
-    tonAutoNote:'⚠️ TON is credited automatically after 1-2 blockchain confirmations. Without the exact comment your funds cannot be matched.',
-    starsRate:'⭐ 65 Stars = 1 TON · Minimum 50 Stars',
-    starsOrAmount:'Enter Stars amount (min 50)...',
-    starsViaBot:'Send /stars to @treward_ton_bot to pay with Telegram Stars. Your balance will be credited automatically.',
-    payStarsBtn:'⭐ Pay via Telegram Bot',
-    noTransactions:'No transactions yet', noFriendsYet:'No friends yet',
-    noTasksAvail:'No tasks available',
-    visitOpt:'Visit Website (+3000 TR +1 Spin)', channelOpt:'Join Channel (+5000 TR +1 Spin)',
-    groupOpt:'Join Group (+5000 TR +1 Spin)', gameOpt:'Play Game Bot (+5000 TR +1 Spin)',
-    dailyOpt:'Daily Task (shown every day)',
-    connectWalletFirst:'Please connect your TON wallet first to use direct top-up',
-    tcConnectBtn:'🔗 Connect TON Wallet',
-    payPopupTitle:'💎 TON Payment Details',
-    payBefore:'Before you pay — important!',
-    payStep1:'1. Copy your unique Comment ID below',
-    payStep2:'2. Open your TON wallet app',
-    payStep3:'3. Send TON to the address shown',
-    payStep4:'4. Paste Comment ID in the memo/comment field',
-    openWalletApp:'📱 Open Wallet to Pay',
-  },
-  ru: {
-    balance:'TR БАЛАНС', days:'дней', spins:'вращений',
-    dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ', streakDesc:'+1,000 TR + 1 вращение каждый день',
-    claimStreak:'Получить бонус', spinWheel:'КОЛЕСО ФОРТУНЫ',
-    spinsLeft:'Вращений:', spinNow:'КРУТИТЬ',
-    quickActions:'БЫСТРЫЕ ДЕЙСТВИЯ', inviteFriend:'Пригласить',
-    withdraw:'Вывести', earnMore:'Заработать', tonCheck:'TON Чек',
-    promoCode:'ПРОМОКОД', enterCode:'Введите код...', redeem:'Применить',
-    dailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ', dailyTaskDesc:'+5,000 TR + 1 вращение (сброс ежедневно)',
-    tasksTitle:'ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ', loading:'Загрузка...',
-    filterAll:'Все', filterDaily:'📅 Ежедн.', filterChannel:'Канал',
-    filterGroup:'Группа', filterGame:'Игра', filterVisit:'Сайт',
-    totalFriends:'Всего друзей', thisWeek:'На этой неделе', trEarned:'TR Заработано',
-    refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ', refPendingDesc:'Ожидается от друзей (30% доля)',
-    refDesc:'Зарабатывайте 30% от наград друзей',
-    claimAll:'Получить всё', yourLink:'ВАША РЕФЕРАЛЬНАЯ ССЫЛКА',
-    copy:'Копировать', inviteViaTelegram:'Пригласить в Telegram',
-    weeklyLB:'🏆 ЕЖЕНЕДЕЛЬНЫЙ РЕЙТИНГ', prevWeekLB:'📜 ПРОШЛАЯ НЕДЕЛЯ',
-    noData:'Нет данных', yourFriends:'ВАШИ ДРУЗЬЯ',
-    walletBalance:'БАЛАНС КОШЕЛЬКА',
-    tonCoinNote:'TON монеты', tonCoinNoteDesc:'используются для рекламы и создания чеков. TR монеты — ваши награды за задания.',
-    tonWallet:'🔗 TON КОШЕЛЁК', convertTitle:'⇄ КОНВЕРТИРОВАТЬ TR → TON',
-    youReceive:'Вы получите', enterTR:'Введите количество TR...',
-    minConvert:'Минимум: 1 000 000 TR', convertNow:'Конвертировать',
-    topUpTON:'ПОПОЛНИТЬ TON', amountTON:'Сумма в TON...',
-    xrocketDesc:'Оплата TON через xRocket', tonWalletMethod:'TON Кошелёк',
-    tonWalletDesc:'Прямой перевод TON', starsMethod:'Telegram Stars',
-    starsDesc:'65 Stars = 1 TON', topupMinNote:'Минимум: 0.50 TON или 50 Stars',
-    withdrawTR:'ВЫВОД TR МОНЕТ', walletAddrPH:'TON адрес кошелька (EQ...)',
-    withdrawNow:'Вывести', withdrawNote:'Обработка в течение 24 часов. Комиссия 0.03 TON.',
-    txHistory:'ИСТОРИЯ ОПЕРАЦИЙ',
-    createCheck:'🧾 СОЗДАТЬ TON ЧЕК', createCheckDesc:'Создайте TON чек для получения другими',
-    personal:'Личный', personalDesc:'Только 1 человек получает',
-    multiple:'Групповой', multipleDesc:'Разделить между несколькими',
-    numRecipients:'Количество получателей...',
-    eachReceives:'Каждый получит:',
-    checkTip:'💡 TON спишется с вашего баланса. Новые пользователи, получившие ваш чек, станут вашими рефералами!',
-    createCheckBtn:'🧾 Создать чек', myChecks:'МОИ ЧЕКИ',
-    noChecksYet:'Чеки ещё не созданы', receivedChecks:'ПОЛУЧЕННЫЕ ЧЕКИ',
-    noChecksClaim:'Нет чеков для получения',
-    navHome:'Главная', navTasks:'Задания', navCheck:'Чек',
-    navFriends:'Друзья', navWallet:'Кошелёк',
-    adTask:'ЗАДАНИЕ', advertise:'РЕКЛАМА', addTask:'Добавить задание', myTasks:'Мои задания',
-    tonBalLabel:'Баланс TON:', taskNamePH:'Название задания...',
-    dailyCostNote:'Стоимость: 5 TON в день', costLabel:'Стоимость:',
-    numDaysPH:'Количество дней (напр. 7)...', publishTask:'Опубликовать',
-    confirmWithdraw:'ПОДТВЕРДИТЬ ВЫВОД', cancel:'Отмена', confirm:'Подтвердить',
-    xrocketAmtLabel:'Сумма:', xrocketMinNote:'Минимум: 0.50 TON',
-    xrocketInfo:'✅ 1 TON = 1 TON зачисляется автоматически после подтверждения.',
-    openXrocket:'Открыть xRocket Pay',
-    verifyTitle:'ПОДТВЕРДИТЬ УЧАСТИЕ', verifyDesc:'Вступите в канал/группу, затем нажмите Я вступил',
-    openLink:'Открыть ссылку', iJoined:'✅ Я вступил',
-    confirmConvert:'ПОДТВЕРДИТЬ КОНВЕРТАЦИЮ',
-    checkCreated:'✅ ЧЕК СОЗДАН!', yourCheckLink:'Ваша ссылка на чек:',
-    copyBtn:'📋 Копировать', shareBtn:'📤 Поделиться',
-    claimCheck:'💎 ПОЛУЧИТЬ ЧЕК', aboutToReceive:'Вы получите',
-    claimNow:'💰 Получить',
-    connectWalletDesc:'Подключите TON кошелёк для прямых пополнений и отслеживания платежей',
-    connected:'Подключён', notConnected:'Кошелёк не подключён',
-    disconnectWallet:'🔌 Отключить кошелёк',
-    watchAds:'СМОТРЕТЬ РЕКЛАМУ', watch:'Смотреть', claim:'Получить', start:'Начать', done:'✓',
-    daily_checkin:'Ежедневная отметка', daily_update:'Проверить обновления', daily_share:'Поделиться',
-    receivingAddr:'Отправьте TON на этот адрес:', mustEnterComment:'⚠️ ОБЯЗАТЕЛЬНЫЙ КОММЕНТАРИЙ:',
-    commentWarn:'⛔ Без этого комментария ваши TON будут потеряны навсегда!',
-    copyAddr:'📋 Копировать адрес', copyCommentID:'📋 Копировать ID',
-    tonAutoNote:'⚠️ TON зачисляется автоматически после 1-2 подтверждений блокчейна. Без правильного комментария средства не будут найдены.',
-    starsRate:'⭐ 65 Stars = 1 TON · Минимум 50 Stars',
-    starsOrAmount:'Введите количество Stars (мин. 50)...',
-    starsViaBot:'Отправьте /stars боту @treward_ton_bot для оплаты Stars. Баланс зачисляется автоматически.',
-    payStarsBtn:'⭐ Оплатить через Telegram бот',
-    noTransactions:'Операций пока нет', noFriendsYet:'Друзей пока нет',
-    noTasksAvail:'Нет доступных заданий',
-    visitOpt:'Посетить сайт (+3000 TR +1 вращение)', channelOpt:'Подписаться на канал (+5000 TR +1 вращение)',
-    groupOpt:'Вступить в группу (+5000 TR +1 вращение)', gameOpt:'Сыграть в игру (+5000 TR +1 вращение)',
-    dailyOpt:'Ежедневное задание (показывается каждый день)',
-    connectWalletFirst:'Сначала подключите TON кошелёк для прямого пополнения',
-    tcConnectBtn:'🔗 Подключить TON кошелёк',
-    payPopupTitle:'💎 Детали оплаты TON',
-    payBefore:'Перед оплатой — важно!',
-    payStep1:'1. Скопируйте ваш уникальный Comment ID ниже',
-    payStep2:'2. Откройте ваш TON кошелёк',
-    payStep3:'3. Отправьте TON на указанный адрес',
-    payStep4:'4. Вставьте Comment ID в поле комментария/заметки',
-    openWalletApp:'📱 Открыть кошелёк для оплаты',
-  }
+// ── i18n ──────────────────────────────────────────────────────────────────────
+const T={
+en:{balance:'TR BALANCE',days:'days',spins:'spins',dailyStreak:'DAILY STREAK',streakDesc:'Claim daily for +1,000 TR + 1 spin',claimStreak:'Claim Streak',spinWheel:'SPIN WHEEL',spinsLeft:'Spins available:',spinNow:'SPIN NOW',quickActions:'QUICK ACTIONS',inviteFriend:'Invite Friend',withdraw:'Withdraw',earnMore:'Earn More',tonCheck:'TON Check',promoCode:'PROMO CODE',enterCode:'Enter code...',redeem:'Redeem',dailyTasks:'📅 DAILY TASKS',dailyTaskDesc:'+5,000 TR + 1 spin each (resets daily)',tasksTitle:'ADVERTISER TASKS',loading:'Loading...',filterAll:'All',filterDaily:'📅 Daily',filterChannel:'Channel',filterGroup:'Group',filterGame:'Game',filterVisit:'Website',totalFriends:'Total Friends',thisWeek:'This Week',trEarned:'TR Earned',refEarnings:'🤑 REFERRAL EARNINGS',refPendingDesc:'Pending from friends (30% share)',refDesc:"Earn 30% of your friends' TR rewards",claimAll:'Claim All Earnings',yourLink:'YOUR REFERRAL LINK',copy:'Copy',inviteViaTelegram:'Invite via Telegram',weeklyLB:'🏆 WEEKLY LEADERBOARD',prevWeekLB:'📜 PREVIOUS WEEK',noData:'No data',yourFriends:'YOUR FRIENDS',walletBalance:'WALLET BALANCE',tonCoinNote:'TON coins',tonCoinNoteDesc:'are used for advertising and creating checks. TR coins are your task rewards.',tonWallet:'🔗 TON WALLET',convertTitle:'⇄ CONVERT TR → TON',youReceive:'You receive',minConvert:'Minimum: 1,000,000 TR',convertNow:'Convert Now',topUpTON:'TOP UP TON',xrocketDesc:'Pay with TON via xRocket',tonWalletMethod:'TON Wallet',tonWalletDesc:'Direct TON transfer',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Minimum: 0.50 TON or 50 Stars',withdrawTR:'WITHDRAW TR COINS',walletAddrPH:'TON wallet address (EQ...)',withdrawNow:'Withdraw Now',withdrawNote:'Processed within 24 hours. 0.03 TON fee.',txHistory:'TRANSACTION HISTORY',createCheck:'🧾 CREATE TON CHECK',createCheckDesc:'Create a TON check that others can claim',personal:'Personal',personalDesc:'Only 1 person claims',multiple:'Multiple',multipleDesc:'Split among many',eachReceives:'Each receives:',checkTip:'💡 TON deducted from balance. New claimers become your referrals!',createCheckBtn:'🧾 Create Check',myChecks:'MY CHECKS',noChecksYet:'No checks created yet',receivedChecks:'RECEIVED CHECKS',noChecksClaim:'No checks to claim',navHome:'Home',navTasks:'Tasks',navCheck:'Check',navFriends:'Friends',navWallet:'Wallet',adTask:'TASK',advertise:'ADVERTISE',addTask:'Add Task',myTasks:'My Tasks',tonBalLabel:'TON Balance:',taskNamePH:'Task name...',dailyCostNote:'Cost: 5 TON per day',costLabel:'Cost:',publishTask:'Publish Task',confirmWithdraw:'CONFIRM WITHDRAWAL',cancel:'Cancel',confirm:'Confirm',xrocketInfo:'✅ 1 TON = 1 TON credited automatically after payment confirmation.',openXrocket:'Open xRocket Pay',verifyTitle:'VERIFY MEMBERSHIP',verifyDesc:"Join the channel/group then tap I've Joined",openLink:'Open Link',iJoined:"✅ I've Joined",confirmConvert:'CONFIRM CONVERT',checkCreated:'✅ CHECK CREATED!',yourCheckLink:'Your check link:',copyBtn:'📋 Copy',shareBtn:'📤 Share',claimCheck:'💎 CLAIM CHECK',aboutToReceive:'You are about to receive',claimNow:'💰 Claim Now',connectWalletDesc:'Connect your TON wallet to enable direct top-ups',connected:'Connected',notConnected:'No wallet connected',disconnectWallet:'🔌 Disconnect Wallet',watchAds:'WATCH ADS',watch:'Watch',claim:'Claim',start:'Start',done:'✓',daily_checkin:'Daily Check-In',daily_update:'Check for Updates',daily_share:'Share with Friends',receivingAddr:'Send TON to this address:',mustEnterComment:'⚠️ MANDATORY COMMENT/MEMO:',commentWarn:'⛔ Without this comment your TON will be LOST!',copyAddr:'📋 Copy Address',copyCommentID:'📋 Copy Comment ID',tonAutoNote:'⚠️ TON credited automatically after blockchain confirmation. Wrong/missing comment = funds lost forever.',starsRate:'⭐ 65 Stars = 1 TON · Minimum 50 Stars',starsOrAmount:'Stars amount (min 50)...',starsViaBot:'Send /stars to @treward_ton_bot to pay with Stars. Balance credited automatically after payment.',payStarsBtn:'⭐ Pay via Telegram Bot',noTransactions:'No transactions yet',noFriendsYet:'No friends yet',noTasksAvail:'No tasks available',visitOpt:'Visit Website (+3000 TR +1 Spin)',channelOpt:'Join Channel (+5000 TR +1 Spin)',groupOpt:'Join Group (+5000 TR +1 Spin)',gameOpt:'Play Game Bot (+5000 TR +1 Spin)',dailyOpt:'Daily Task (shown every day)',connectWalletFirst:'Connect your TON wallet first',openWalletApp:'📱 Open Wallet to Pay'},
+ru:{balance:'TR БАЛАНС',days:'дней',spins:'вращений',dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ',streakDesc:'+1,000 TR + 1 вращение каждый день',claimStreak:'Получить бонус',spinWheel:'КОЛЕСО ФОРТУНЫ',spinsLeft:'Вращений:',spinNow:'КРУТИТЬ',quickActions:'БЫСТРЫЕ ДЕЙСТВИЯ',inviteFriend:'Пригласить',withdraw:'Вывести',earnMore:'Заработать',tonCheck:'TON Чек',promoCode:'ПРОМОКОД',enterCode:'Введите код...',redeem:'Применить',dailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ',dailyTaskDesc:'+5,000 TR + 1 вращение (сброс ежедневно)',tasksTitle:'ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ',loading:'Загрузка...',filterAll:'Все',filterDaily:'📅 Ежедн.',filterChannel:'Канал',filterGroup:'Группа',filterGame:'Игра',filterVisit:'Сайт',totalFriends:'Всего друзей',thisWeek:'На этой неделе',trEarned:'TR Заработано',refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ',refPendingDesc:'Ожидается от друзей (30% доля)',refDesc:'Зарабатывайте 30% от наград друзей',claimAll:'Получить всё',yourLink:'ВАША РЕФЕРАЛЬНАЯ ССЫЛКА',copy:'Копировать',inviteViaTelegram:'Пригласить в Telegram',weeklyLB:'🏆 ЕЖЕНЕДЕЛЬНЫЙ РЕЙТИНГ',prevWeekLB:'📜 ПРОШЛАЯ НЕДЕЛЯ',noData:'Нет данных',yourFriends:'ВАШИ ДРУЗЬЯ',walletBalance:'БАЛАНС КОШЕЛЬКА',tonCoinNote:'TON монеты',tonCoinNoteDesc:'используются для рекламы и создания чеков.',tonWallet:'🔗 TON КОШЕЛЁК',convertTitle:'⇄ КОНВЕРТИРОВАТЬ TR → TON',youReceive:'Вы получите',minConvert:'Минимум: 1 000 000 TR',convertNow:'Конвертировать',topUpTON:'ПОПОЛНИТЬ TON',xrocketDesc:'Оплата TON через xRocket',tonWalletMethod:'TON Кошелёк',tonWalletDesc:'Прямой перевод TON',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Минимум: 0.50 TON или 50 Stars',withdrawTR:'ВЫВОД TR МОНЕТ',walletAddrPH:'TON адрес кошелька (EQ...)',withdrawNow:'Вывести',withdrawNote:'Обработка в течение 24 часов. Комиссия 0.03 TON.',txHistory:'ИСТОРИЯ ОПЕРАЦИЙ',createCheck:'🧾 СОЗДАТЬ TON ЧЕК',createCheckDesc:'Создайте TON чек для получения другими',personal:'Личный',personalDesc:'Только 1 человек',multiple:'Групповой',multipleDesc:'Разделить между несколькими',eachReceives:'Каждый получит:',checkTip:'💡 TON спишется с баланса. Новые пользователи станут вашими рефералами!',createCheckBtn:'🧾 Создать чек',myChecks:'МОИ ЧЕКИ',noChecksYet:'Чеки ещё не созданы',receivedChecks:'ПОЛУЧЕННЫЕ ЧЕКИ',noChecksClaim:'Нет чеков',navHome:'Главная',navTasks:'Задания',navCheck:'Чек',navFriends:'Друзья',navWallet:'Кошелёк',adTask:'ЗАДАНИЕ',advertise:'РЕКЛАМА',addTask:'Добавить задание',myTasks:'Мои задания',tonBalLabel:'Баланс TON:',taskNamePH:'Название задания...',dailyCostNote:'Стоимость: 5 TON в день',costLabel:'Стоимость:',publishTask:'Опубликовать',confirmWithdraw:'ПОДТВЕРДИТЬ ВЫВОД',cancel:'Отмена',confirm:'Подтвердить',xrocketInfo:'✅ 1 TON зачисляется автоматически после подтверждения.',openXrocket:'Открыть xRocket Pay',verifyTitle:'ПОДТВЕРДИТЬ УЧАСТИЕ',verifyDesc:'Вступите в канал/группу, затем нажмите Я вступил',openLink:'Открыть ссылку',iJoined:'✅ Я вступил',confirmConvert:'ПОДТВЕРДИТЬ КОНВЕРТАЦИЮ',checkCreated:'✅ ЧЕК СОЗДАН!',yourCheckLink:'Ваша ссылка на чек:',copyBtn:'📋 Копировать',shareBtn:'📤 Поделиться',claimCheck:'💎 ПОЛУЧИТЬ ЧЕК',aboutToReceive:'Вы получите',claimNow:'💰 Получить',connectWalletDesc:'Подключите TON кошелёк для прямых пополнений',connected:'Подключён',notConnected:'Кошелёк не подключён',disconnectWallet:'🔌 Отключить кошелёк',watchAds:'СМОТРЕТЬ РЕКЛАМУ',watch:'Смотреть',claim:'Получить',start:'Начать',done:'✓',daily_checkin:'Ежедневная отметка',daily_update:'Проверить обновления',daily_share:'Поделиться',receivingAddr:'Отправьте TON на этот адрес:',mustEnterComment:'⚠️ ОБЯЗАТЕЛЬНЫЙ КОММЕНТАРИЙ:',commentWarn:'⛔ Без этого комментария ваши TON будут потеряны!',copyAddr:'📋 Копировать адрес',copyCommentID:'📋 Копировать ID',tonAutoNote:'⚠️ TON зачисляется автоматически после подтверждения блокчейна. Без правильного комментария средства не будут найдены.',starsRate:'⭐ 65 Stars = 1 TON · Минимум 50 Stars',starsOrAmount:'Количество Stars (мин. 50)...',starsViaBot:'Отправьте /stars боту @treward_ton_bot для оплаты Stars.',payStarsBtn:'⭐ Оплатить через бота',noTransactions:'Операций пока нет',noFriendsYet:'Друзей пока нет',noTasksAvail:'Нет доступных заданий',visitOpt:'Посетить сайт (+3000 TR)',channelOpt:'Подписаться на канал (+5000 TR)',groupOpt:'Вступить в группу (+5000 TR)',gameOpt:'Сыграть в игру (+5000 TR)',dailyOpt:'Ежедневное задание',connectWalletFirst:'Сначала подключите TON кошелёк',openWalletApp:'📱 Открыть кошелёк для оплаты'}
 };
 
-// ─── STATE ────────────────────────────────────────────────────────────────────
-let lang = 'en', userData = null, initData = '';
-let selectedTier = -1, pendingWithdraw = null;
-let pendingTopupAmt = 0;
-let pendingVerifyId = null, pendingVerifyUrl = null, pendingConvert = null;
-let isSpinning = false, activeFilter = 'all';
-let selectedCheckType = 'personal', newCheckLinkVal = '', pendingClaimCheckId = null;
+// ── State ─────────────────────────────────────────────────────────────────────
+let lang='en',userData=null,initData='';
+let selectedTier=-1,pendingWithdraw=null,pendingTopupAmt=0;
+let pendingVerifyId=null,pendingVerifyUrl=null,pendingConvert=null;
+let isSpinning=false,activeFilter='all';
+let selectedCheckType='personal',newCheckLinkVal='',pendingClaimCheckId=null;
 
-// ─── Week helpers ─────────────────────────────────────────────────────────────
-function getWeekId(d = new Date()) {
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const dayOfYear = Math.floor((d - jan1) / 86400000);
-  const weekNum = Math.ceil((dayOfYear + 1) / 7);
-  return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-}
-function getPrevWeekId() { const d = new Date(); d.setDate(d.getDate() - 7); return getWeekId(d); }
-function weekLabel(wid) { if (!wid) return ''; const [y, w] = wid.split('-W'); return `Week ${w}, ${y}`; }
+function getWeekId(d=new Date()){const j=new Date(d.getFullYear(),0,1);const day=Math.floor((d-j)/86400000);return`${d.getFullYear()}-W${String(Math.ceil((day+1)/7)).padStart(2,'0')}`;}
+function getPrevWeekId(){const d=new Date();d.setDate(d.getDate()-7);return getWeekId(d);}
+function weekLabel(w){if(!w)return'';const[y,n]=w.split('-W');return`Week ${n}, ${y}`;}
 
-// ─── INIT ─────────────────────────────────────────────────────────────────────
-async function init() {
-  if (tg) {
-    tg.ready(); tg.expand();
-    tg.setHeaderColor('#0A0800');
-    tg.setBackgroundColor('#0A0800');
-    initData = tg.initData || '';
-    if (tg.initDataUnsafe?.user?.language_code === 'ru') setLang('ru', false);
-  }
-  const sl = localStorage.getItem('tr_lang');
-  if (sl) setLang(sl, false);
-  applyI18n();
-  buildStreakDots(0);
-  buildTierGrid();
-  drawWheel(0);
-  mountWatchAds('homeWatchAds');
-
-  setTimeout(initAdsgram, 1500);
-  setTimeout(initTonConnect, 500);
-
-  const sp = tg?.initDataUnsafe?.start_param;
-  if (sp && sp.startsWith('c_')) {
-    const checkId = sp.slice(2);
-    setTimeout(() => openClaimCheckById(checkId), 800);
-  }
-  const ref = /^\d+$/.test(sp || '') ? parseInt(sp) : null;
-
+async function init(){
+  if(tg){tg.ready();tg.expand();tg.setHeaderColor('#0A0800');tg.setBackgroundColor('#0A0800');initData=tg.initData||'';if(tg.initDataUnsafe?.user?.language_code==='ru')setLang('ru',false);}
+  const sl=localStorage.getItem('tr_lang');if(sl)setLang(sl,false);
+  applyI18n();buildStreakDots(0);buildTierGrid();drawWheel(0);mountWatchAds('homeWatchAds');
+  setTimeout(initAdsgram,1500);setTimeout(initTonConnect,500);
+  const sp=tg?.initDataUnsafe?.start_param;
+  if(sp&&sp.startsWith('c_'))setTimeout(()=>openClaimCheckById(sp.slice(2)),800);
+  const ref=/^\d+$/.test(sp||'')?parseInt(sp):null;
   await loadUser(ref);
-  await Promise.all([loadTasks(), loadFriends(), loadTransactions(), loadDailyTaskStatus(), loadChecks()]);
-
-  _q('currentWeekLabel').textContent = weekLabel(getWeekId());
-  _q('prevWeekLabel').textContent    = weekLabel(getPrevWeekId());
+  await Promise.all([loadTasks(),loadFriends(),loadTransactions(),loadDailyTaskStatus(),loadChecks()]);
+  _q('currentWeekLabel').textContent=weekLabel(getWeekId());
+  _q('prevWeekLabel').textContent=weekLabel(getPrevWeekId());
 }
+function _q(id){return document.getElementById(id);}
+function toggleLang(){setLang(lang==='en'?'ru':'en',true);}
+function setLang(l,save=true){lang=l;_q('langBtn').textContent=l==='en'?'RU':'EN';if(save){localStorage.setItem('tr_lang',l);if(initData)api('POST','/api/set-language',{init_data:initData,language:l}).catch(()=>{});}applyI18n();}
+function applyI18n(){document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');if(T[lang][k]!==undefined)el.textContent=T[lang][k];});document.querySelectorAll('[data-ph]').forEach(el=>{const k=el.getAttribute('data-ph');if(T[lang][k]!==undefined)el.placeholder=T[lang][k];});document.querySelectorAll('[data-i-opt]').forEach(el=>{const k=el.getAttribute('data-i-opt');if(T[lang][k]!==undefined)el.textContent=T[lang][k];});buildDailyTasks(window._doneDaily||[]);renderFiltered();mountWatchAds('homeWatchAds');renderWCS();}
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function _q(id) { return document.getElementById(id); }
-
-// ─── LANG ─────────────────────────────────────────────────────────────────────
-function toggleLang() { setLang(lang === 'en' ? 'ru' : 'en', true); }
-function setLang(l, save = true) {
-  lang = l;
-  _q('langBtn').textContent = l === 'en' ? 'RU' : 'EN';
-  if (save) {
-    localStorage.setItem('tr_lang', l);
-    if (initData) api('POST', '/api/set-language', { init_data: initData, language: l }).catch(() => {});
-  }
-  applyI18n();
+async function loadUser(ref=null){
+  if(!initData){userData={id:1,first_name:'Dev',coins:12500,spins:3,streak:2,last_streak_date:null,ton_balance:0.5,language:lang,referral_link:'https://t.me/bot?start=1',ton_wallet_address:null,ton_comment_id:'123456'};updateUI();return;}
+  try{userData=await api('POST','/api/user',{init_data:initData,referrer_id:ref,language:lang});updateUI();}catch(e){toast(e.message,'err');}
 }
-
-function applyI18n() {
-  document.querySelectorAll('[data-i]').forEach(el => {
-    const k = el.getAttribute('data-i');
-    if (T[lang][k] !== undefined) el.textContent = T[lang][k];
-  });
-  document.querySelectorAll('[data-ph]').forEach(el => {
-    const k = el.getAttribute('data-ph');
-    if (T[lang][k] !== undefined) el.placeholder = T[lang][k];
-  });
-  document.querySelectorAll('[data-i-opt]').forEach(el => {
-    const k = el.getAttribute('data-i-opt');
-    if (T[lang][k] !== undefined) el.textContent = T[lang][k];
-  });
-  buildDailyTasks(window._doneDaily || []);
-  renderFiltered();
-  mountWatchAds('homeWatchAds');
-  renderWalletConnectStatus();
+function updateUI(){
+  if(!userData)return;
+  const c=userData.coins||0;
+  _q('balCoins').textContent=c.toLocaleString();_q('walletCoins').textContent=c.toLocaleString();
+  _q('balTon').textContent=(c*0.00000015).toFixed(4);
+  const ton=parseFloat(userData.ton_balance||0);
+  _q('walletTon').textContent=ton.toFixed(4);
+  _q('streakBadge').textContent=userData.streak||0;_q('spinsBadge').textContent=userData.spins||0;_q('spinCount').textContent=userData.spins||0;
+  buildStreakDots(userData.streak||0);
+  if(userData.referral_link)_q('refLink').textContent=userData.referral_link;
+  const ab=_q('adBal');if(ab)ab.textContent=ton.toFixed(4);
+  const today=new Date().toISOString().slice(0,10);
+  const sb=_q('streakBtn');
+  if(userData.last_streak_date&&userData.last_streak_date.slice(0,10)===today){sb.disabled=true;sb.textContent=T[lang].done+' '+T[lang].claimStreak;}
+  else{sb.disabled=false;sb.textContent=T[lang].claimStreak;}
+  _q('spinBtn').disabled=(userData.spins||0)<1;
+  renderWCS();
 }
+function goTab(t){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));_q('tab-'+t).classList.add('active');const ni=_q('nav-'+t);if(ni)ni.classList.add('active');_q('scroll').scrollTop=0;if(t==='tasks')loadTasks();if(t==='friends')loadFriends();if(t==='wallet'){loadTransactions();renderWCS();}if(t==='check')loadChecks();}
+function buildStreakDots(s){const c=_q('streakDots');c.innerHTML='';for(let i=1;i<=7;i++){const d=document.createElement('div');d.className='s-dot'+(i<s?' done':i===s?' today':'');d.textContent=i;c.appendChild(d);}}
+async function claimStreakWithAd(){toast(lang==='ru'?'Смотрите рекламу...':'Watch ad first...','ok');await showRewardedAd();await claimStreak();}
+async function claimStreak(){if(!initData){toast('Dev mode','ok');return;}try{const r=await api('POST','/api/claim-streak',{init_data:initData});userData.coins+=r.coins_earned;userData.spins+=r.spins_earned;userData.streak=r.streak;userData.last_streak_date=new Date().toISOString();updateUI();toast(`+${r.coins_earned.toLocaleString()} TR +${r.spins_earned} spin!`,'ok');}catch(e){toast(e.message,'err');}}
 
-// ─── USER ─────────────────────────────────────────────────────────────────────
-async function loadUser(ref = null) {
-  if (!initData) {
-    userData = {
-      id: 1, first_name: 'Dev', coins: 12500, spins: 3, streak: 2,
-      last_streak_date: null, ton_balance: 0.5, language: lang,
-      referral_link: 'https://t.me/bot?start=1',
-      ton_wallet_address: null, ton_comment_id: '123456'
-    };
-    updateUI();
-    return;
-  }
-  try {
-    userData = await api('POST', '/api/user', { init_data: initData, referrer_id: ref, language: lang });
-    updateUI();
-  } catch (e) { toast(e.message, 'err'); }
+const SEGS=[10,50,80,100,300,500];const SCOL=['#1A1200','#251800','#1A1200','#2A1C00','#1A1200','#301F00'];const SBRD=['#FFB800','#FFD454','#CC9200','#FFB800','#FFD454','#CC9200'];let wAngle=0;
+function drawWheel(a){const cv=_q('spinCanvas'),ctx=cv.getContext('2d');const cx=130,cy=130,r=120,n=SEGS.length,arc=(2*Math.PI)/n;ctx.clearRect(0,0,260,260);for(let i=0;i<n;i++){const s=a+i*arc-Math.PI/2,e=s+arc;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,s,e);ctx.closePath();ctx.fillStyle=SCOL[i];ctx.fill();ctx.strokeStyle=SBRD[i];ctx.lineWidth=2;ctx.stroke();ctx.save();ctx.translate(cx,cy);ctx.rotate(s+arc/2);ctx.textAlign='right';ctx.fillStyle='#FFD454';ctx.font='bold 13px Orbitron,monospace';ctx.fillText(SEGS[i],r-14,5);ctx.restore();}ctx.beginPath();ctx.arc(cx,cy,18,0,2*Math.PI);ctx.fillStyle='#0A0800';ctx.fill();ctx.strokeStyle='#FFB800';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#FFB800';ctx.font='bold 10px Orbitron';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('TR',cx,cy);}
+async function doSpin(){if(isSpinning)return;if((userData?.spins||0)<1){toast(lang==='ru'?'Нет вращений!':'No spins!','err');return;}let result,si;if(!initData){si=Math.floor(Math.random()*SEGS.length);result=SEGS[si];}else{try{const r=await api('POST','/api/spin',{init_data:initData});result=r.result;si=r.segment_index;userData.coins=r.new_balance;userData.spins=r.remaining_spins;}catch(e){toast(e.message,'err');return;}}isSpinning=true;_q('spinBtn').disabled=true;const n=SEGS.length,arc=(2*Math.PI)/n;const target=wAngle+(5+Math.random()*2)*2*Math.PI+(-(si*arc+arc/2)+Math.PI/2)-(wAngle%(2*Math.PI));const dur=4000,t0=performance.now(),a0=wAngle;function anim(now){const t=Math.min((now-t0)/dur,1),ease=1-Math.pow(1-t,3);wAngle=a0+(target-a0)*ease;drawWheel(wAngle);if(t<1){requestAnimationFrame(anim);}else{isSpinning=false;if(!initData){userData.coins=(userData.coins||0)+result;userData.spins=(userData.spins||0)-1;}updateUI();toast(`🎰 +${result} TR!`,'ok');}}requestAnimationFrame(anim);}
+
+const DT=[{type:'checkin',icon:'✅',url:null},{type:'update',icon:'📢',url:'https://t.me/treward_ton'},{type:'share',icon:'📤',url:null}];const _dtState={};
+async function loadDailyTaskStatus(){if(!initData){buildDailyTasks([]);return;}try{const r=await api('GET','/api/daily-task-status?init_data='+encodeURIComponent(initData));window._doneDaily=r.completed||[];buildDailyTasks(r.completed||[]);}catch(e){buildDailyTasks([]);}}
+function buildDailyTasks(done){window._doneDaily=done;const l=_q('dailyTaskList');if(!l)return;l.innerHTML='';DT.forEach(dt=>{const d=done.includes(dt.type);_dtState[dt.type]=d?'done':(_dtState[dt.type]==='ready'?'ready':'idle');const n=T[lang]['daily_'+dt.type]||dt.type;const el=document.createElement('div');el.className='task-item'+(d?' completed':'');el.id='dt-'+dt.type;el.innerHTML=`<div class="task-icon">${dt.icon}</div><div class="task-info"><div class="task-name">${n}</div><div class="task-reward">+5,000 TR +1 spin</div></div><div class="task-btn">${d?`<span style="color:var(--ok);font-weight:700">✓</span>`:`<button class="btn btn-gold btn-sm" onclick="handleDT('${dt.type}')" id="dbt-${dt.type}">${T[lang].start}</button>`}</div>`;l.appendChild(el);});}
+async function handleDT(type){const st=_dtState[type];if(st==='done')return;const dt=DT.find(d=>d.type===type);const btn=_q('dbt-'+type);if(st==='idle'){if(type==='checkin'){await claimDT(type);return;}if(type==='update'){if(dt.url)window.open(dt.url,'_blank');_dtState[type]='ready';if(btn){btn.textContent=T[lang].claim;btn.style.background='linear-gradient(135deg,#00a352,#44ff88)';}return;}if(type==='share'){const lk=userData?.referral_link||'https://t.me/treward_ton_bot';if(tg?.openTelegramLink)tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent('🏆 Earn TR coins!')}`);else window.open(`https://t.me/share/url?url=${encodeURIComponent(lk)}`,'_blank');_dtState[type]='ready';setTimeout(()=>claimDT(type),2000);return;}}if(st==='ready')await claimDT(type);}
+async function claimDT(type){if(!initData){toast('+5,000 TR +1 spin!','ok');_dtState[type]='done';buildDailyTasks(Object.keys(_dtState).filter(k=>_dtState[k]==='done'));return;}try{const r=await api('POST','/api/claim-daily-task',{init_data:initData,task_type:type});userData.coins=r.new_balance;userData.spins=(userData.spins||0)+r.spins_earned;updateUI();toast(`+${r.coins_earned.toLocaleString()} TR +${r.spins_earned} spin!`,'ok');_dtState[type]='done';buildDailyTasks(Object.keys(_dtState).filter(k=>_dtState[k]==='done'));}catch(e){toast(e.message,'err');}}
+
+async function loadTasks(){if(!initData){window._tasks=[];renderFiltered();return;}try{window._tasks=await api('GET','/api/tasks?init_data='+encodeURIComponent(initData));renderFiltered();}catch(e){_q('taskList').innerHTML=`<div style="text-align:center;color:var(--err);padding:20px">${e.message}</div>`;}}
+function setFilter(f){activeFilter=f;document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c.getAttribute('data-f')===f));const isD=f==='daily';const dp=_q('dailyTaskPanel'),tw=_q('taskListWrap');if(dp)dp.style.display=isD?'':'none';if(tw)tw.style.display=isD?'none':'';if(!isD)renderFiltered();}
+function renderFiltered(){const all=window._tasks||[];const list=activeFilter==='all'?all:all.filter(t=>t.type===activeFilter);const el=_q('taskList');if(!el)return;if(!list.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noTasksAvail}</div>`;return;}const ico={visit:'🌐',channel:'📢',group:'👥',game:'🎮',daily:'📅'};el.innerHTML=list.map(t=>`<div class="task-item ${t.completed?'completed':''}" id="task-${t.id}"><div class="task-icon">${ico[t.type]||'⚡'}</div><div class="task-info"><div class="task-name">${t.name}</div><div class="task-reward">${t.type==='visit'?'+3,000 TR +1 Spin':'+5,000 TR +1 Spin'}</div><div class="prog-wrap"><div class="prog-bar" id="pg-${t.id}" style="width:0%"></div></div></div><div class="task-btn">${t.completed?`<span style="color:var(--ok);font-weight:700">✓</span>`:`<button class="btn btn-gold btn-sm" onclick="startTask(${t.id},'${t.type}','${encodeURIComponent(t.url)}')" id="tbt-${t.id}">${T[lang].start}</button>`}</div></div>`).join('');}
+async function startTask(id,type,ue){const url=decodeURIComponent(ue),btn=_q('tbt-'+id);if(!btn)return;if(type==='channel'||type==='group'){pendingVerifyId=id;pendingVerifyUrl=url;_q('verifyOverlay').style.display='flex';return;}window.open(url,'_blank');const dur=type==='game'?10:15;btn.disabled=true;btn.style.background='linear-gradient(135deg,#1a3a1a,#44ff88)';btn.style.color='#000';const pg=_q('pg-'+id);let el=0;const iv=setInterval(()=>{el++;if(pg)pg.style.width=((el/dur)*100)+'%';btn.textContent=(dur-el)+'s';if(el>=dur){clearInterval(iv);btn.textContent=T[lang].claim;btn.disabled=false;btn.style.background='';btn.style.color='';btn.onclick=()=>claimTask(id);}},1000);}
+async function claimTask(id){if(!initData){toast('+3000 TR!','ok');return;}try{const r=await api('POST','/api/claim-task',{init_data:initData,task_id:id});userData.coins=r.new_balance;userData.spins=(userData.spins||0)+r.spins_earned;updateUI();toast(`+${r.coins_earned} TR!`,'ok');const it=_q('task-'+id);if(it){it.classList.add('completed');const b=_q('tbt-'+id);if(b)b.parentElement.innerHTML=`<span style="color:var(--ok);font-weight:700">✓</span>`;}}catch(e){toast(e.message,'err');}}
+function openVerifyLink(){if(pendingVerifyUrl)window.open(pendingVerifyUrl,'_blank');}
+function closeVerify(){_q('verifyOverlay').style.display='none';pendingVerifyId=null;pendingVerifyUrl=null;}
+async function verifyJoin(){if(!pendingVerifyId)return;if(!initData){toast('+5000 TR!','ok');closeVerify();return;}try{const r=await api('POST','/api/verify-join',{init_data:initData,task_id:pendingVerifyId});userData.coins=r.new_balance;userData.spins=(userData.spins||0)+r.spins_earned;updateUI();toast(`+${r.coins_earned} TR!`,'ok');closeVerify();loadTasks();}catch(e){toast(e.message,'err');}}
+
+function mountWatchAds(cid){const c=document.getElementById(cid);if(!c)return;const rows=AD_DEF.map(ad=>`<div class="ad-row"><div class="ad-tv">📺</div><div class="ad-info"><div style="font-size:13px;font-weight:600">${ad.name}</div><div class="ad-rew">+${ad.reward.toLocaleString()} TR</div><div class="ad-dur">${ad.dur}s · ${lang==='ru'?'Безлимитно':'Unlimited'}</div></div><div id="adwrap-${ad.id}">${adBtnHTML(ad.id)}</div></div>`).join('');c.innerHTML=`<div class="wb"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:16px">📺</span><span class="wb-ttl">${T[lang].watchAds}</span></div>${rows}</div>`;}
+
+async function redeemPromoWithAd(){const code=_q('promoInput').value.trim();if(!code){toast(lang==='ru'?'Введите промокод':'Enter a promo code','err');return;}toast(lang==='ru'?'Смотрите рекламу...':'Watch ad to redeem...','ok');await showRewardedAd();await redeemPromo();}
+async function redeemPromo(){const code=_q('promoInput').value.trim();if(!code)return;if(!initData){toast('Dev mode','ok');return;}try{const r=await api('POST','/api/redeem-promo',{init_data:initData,code});if(r.reward_type==='coins'){userData.coins=(userData.coins||0)+r.amount;updateUI();toast(`🎁 +${r.amount.toLocaleString()} TR!`,'ok');}else{userData.ton_balance=(parseFloat(userData.ton_balance)||0)+r.amount;updateUI();toast(`🎁 +${r.amount} TON!`,'ok');}_q('promoInput').value='';}catch(e){toast(e.message,'err');}}
+
+async function loadFriends(){
+  if(!initData){_q('totalFriendsVal').textContent='5';_q('weeklyFriendsVal').textContent='2';_q('friendsEarned').textContent='3,750';renderLeaderboard([{rank:1,name:'CryptoKing',weekly_friends:12,is_me:false},{rank:2,name:'Dev',weekly_friends:2,is_me:true},{rank:3,name:'TonWhale',weekly_friends:1,is_me:false}],'weeklyLeaderboard');renderLeaderboard([],'prevWeeklyLeaderboard');_q('refLink').textContent='https://t.me/treward_ton_bot?start=1';return;}
+  try{
+    const r=await api('GET','/api/friends?init_data='+encodeURIComponent(initData));
+    _q('totalFriendsVal').textContent=r.total_friends||0;_q('weeklyFriendsVal').textContent=r.weekly_friends||0;_q('friendsEarned').textContent=(r.total_earned||0).toLocaleString();
+    if(r.referral_link){_q('refLink').textContent=r.referral_link;if(userData)userData.referral_link=r.referral_link;}
+    buildRefEarnCard(r.friends||[],r.unclaimed||0);
+    renderLeaderboard(r.leaderboard||[],'weeklyLeaderboard');renderLeaderboard(r.prev_leaderboard||[],'prevWeeklyLeaderboard');
+    const fl=_q('friendsList');
+    if(!r.friends||!r.friends.length){fl.innerHTML=`<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noFriendsYet}</div>`;return;}
+    fl.innerHTML=r.friends.map(f=>`<div style="background:var(--bg2);border:1px solid rgba(255,184,0,.08);border-radius:var(--r);padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px"><div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold-d),var(--gold));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#000;flex-shrink:0">${(f.name||'?')[0].toUpperCase()}</div><div style="flex:1"><div style="font-size:13px;font-weight:600">${f.name}</div><div style="font-size:11px;color:var(--t2);margin-top:1px">${(f.coins||0).toLocaleString()} TR earned</div></div><div style="font-size:12px;font-weight:700;color:var(--ok)">+${(f.your_share||0).toLocaleString()}</div></div>`).join('');
+  }catch(e){console.error('loadFriends',e);}
 }
+function renderLeaderboard(items,cid){const el=_q(cid);if(!el)return;if(!items||!items.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:16px 0;font-size:12px">${T[lang].noData}</div>`;return;}const rc=r=>r===1?'gold':r===2?'silver':r===3?'bronze':'';const re=r=>r===1?'🥇':r===2?'🥈':r===3?'🥉':'';el.innerHTML=items.slice(0,20).map(f=>`<div class="lb-row"><div class="lb-rank ${rc(f.rank)}">${re(f.rank)||f.rank}</div><div class="lb-av ${f.is_me?'me':''}">${(f.name||'?')[0].toUpperCase()}</div><div class="lb-info"><div class="lb-name">${f.name}${f.is_me?` <span style="font-size:10px;color:var(--gold)">(${lang==='ru'?'Вы':'You'})</span>`:''}</div><div class="lb-sub">${lang==='ru'?'Друзей за неделю':'Weekly friends'}</div></div><div class="lb-cnt ${f.is_me?'me':''}">${f.weekly_friends}</div></div>`).join('');}
+function buildRefEarnCard(friends,total){const card=_q('refEarnCard');if(total<=0){card.style.display='none';return;}card.style.display='';_q('refEarnAmt').textContent=total.toLocaleString()+' TR';const rows=friends.filter(f=>(f.your_share||0)>0).slice(0,5).map(f=>`<div class="rf-row"><div class="rf-av">${(f.name||'?')[0].toUpperCase()}</div><div class="rf-info"><div class="rf-name">${f.name}</div><div class="rf-sub">${(f.coins||0).toLocaleString()} TR total</div></div><div class="rf-share">+${(f.your_share||0).toLocaleString()}</div></div>`).join('');_q('refFriendRows').innerHTML=rows;}
+async function claimAllReferral(){if(!initData){const p=parseInt((_q('refEarnAmt').textContent||'0').replace(/[^0-9]/g,''))||0;userData.coins=(userData.coins||0)+p;updateUI();toast(`+${p.toLocaleString()} TR!`,'ok');_q('refEarnCard').style.display='none';return;}try{const r=await api('POST','/api/claim-referral',{init_data:initData});userData.coins=(userData.coins||0)+r.claimed;updateUI();toast(`+${r.claimed.toLocaleString()} TR!`,'ok');_q('refEarnCard').style.display='none';loadFriends();}catch(e){toast(e.message,'err');}}
+function copyRef(){navigator.clipboard?.writeText(_q('refLink').textContent).then(()=>toast(lang==='ru'?'Скопировано!':'Copied!','ok'));}
+function shareRef(){const lk=userData?.referral_link||'https://t.me/treward_ton_bot';const tx=lang==='ru'?'🏆 Зарабатывай TR!':'🏆 Join TRewards!';if(tg?.openTelegramLink)tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`);else window.open(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`,'_blank');}
 
-function updateUI() {
-  if (!userData) return;
-  const c = userData.coins || 0;
-  _q('balCoins').textContent = c.toLocaleString();
-  _q('walletCoins').textContent = c.toLocaleString();
-  _q('balTon').textContent = (c * 0.00000015).toFixed(4);
-  const ton = parseFloat(userData.ton_balance || 0);
-  _q('walletTon').textContent = ton.toFixed(4);
-  _q('streakBadge').textContent = userData.streak || 0;
-  _q('spinsBadge').textContent  = userData.spins  || 0;
-  _q('spinCount').textContent   = userData.spins  || 0;
-  buildStreakDots(userData.streak || 0);
-  if (userData.referral_link) _q('refLink').textContent = userData.referral_link;
-  if (userData.ton_balance !== undefined) {
-    const ab = _q('adBal');
-    if (ab) ab.textContent = ton.toFixed(4);
-  }
-  const today = new Date().toISOString().slice(0, 10);
-  const sb = _q('streakBtn');
-  if (userData.last_streak_date && userData.last_streak_date.slice(0, 10) === today) {
-    sb.disabled = true;
-    sb.textContent = T[lang].done + ' ' + T[lang].claimStreak;
-  } else {
-    sb.disabled = false;
-    sb.textContent = T[lang].claimStreak;
-  }
-  _q('spinBtn').disabled = (userData.spins || 0) < 1;
-  renderWalletConnectStatus();
-}
+const TIERS=[{coins:1000000,ton:.10,net:.07,fee:.03},{coins:2000000,ton:.20,net:.17,fee:.03},{coins:3000000,ton:.30,net:.27,fee:.03},{coins:10000000,ton:1.00,net:1.00,fee:0}];
+function buildTierGrid(){_q('tierGrid').innerHTML=TIERS.map((t,i)=>`<div class="tier-item" id="tier-${i}" onclick="selectTier(${i})"><div class="tier-coins">${(t.coins/1000000).toFixed(0)}M TR</div><div class="tier-ton">${t.ton} TON</div><div class="tier-net">Net: ${t.net} TON</div><div class="tier-fee">${t.fee>0?`Fee: ${t.fee} TON`:(lang==='ru'?'Без комиссии 🎉':'No Fee 🎉')}</div></div>`).join('');}
+function selectTier(i){selectedTier=i;document.querySelectorAll('.tier-item').forEach((el,j)=>el.classList.toggle('selected',j===i));}
+function doWithdraw(){if(selectedTier<0){toast(lang==='ru'?'Выберите уровень':'Select a tier','err');return;}const ti=TIERS[selectedTier];if((userData?.coins||0)<ti.coins){toast(lang==='ru'?'Недостаточно монет':'Insufficient coins','err');return;}const addr=_q('walletAddr').value.trim();if(!addr){toast(lang==='ru'?'Введите адрес кошелька':'Enter wallet address','err');return;}pendingWithdraw={ti,addr};_q('confirmBody').innerHTML=`<div class="sr"><span class="sr-l">${lang==='ru'?'Спишется TR':'Coins deducted'}</span><span class="sr-v" style="color:var(--err)">-${ti.coins.toLocaleString()} TR</span></div><div class="sr"><span class="sr-l">${lang==='ru'?'Сумма TON':'TON amount'}</span><span class="sr-v">${ti.ton} TON</span></div><div class="sr"><span class="sr-l">${lang==='ru'?'Комиссия':'Fee'}</span><span class="sr-v" style="color:var(--err)">${ti.fee>0?'-'+ti.fee+' TON':(lang==='ru'?'Бесплатно!':'Free!')}</span></div><div class="sr"><span class="sr-l"><b>${lang==='ru'?'Вы получите':'You receive'}</b></span><span class="sr-v" style="color:var(--ok)">${ti.net} TON</span></div><div style="margin-top:10px;font-size:11px;color:var(--t3)">${lang==='ru'?'Кошелёк':'To'}: ${addr.slice(0,12)}...${addr.slice(-6)}</div>`;_q('confirmOverlay').style.display='flex';}
+function closeConfirm(){_q('confirmOverlay').style.display='none';}
+async function confirmWithdraw(){if(!pendingWithdraw)return;closeConfirm();if(!initData){toast(lang==='ru'?'Запрос отправлен!':'Withdrawal queued!','ok');return;}try{const r=await api('POST','/api/withdraw',{init_data:initData,tier_index:selectedTier,wallet_address:pendingWithdraw.addr});userData.coins-=r.coins_deducted;updateUI();toast(lang==='ru'?'Запрос отправлен!':'Withdrawal queued!','ok');selectedTier=-1;document.querySelectorAll('.tier-item').forEach(el=>el.classList.remove('selected'));_q('walletAddr').value='';loadTransactions();}catch(e){toast(e.message,'err');}}
 
-// ─── TABS ─────────────────────────────────────────────────────────────────────
-function goTab(t) {
-  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
-  _q('tab-' + t).classList.add('active');
-  const ni = _q('nav-' + t);
-  if (ni) ni.classList.add('active');
-  _q('scroll').scrollTop = 0;
-  if (t === 'tasks')  loadTasks();
-  if (t === 'friends') loadFriends();
-  if (t === 'wallet') { loadTransactions(); renderWalletConnectStatus(); }
-  if (t === 'check')  loadChecks();
-}
+function updateConvPrev(){const v=parseFloat(_q('convAmt').value)||0;_q('convPrev').textContent=v>0?((v/1000000)*0.15).toFixed(4):'0.0000';}
+function doConvert(){const v=parseFloat(_q('convAmt').value)||0;if(v<1000000){toast(lang==='ru'?'Минимум 1 000 000 TR':'Minimum 1,000,000 TR','err');return;}if(v>(userData?.coins||0)){toast(lang==='ru'?'Недостаточно TR':'Insufficient TR','err');return;}const ton=(v/1000000)*0.15;pendingConvert={tr:v,ton};_q('convConfirmBody').innerHTML=`<div class="sr"><span class="sr-l">${lang==='ru'?'Спишется TR':'TR deducted'}</span><span class="sr-v" style="color:var(--err)">-${v.toLocaleString()} TR</span></div><div class="sr"><span class="sr-l">${lang==='ru'?'Курс':'Rate'}</span><span class="sr-v" style="color:var(--t2)">1M TR = 0.15 TON</span></div><div class="sr"><span class="sr-l"><b>${lang==='ru'?'Вы получите':'You receive'}</b></span><span class="sr-v" style="color:var(--ton)">${ton.toFixed(4)} TON</span></div>`;_q('convOverlay').style.display='flex';}
+function closeConvert(){_q('convOverlay').style.display='none';}
+async function confirmConvert(){if(!pendingConvert)return;closeConvert();if(!initData){userData.coins=(userData.coins||0)-pendingConvert.tr;userData.ton_balance=(parseFloat(userData.ton_balance)||0)+pendingConvert.ton;updateUI();toast(`+${pendingConvert.ton.toFixed(4)} TON!`,'ok');_q('convAmt').value='';_q('convPrev').textContent='0.0000';pendingConvert=null;return;}try{const r=await api('POST','/api/convert',{init_data:initData,tr_amount:pendingConvert.tr});userData.coins=r.new_tr_balance;userData.ton_balance=r.new_ton_balance;updateUI();toast(`+${r.ton_received.toFixed(4)} TON!`,'ok');_q('convAmt').value='';_q('convPrev').textContent='0.0000';loadTransactions();}catch(e){toast(e.message,'err');}pendingConvert=null;}
 
-// ─── STREAK ───────────────────────────────────────────────────────────────────
-function buildStreakDots(s) {
-  const c = _q('streakDots');
-  c.innerHTML = '';
-  for (let i = 1; i <= 7; i++) {
-    const d = document.createElement('div');
-    d.className = 's-dot' + (i < s ? ' done' : i === s ? ' today' : '');
-    d.textContent = i;
-    c.appendChild(d);
-  }
-}
-
-async function claimStreakWithAd() {
-  toast(lang === 'ru' ? 'Смотрите рекламу...' : 'Watch ad to claim streak...', 'ok');
-  await showRewardedAd();
-  await claimStreak();
-}
-
-async function claimStreak() {
-  if (!initData) { toast('Dev mode', 'ok'); return; }
-  try {
-    const r = await api('POST', '/api/claim-streak', { init_data: initData });
-    userData.coins += r.coins_earned;
-    userData.spins += r.spins_earned;
-    userData.streak = r.streak;
-    userData.last_streak_date = new Date().toISOString();
-    updateUI();
-    toast(`+${r.coins_earned.toLocaleString()} TR +${r.spins_earned} spin!`, 'ok');
-  } catch (e) { toast(e.message, 'err'); }
-}
-
-// ─── SPIN WHEEL ───────────────────────────────────────────────────────────────
-const SEGS = [10, 50, 80, 100, 300, 500];
-const SCOL = ['#1A1200','#251800','#1A1200','#2A1C00','#1A1200','#301F00'];
-const SBRD = ['#FFB800','#FFD454','#CC9200','#FFB800','#FFD454','#CC9200'];
-let wAngle = 0;
-
-function drawWheel(a) {
-  const cv = _q('spinCanvas'), ctx = cv.getContext('2d');
-  const cx = 130, cy = 130, r = 120, n = SEGS.length, arc = (2 * Math.PI) / n;
-  ctx.clearRect(0, 0, 260, 260);
-  for (let i = 0; i < n; i++) {
-    const s = a + i * arc - Math.PI / 2, e = s + arc;
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, s, e); ctx.closePath();
-    ctx.fillStyle = SCOL[i]; ctx.fill();
-    ctx.strokeStyle = SBRD[i]; ctx.lineWidth = 2; ctx.stroke();
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(s + arc / 2);
-    ctx.textAlign = 'right'; ctx.fillStyle = '#FFD454';
-    ctx.font = 'bold 13px Orbitron,monospace';
-    ctx.fillText(SEGS[i], r - 14, 5); ctx.restore();
-  }
-  ctx.beginPath(); ctx.arc(cx, cy, 18, 0, 2 * Math.PI);
-  ctx.fillStyle = '#0A0800'; ctx.fill();
-  ctx.strokeStyle = '#FFB800'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = '#FFB800'; ctx.font = 'bold 10px Orbitron';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('TR', cx, cy);
-}
-
-async function doSpin() {
-  if (isSpinning) return;
-  if ((userData?.spins || 0) < 1) { toast(lang === 'ru' ? 'Нет вращений!' : 'No spins!', 'err'); return; }
-  let result, si;
-  if (!initData) {
-    si = Math.floor(Math.random() * SEGS.length); result = SEGS[si];
-  } else {
-    try {
-      const r = await api('POST', '/api/spin', { init_data: initData });
-      result = r.result; si = r.segment_index;
-      userData.coins = r.new_balance; userData.spins = r.remaining_spins;
-    } catch (e) { toast(e.message, 'err'); return; }
-  }
-  isSpinning = true; _q('spinBtn').disabled = true;
-  const n = SEGS.length, arc = (2 * Math.PI) / n;
-  const target = wAngle + (5 + Math.random() * 2) * 2 * Math.PI + (-(si * arc + arc / 2) + Math.PI / 2) - (wAngle % (2 * Math.PI));
-  const dur = 4000, t0 = performance.now(), a0 = wAngle;
-  function anim(now) {
-    const t = Math.min((now - t0) / dur, 1), ease = 1 - Math.pow(1 - t, 3);
-    wAngle = a0 + (target - a0) * ease;
-    drawWheel(wAngle);
-    if (t < 1) { requestAnimationFrame(anim); }
-    else {
-      isSpinning = false;
-      if (!initData) { userData.coins = (userData.coins || 0) + result; userData.spins = (userData.spins || 0) - 1; }
-      updateUI();
-      toast(`🎰 +${result} TR!`, 'ok');
+function closeAllTopups(){['topupXrocketOverlay','topupTonWalletOverlay','topupStarsOverlay'].forEach(id=>{const el=_q(id);if(el)el.style.display='none';});}
+function copyText(text,msg){navigator.clipboard?.writeText(text).then(()=>toast(msg||'Copied!','ok'));}
+function topUp(method){
+  const amt=parseFloat(_q('topupTonAmt')?.value)||0;pendingTopupAmt=amt;
+  if(method==='xrocket'){_q('xrocketAmt').textContent=amt>0?amt:'—';_q('topupXrocketOverlay').style.display='flex';return;}
+  if(method==='ton_wallet'){
+    const connected=tcWalletAddr||userData?.ton_wallet_address;
+    const cid=userData?.ton_comment_id||'------';
+    if(!connected){
+      _q('tonWalletTopupContent').innerHTML=`<div style="text-align:center;padding:24px 0"><div style="font-size:48px;margin-bottom:12px">🔗</div><div style="font-size:15px;font-weight:700;margin-bottom:8px">${T[lang].connectWalletFirst}</div><p style="font-size:12px;color:var(--t2);margin-bottom:20px">${T[lang].connectWalletDesc}</p><button class="btn btn-ton" onclick="closeAllTopups();goTab('wallet');" style="width:100%">🔗 ${T[lang].connected||'Connect Wallet'}</button></div>`;
+      _q('topupTonWalletOverlay').style.display='flex';return;
     }
-  }
-  requestAnimationFrame(anim);
-}
-
-// ─── DAILY TASKS ──────────────────────────────────────────────────────────────
-const DT = [
-  { type: 'checkin', icon: '✅', url: null },
-  { type: 'update',  icon: '📢', url: 'https://t.me/treward_ton' },
-  { type: 'share',   icon: '📤', url: null },
-];
-const _dtState = {};
-
-async function loadDailyTaskStatus() {
-  if (!initData) { buildDailyTasks([]); return; }
-  try {
-    const r = await api('GET', '/api/daily-task-status?init_data=' + encodeURIComponent(initData));
-    window._doneDaily = r.completed || [];
-    buildDailyTasks(r.completed || []);
-  } catch (e) { buildDailyTasks([]); }
-}
-
-function buildDailyTasks(done) {
-  window._doneDaily = done;
-  const l = _q('dailyTaskList');
-  if (!l) return;
-  l.innerHTML = '';
-  DT.forEach(dt => {
-    const d = done.includes(dt.type);
-    _dtState[dt.type] = d ? 'done' : (_dtState[dt.type] === 'ready' ? 'ready' : 'idle');
-    const n = T[lang]['daily_' + dt.type] || dt.type;
-    const el = document.createElement('div');
-    el.className = 'task-item' + (d ? ' completed' : '');
-    el.id = 'dt-' + dt.type;
-    el.innerHTML = `
-      <div class="task-icon">${dt.icon}</div>
-      <div class="task-info">
-        <div class="task-name">${n}</div>
-        <div class="task-reward">+5,000 TR +1 spin</div>
+    _q('tonWalletTopupContent').innerHTML=`
+      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.25);border-radius:var(--r);padding:12px;margin-bottom:12px;font-size:12px;color:var(--err);font-weight:600;text-align:center">⛔ ${T[lang].commentWarn}</div>
+      <div style="background:rgba(0,152,234,.08);border:1px solid rgba(0,152,234,.2);border-radius:var(--r);padding:12px;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--t2);margin-bottom:4px">${T[lang].receivingAddr}</div>
+        <div style="font-family:monospace;font-size:11px;color:var(--ton);word-break:break-all;margin-bottom:6px">${TON_WALLET}</div>
+        <button class="btn btn-outline btn-sm" onclick="copyText('${TON_WALLET}','${lang==='ru'?'Адрес скопирован!':'Address copied!'}')">${T[lang].copyAddr}</button>
       </div>
-      <div class="task-btn">${d
-        ? `<span style="color:var(--ok);font-weight:700">✓</span>`
-        : `<button class="btn btn-gold btn-sm" onclick="handleDT('${dt.type}')" id="dbt-${dt.type}">${T[lang].start}</button>`
-      }</div>`;
-    l.appendChild(el);
-  });
+      <div class="cid-box">
+        <div style="font-size:11px;color:var(--t2);margin-bottom:6px;font-weight:600">${T[lang].mustEnterComment}</div>
+        <div class="cid-num">${cid}</div>
+        <div class="cid-warn">${T[lang].commentWarn}</div>
+        <button class="btn btn-gold btn-sm" onclick="copyText('${cid}','${lang==='ru'?'ID скопирован!':'Comment ID copied!'}')" style="margin-top:8px">${T[lang].copyCommentID}</button>
+      </div>
+      <div style="background:rgba(255,68,68,.06);border:1px solid rgba(255,68,68,.15);border-radius:var(--r);padding:10px;margin:10px 0;font-size:11px;color:var(--err)">${T[lang].tonAutoNote}</div>
+      <button class="btn btn-ton" onclick="openTonWalletPay(${amt})" style="width:100%;padding:13px;margin-top:4px">${T[lang].openWalletApp}</button>`;
+    _q('topupTonWalletOverlay').style.display='flex';return;
+  }
+  if(method==='stars'){
+    const sn=Math.max(50,Math.round(amt*65));
+    _q('starsTopupContent').innerHTML=`
+      <div style="background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.2);border-radius:var(--r);padding:10px;text-align:center;margin-bottom:12px;font-size:12px;color:var(--t2)">${T[lang].starsRate}</div>
+      <input type="number" id="starsInputAmt" placeholder="${T[lang].starsOrAmount}" min="50" step="1" value="${sn}" style="margin-bottom:4px">
+      <div style="font-size:11px;color:var(--t2);text-align:center;margin-bottom:12px">= <span id="starsToTon">${(sn/65).toFixed(4)}</span> TON</div>
+      <div style="background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.15);border-radius:var(--r);padding:12px;margin-bottom:14px;font-size:12px;color:var(--t2)">${T[lang].starsViaBot}</div>
+      <button class="btn btn-stars" onclick="openStarsBot()" style="width:100%;padding:14px">${T[lang].payStarsBtn}</button>`;
+    _q('topupStarsOverlay').style.display='flex';
+    setTimeout(()=>{const inp=_q('starsInputAmt');if(inp)inp.oninput=()=>{const s=parseInt(inp.value)||0;const e=_q('starsToTon');if(e)e.textContent=(s/65).toFixed(4);};},100);
+  }
 }
-
-async function handleDT(type) {
-  const st = _dtState[type];
-  if (st === 'done') return;
-  const dt = DT.find(d => d.type === type);
-  const btn = _q('dbt-' + type);
-  if (st === 'idle') {
-    if (type === 'checkin') { await claimDT(type); return; }
-    if (type === 'update') {
-      if (dt.url) window.open(dt.url, '_blank');
-      _dtState[type] = 'ready';
-      if (btn) { btn.textContent = T[lang].claim; btn.style.background = 'linear-gradient(135deg,#00a352,#44ff88)'; }
+function openTonWalletPay(amount){
+  const cid=userData?.ton_comment_id||'';
+  const nano=Math.round((amount||0.5)*1e9);
+  const deepLink=`ton://transfer/${TON_WALLET}?amount=${nano}&text=${cid}`;
+  if(tonConnectUI&&tcWalletAddr){
+    try{
+      const tx={validUntil:Math.floor(Date.now()/1000)+600,messages:[{address:TON_WALLET,amount:String(nano),payload:btoa(cid)}]};
+      tonConnectUI.sendTransaction(tx).then(()=>toast(lang==='ru'?'✅ Транзакция отправлена!':'✅ Transaction sent!','ok')).catch(()=>window.open(deepLink,'_blank'));
       return;
-    }
-    if (type === 'share') {
-      const lk = userData?.referral_link || 'https://t.me/treward_ton_bot';
-      const tx = lang === 'ru' ? '🏆 Зарабатывай TR монеты в TRewards!' : '🏆 Earn TR coins on TRewards!';
-      if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`);
-      else window.open(`https://t.me/share/url?url=${encodeURIComponent(lk)}`, '_blank');
-      _dtState[type] = 'ready';
-      setTimeout(() => claimDT(type), 2000);
-      return;
-    }
+    }catch(e){}
   }
-  if (st === 'ready') await claimDT(type);
+  window.open(deepLink,'_blank');
 }
+function openStarsBot(){const u='https://t.me/treward_ton_bot?start=stars';if(tg?.openTelegramLink)tg.openTelegramLink(u);else window.open(u,'_blank');toast(lang==='ru'?'Отправьте /stars боту':'Send /stars to the bot','ok');closeAllTopups();}
+async function confirmXrocketTopup(){const amt=pendingTopupAmt;closeAllTopups();if(amt<0.5){toast(lang==='ru'?'Минимум 0.50 TON':'Minimum 0.50 TON','err');return;}if(!initData){toast(lang==='ru'?'Открываем xRocket...':'Opening xRocket...','ok');return;}try{const r=await api('POST','/api/create-topup',{init_data:initData,amount:amt,method:'xrocket'});if(tg?.openLink)tg.openLink(r.invoice_url);else window.open(r.invoice_url,'_blank');}catch(e){toast(e.message,'err');}}
 
-async function claimDT(type) {
-  if (!initData) {
-    toast('+5,000 TR +1 spin!', 'ok');
-    _dtState[type] = 'done';
-    buildDailyTasks(Object.keys(_dtState).filter(k => _dtState[k] === 'done'));
-    return;
-  }
-  try {
-    const r = await api('POST', '/api/claim-daily-task', { init_data: initData, task_type: type });
-    userData.coins = r.new_balance;
-    userData.spins = (userData.spins || 0) + r.spins_earned;
-    updateUI();
-    toast(`+${r.coins_earned.toLocaleString()} TR +${r.spins_earned} spin!`, 'ok');
-    _dtState[type] = 'done';
-    buildDailyTasks(Object.keys(_dtState).filter(k => _dtState[k] === 'done'));
-  } catch (e) { toast(e.message, 'err'); }
-}
+async function loadTransactions(){if(!initData){_q('txList').innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px">${T[lang].noTransactions}</div>`;return;}try{const txs=await api('GET','/api/transactions?init_data='+encodeURIComponent(initData));const el=_q('txList');if(!txs||!txs.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px;font-size:13px">${T[lang].noTransactions}</div>`;return;}const ico={streak:'🔥',spin:'🎰',task:'⚡',daily_task:'✅',promo:'🎁',referral:'👥',withdrawal:'💸',topup:'➕',topup_stars:'⭐',topup_ton_wallet:'💎',watch_ad:'📺',convert:'⇄',check_create:'🧾',check_claim:'💎'};el.innerHTML=txs.map(t=>{const isTon=t.ton_amount&&parseFloat(t.ton_amount)!==0;const val=isTon?parseFloat(t.ton_amount):(t.amount||0);const cr=val>0;const am=isTon?`${cr?'+':''}${parseFloat(t.ton_amount).toFixed(4)} TON`:`${cr?'+':''}${(t.amount||0).toLocaleString()} TR`;return`<div class="tx-item"><div class="tx-icon">${ico[t.type]||'💫'}</div><div class="tx-info"><div class="tx-desc">${t.description||t.type}</div><div class="tx-date">${new Date(t.created_at).toLocaleDateString()}</div></div><div class="tx-amt ${cr?'tx-credit':'tx-debit'}">${am}</div></div>`;}).join('');}catch(e){}}
 
-// ─── TASKS + FILTER ───────────────────────────────────────────────────────────
-async function loadTasks() {
-  if (!initData) { window._tasks = []; renderFiltered(); return; }
-  try {
-    window._tasks = await api('GET', '/api/tasks?init_data=' + encodeURIComponent(initData));
-    renderFiltered();
-  } catch (e) {
-    _q('taskList').innerHTML = `<div style="text-align:center;color:var(--err);padding:20px">${e.message}</div>`;
-  }
-}
+function selectCheckType(type){selectedCheckType=type;_q('ct-personal').classList.toggle('selected',type==='personal');_q('ct-multi').classList.toggle('selected',type==='multi');_q('checkMultiWrap').style.display=type==='multi'?'':'none';updateCheckPreview();}
+function updateCheckPreview(){if(selectedCheckType==='multi'){const amt=parseFloat(_q('checkAmt').value)||0;const ppl=parseInt(_q('checkPeople').value)||0;_q('checkPerPerson').textContent=ppl>0?(amt/ppl).toFixed(4):'—';}}
+async function createCheck(){const amt=parseFloat(_q('checkAmt').value)||0;if(amt<=0){toast(lang==='ru'?'Введите корректную сумму':'Enter a valid amount','err');return;}if(amt>(parseFloat(userData?.ton_balance)||0)){toast(lang==='ru'?'Недостаточно TON':'Insufficient TON balance','err');return;}let people=1;if(selectedCheckType==='multi'){people=parseInt(_q('checkPeople').value)||0;if(people<2){toast(lang==='ru'?'Минимум 2 получателя':'Enter at least 2 recipients','err');return;}}if(!initData){const cid='CHECK'+Date.now();const link=`https://t.me/treward_ton_bot?start=c_${cid}`;newCheckLinkVal=link;userData.ton_balance=(parseFloat(userData.ton_balance)||0)-amt;updateUI();_q('newCheckLink').textContent=link;_q('checkCreatedOverlay').style.display='flex';_q('checkAmt').value='';await loadChecks();return;}try{const r=await api('POST','/api/create-check',{init_data:initData,amount:amt,check_type:selectedCheckType,recipients:people});userData.ton_balance=r.new_ton_balance;updateUI();newCheckLinkVal=r.link;_q('newCheckLink').textContent=r.link;_q('checkCreatedOverlay').style.display='flex';_q('checkAmt').value='';if(selectedCheckType==='multi')_q('checkPeople').value='';loadChecks();}catch(e){toast(e.message,'err');}}
+function closeCheckCreated(){_q('checkCreatedOverlay').style.display='none';}
+function copyCheckLink(){copyText(newCheckLinkVal,lang==='ru'?'Скопировано!':'Link copied!');}
+function shareCheckLink(){const tx=lang==='ru'?'💎 Получи свой TON чек!':'💎 Claim your TON check!';if(tg?.openTelegramLink)tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(newCheckLinkVal)}&text=${encodeURIComponent(tx)}`);else window.open(`https://t.me/share/url?url=${encodeURIComponent(newCheckLinkVal)}&text=${encodeURIComponent(tx)}`,'_blank');}
+async function loadChecks(){if(!initData){renderMyChecks([{id:'C001',amount:0.5,check_type:'personal',recipients:1,status:'active',link:'https://t.me/bot?start=c_C001',claimed_count:0}]);renderReceivedChecks([]);return;}try{const r=await api('GET','/api/checks?init_data='+encodeURIComponent(initData));renderMyChecks(r.my_checks||[]);renderReceivedChecks(r.received_checks||[]);}catch(e){}}
+function renderMyChecks(checks){const el=_q('myChecksList');if(!checks.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px">${T[lang].noChecksYet}</div>`;return;}el.innerHTML=checks.map(c=>`<div class="chk-item"><div class="chk-hdr"><div class="chk-amt">${parseFloat(c.amount).toFixed(4)} TON</div><div class="chk-type ${c.check_type}">${c.check_type==='personal'?'👤 '+T[lang].personal:'👥 Multi ('+c.recipients+')'}</div></div><div class="chk-link">${c.link||'—'}</div><div class="chk-foot"><div class="chk-st ${c.status==='active'?'active':'claimed'}">${c.status==='active'?'● Active':'✓ Claimed'}</div><div style="display:flex;gap:6px;align-items:center">${c.status==='active'?`<button class="btn btn-outline btn-sm" onclick="copyText('${c.link||''}','Copied!')">${T[lang].copyBtn}</button>`:''} ${c.check_type==='multi'?`<span style="font-size:11px;color:var(--t2)">${c.claimed_count||0}/${c.recipients}</span>`:''}</div></div></div>`).join('');}
+function renderReceivedChecks(checks){const el=_q('receivedChecksList');if(!checks.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px">${T[lang].noChecksClaim}</div>`;return;}el.innerHTML=checks.map(c=>`<div class="chk-item"><div class="chk-hdr"><div class="chk-amt">${parseFloat(c.amount_per_person||c.amount).toFixed(4)} TON</div><div class="chk-type ${c.check_type}">${c.check_type==='personal'?'👤 '+T[lang].personal:'👥 Multi'}</div></div><div class="chk-foot"><div style="font-size:11px;color:var(--t2)">${lang==='ru'?'От:':'From:'} ${c.creator_name||'Unknown'}</div><button class="btn btn-ton btn-sm" onclick="openClaimCheck('${c.id}','${parseFloat(c.amount_per_person||c.amount).toFixed(4)}','${c.check_type}','${c.recipients||1}')">💰 ${T[lang].claim}</button></div></div>`).join('');}
+function openClaimCheck(id,amt,type,recs){pendingClaimCheckId=id;_q('claimCheckAmt').textContent=amt+' TON';_q('claimCheckInfo').textContent=type==='personal'?(lang==='ru'?'Личный чек':'Personal check'):`Multi check — ${recs} ${lang==='ru'?'получателей':'recipients'}`;_q('claimCheckOverlay').style.display='flex';}
+async function openClaimCheckById(checkId){pendingClaimCheckId=checkId;_q('claimCheckAmt').textContent=lang==='ru'?'Загрузка...':'Loading...';_q('claimCheckInfo').textContent=lang==='ru'?'Получение деталей...':'Fetching...';_q('claimCheckOverlay').style.display='flex';if(!initData)return;try{const r=await api('GET','/api/check/'+checkId+'?init_data='+encodeURIComponent(initData));_q('claimCheckAmt').textContent=parseFloat(r.amount_per_person||r.amount).toFixed(4)+' TON';_q('claimCheckInfo').textContent=r.check_type==='personal'?(lang==='ru'?'Личный чек':'Personal check'):`Multi check — ${r.recipients} ${lang==='ru'?'получателей':'recipients'}`;}catch(e){toast(e.message,'err');closeClaimCheck();}}
+function closeClaimCheck(){_q('claimCheckOverlay').style.display='none';pendingClaimCheckId=null;}
+async function confirmClaimCheck(){if(!pendingClaimCheckId)return;if(!initData){toast(lang==='ru'?'Получено!':'Claimed!','ok');userData.ton_balance=(parseFloat(userData.ton_balance)||0)+0.5;updateUI();closeClaimCheck();return;}try{const r=await api('POST','/api/claim-check',{init_data:initData,check_id:pendingClaimCheckId});userData.ton_balance=r.new_ton_balance;updateUI();toast(`💎 +${parseFloat(r.amount_received).toFixed(4)} TON!`,'ok');closeClaimCheck();loadChecks();goTab('check');}catch(e){toast(e.message,'err');closeClaimCheck();}}
 
-function setFilter(f) {
-  activeFilter = f;
-  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.getAttribute('data-f') === f));
-  const isDaily = f === 'daily';
-  const dp = _q('dailyTaskPanel'), tw = _q('taskListWrap');
-  if (dp) dp.style.display = isDaily ? '' : 'none';
-  if (tw) tw.style.display = isDaily ? 'none' : '';
-  if (!isDaily) renderFiltered();
-}
+function updateAdCostDisplay(){const type=_q('adType').value;const isD=type==='daily';_q('adLimitWrap').style.display=isD?'none':'';_q('adDailyWrap').style.display=isD?'':'none';if(isD){const days=parseInt(_q('adDays')?.value)||1;_q('adCost').textContent=(days*5).toFixed(3)+' TON';}else{const lim=parseInt(_q('adLimit').value)||1000;_q('adCost').textContent=(lim*0.001).toFixed(3)+' TON';}}
+async function openAd(){_q('adOverlay').style.display='flex';if(!initData)return;try{const r=await api('GET','/api/advertiser?init_data='+encodeURIComponent(initData));_q('adBal').textContent=parseFloat(r.ad_balance).toFixed(4);renderMyTasks(r.tasks||[]);}catch(e){}}
+function closeAd(){_q('adOverlay').style.display='none';}
+function switchAdTab(t){document.querySelectorAll('.adt-item').forEach((el,i)=>el.classList.toggle('active',(t==='add'&&i===0)||(t==='my'&&i===1)));_q('adTabAdd').style.display=t==='add'?'':'none';_q('adTabMy').style.display=t==='my'?'':'none';}
+function renderMyTasks(tasks){const el=_q('myTasksList');if(!tasks.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px;font-size:12px">${lang==='ru'?'Нет заданий':'No tasks yet'}</div>`;return;}const sc={active:'var(--ok)',paused:'var(--gold)',completed:'var(--t3)'};el.innerHTML=tasks.map(t=>`<div class="task-item" style="margin-bottom:8px"><div class="task-info"><div class="task-name">${t.name}</div><div class="task-reward">${t.completed_count}/${t.completion_limit||t.days_limit||'∞'} — <span style="color:${sc[t.status]}">${t.status}</span></div><div class="prog-wrap"><div class="prog-bar" style="width:${t.completion_limit?((t.completed_count/t.completion_limit)*100):50}%"></div></div></div></div>`).join('');}
+async function publishTask(){const nm=_q('adName').value.trim(),ty=_q('adType').value,ur=_q('adUrl').value.trim();if(!nm){toast(lang==='ru'?'Введите название':'Enter task name','err');return;}if(!ur||!ur.startsWith('http')){toast(lang==='ru'?'Введите корректный URL':'Enter valid URL','err');return;}let li=parseInt(_q('adLimit').value)||1000,days=0;if(ty==='daily'){days=parseInt(_q('adDays').value)||0;if(days<1){toast(lang==='ru'?'Введите количество дней':'Enter number of days','err');return;}}if(!initData){toast(lang==='ru'?'Опубликовано!':'Published!','ok');return;}try{const payload={init_data:initData,name:nm,task_type:ty,url:ur};if(ty==='daily')payload.days_limit=days;else payload.completion_limit=li;const r=await api('POST','/api/create-task',payload);userData.ton_balance=(parseFloat(userData.ton_balance)||0)-r.cost;_q('adBal').textContent=parseFloat(userData.ton_balance).toFixed(4);updateUI();toast(`${lang==='ru'?'Опубликовано!':'Published!'} ${r.cost} TON`,'ok');_q('adName').value='';_q('adUrl').value='';switchAdTab('my');const ad=await api('GET','/api/advertiser?init_data='+encodeURIComponent(initData));renderMyTasks(ad.tasks||[]);}catch(e){toast(e.message,'err');}}
 
-function renderFiltered() {
-  const all  = window._tasks || [];
-  const list = activeFilter === 'all' ? all : all.filter(t => t.type === activeFilter);
-  const el   = _q('taskList');
-  if (!el) return;
-  if (!list.length) {
-    el.innerHTML = `<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noTasksAvail}</div>`;
-    return;
-  }
-  const ico = { visit:'🌐', channel:'📢', group:'👥', game:'🎮', daily:'📅' };
-  el.innerHTML = list.map(t => `
-    <div class="task-item ${t.completed ? 'completed' : ''}" id="task-${t.id}">
-      <div class="task-icon">${ico[t.type] || '⚡'}</div>
-      <div class="task-info">
-        <div class="task-name">${t.name}</div>
-        <div class="task-reward">${t.type === 'visit' ? '+3,000 TR +1 Spin' : '+5,000 TR +1 Spin'}</div>
-        <div class="prog-wrap"><div class="prog-bar" id="pg-${t.id}" style="width:0%"></div></div>
-      </div>
-      <div class="task-btn">${t.completed
-        ? `<span style="color:var(--ok);font-weight:700">✓</span>`
-        : `<button class="btn btn-gold btn-sm" onclick="startTask(${t.id},'${t.type}','${encodeURIComponent(t.url)}')" id="tbt-${t.id}">${T[lang].start}</button>`
-      }</div>
-    </div>`).join('');
-}
-
-async function startTask(id, type, ue) {
-  const url = decodeURIComponent(ue), btn = _q('tbt-' + id);
-  if (!btn) return;
-  if (type === 'channel' || type === 'group') {
-    pendingVerifyId = id; pendingVerifyUrl = url;
-    _q('verifyOverlay').style.display = 'flex';
-    return;
-  }
-  window.open(url, '_blank');
-  const dur = type === 'game' ? 10 : 15;
-  btn.disabled = true;
-  btn.style.background = 'linear-gradient(135deg,#1a3a1a,#44ff88)';
-  btn.style.color = '#000';
-  const pg = _q('pg-' + id); let el = 0;
-  const iv = setInterval(() => {
-    el++;
-    if (pg) pg.style.width = ((el / dur) * 100) + '%';
-    btn.textContent = (dur - el) + 's';
-    if (el >= dur) {
-      clearInterval(iv);
-      btn.textContent = T[lang].claim;
-      btn.disabled = false;
-      btn.style.background = ''; btn.style.color = '';
-      btn.onclick = () => claimTask(id);
-    }
-  }, 1000);
-}
-
-async function claimTask(id) {
-  if (!initData) { toast('+3000 TR!', 'ok'); return; }
-  try {
-    const r = await api('POST', '/api/claim-task', { init_data: initData, task_id: id });
-    userData.coins = r.new_balance;
-    userData.spins = (userData.spins || 0) + r.spins_earned;
-    updateUI(); toast(`+${r.coins_earned} TR!`, 'ok');
-    const it = _q('task-' + id);
-    if (it) { it.classList.add('completed'); const b = _q('tbt-' + id); if (b) b.parentElement.innerHTML = `<span style="color:var(--ok);font-weight:700">✓</span>`; }
-  } catch (e) { toast(e.message, 'err'); }
-}
-
-function openVerifyLink() { if (pendingVerifyUrl) window.open(pendingVerifyUrl, '_blank'); }
-function closeVerify() { _q('verifyOverlay').style.display = 'none'; pendingVerifyId = null; pendingVerifyUrl = null; }
-
-async function verifyJoin() {
-  if (!pendingVerifyId) return;
-  if (!initData) { toast('+5000 TR!', 'ok'); closeVerify(); return; }
-  try {
-    const r = await api('POST', '/api/verify-join', { init_data: initData, task_id: pendingVerifyId });
-    userData.coins = r.new_balance;
-    userData.spins = (userData.spins || 0) + r.spins_earned;
-    updateUI(); toast(`+${r.coins_earned} TR!`, 'ok'); closeVerify(); loadTasks();
-  } catch (e) { toast(e.message, 'err'); }
-}
-
-
-// ─── WATCH ADS ────────────────────────────────────────────────
-function mountWatchAds(containerId) {
-  const c = document.getElementById(containerId);
-  if (!c) return;
-  const rows = AD_DEF.map(ad => `
-    <div class="ad-row">
-      <div class="ad-tv">📺</div>
-      <div class="ad-info">
-        <div class="ad-name">${ad.name}</div>
-        <div class="ad-rew">+${ad.reward.toLocaleString()} TR</div>
-        <div class="ad-dur">${ad.dur}s · ${lang === 'ru' ? 'Безлимитно' : 'Unlimited'}</div>
-      </div>
-      <div id="adwrap-${ad.id}">${adBtnHTML(ad.id)}</div>
-    </div>`).join('');
-  c.innerHTML = `<div class="watch-block">
-    <div class="watch-hdr"><span style="font-size:16px">📺</span><span class="watch-ttl">${T[lang].watchAds}</span></div>
-    ${rows}
-  </div>`;
-}
-
-// ─── PROMO ────────────────────────────────────────────────────
-async function redeemPromoWithAd() {
-  const code = _q('promoInput').value.trim();
-  if (!code) { toast(lang === 'ru' ? 'Введите промокод' : 'Enter a promo code', 'err'); return; }
-  toast(lang === 'ru' ? 'Смотрите рекламу...' : 'Watch ad to redeem...', 'ok');
-  await showRewardedAd();
-  await redeemPromo();
-}
-
-async function redeemPromo() {
-  const code = _q('promoInput').value.trim();
-  if (!code) return;
-  if (!initData) { toast('Dev mode', 'ok'); return; }
-  try {
-    const r = await api('POST', '/api/redeem-promo', {init_data: initData, code});
-    if (r.reward_type === 'coins') {
-      userData.coins = (userData.coins || 0) + r.amount;
-      updateUI();
-      toast(`🎁 +${r.amount} TR!`, 'ok');
-    } else {
-      // TON promo — ton_balance IS ads balance, same thing
-      userData.ton_balance = (parseFloat(userData.ton_balance) || 0) + r.amount;
-      updateUI();
-      toast(`🎁 +${r.amount} TON!`, 'ok');
-    }
-    _q('promoInput').value = '';
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-// ─── FRIENDS + REFERRAL + LEADERBOARD ────────────────────────
-async function loadFriends() {
-  if (!initData) {
-    _q('totalFriendsVal').textContent = '5';
-    _q('weeklyFriendsVal').textContent = '2';
-    _q('friendsEarned').textContent = '3,750';
-    renderLeaderboard([
-      {rank:1, name:'CryptoKing', weekly_friends:12, is_me:false},
-      {rank:2, name:'Dev',        weekly_friends:2,  is_me:true},
-      {rank:3, name:'TonWhale',   weekly_friends:1,  is_me:false},
-    ], 'weeklyLeaderboard');
-    renderLeaderboard([], 'prevWeeklyLeaderboard');
-    return;
-  }
-  try {
-    const r = await api('GET', '/api/friends?init_data=' + encodeURIComponent(initData));
-    _q('totalFriendsVal').textContent = r.total_friends || 0;
-    _q('weeklyFriendsVal').textContent = r.weekly_friends || 0;
-    _q('friendsEarned').textContent = (r.total_earned || 0).toLocaleString();
-    if (r.referral_link) { _q('refLink').textContent = r.referral_link; if (userData) userData.referral_link = r.referral_link; }
-    buildRefEarnCard(r.friends || [], r.unclaimed || 0);
-    renderLeaderboard(r.leaderboard || [], 'weeklyLeaderboard');
-    renderLeaderboard(r.prev_leaderboard || [], 'prevWeeklyLeaderboard');
-    const fl = _q('friendsList');
-    if (!r.friends || !r.friends.length) {
-      fl.innerHTML = `<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noFriendsYet}</div>`;
-      return;
-    }
-    fl.innerHTML = r.friends.map(f => `
-      <div class="friend-item">
-        <div class="friend-avatar">${(f.name || '?')[0].toUpperCase()}</div>
-        <div style="flex:1"><div style="font-size:13px;font-weight:600">${f.name}</div><div style="font-size:11px;color:var(--t2);margin-top:1px">${(f.coins || 0).toLocaleString()} TR earned</div></div>
-        <div style="font-size:12px;font-weight:700;color:var(--ok)">+${(f.your_share || 0).toLocaleString()}</div>
-      </div>`).join('');
-  } catch(e) {}
-}
-
-function renderLeaderboard(items, containerId) {
-  const el = _q(containerId);
-  if (!el) return;
-  if (!items || !items.length) {
-    el.innerHTML = `<div style="text-align:center;color:var(--t3);padding:16px 0;font-size:12px">${T[lang].noData}</div>`;
-    return;
-  }
-  const rankClass = r => r === 1 ? 'gold' : r === 2 ? 'silver' : r === 3 ? 'bronze' : '';
-  const rankEmoji = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
-  el.innerHTML = items.slice(0, 20).map(f => `
-    <div class="lb-row">
-      <div class="lb-rank ${rankClass(f.rank)}">${rankEmoji(f.rank) || f.rank}</div>
-      <div class="lb-av ${f.is_me ? 'me' : ''}">${(f.name || '?')[0].toUpperCase()}</div>
-      <div class="lb-info">
-        <div class="lb-name">${f.name}${f.is_me ? ` <span style="font-size:10px;color:var(--gold)">(${lang === 'ru' ? 'Вы' : 'You'})</span>` : ''}</div>
-        <div class="lb-sub">${lang === 'ru' ? 'Друзей за неделю' : 'Weekly friends'}</div>
-      </div>
-      <div class="lb-cnt ${f.is_me ? 'me' : ''}">${f.weekly_friends}</div>
-    </div>`).join('');
-}
-
-function buildRefEarnCard(friends, total) {
-  const card = _q('refEarnCard');
-  const pending = total || 0;
-  if (pending <= 0) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  _q('refEarnAmt').textContent = pending.toLocaleString() + ' TR';
-  const rows = friends.filter(f => (f.pending_share || 0) > 0).map(f => `
-    <div class="ref-fr-row">
-      <div class="ref-fr-av">${(f.name || '?')[0].toUpperCase()}</div>
-      <div class="ref-fr-info">
-        <div class="ref-fr-name">${f.name}</div>
-        <div class="ref-fr-sub">${(f.coins || 0).toLocaleString()} TR total</div>
-      </div>
-      <div class="ref-fr-share">+${(f.pending_share || 0).toLocaleString()}</div>
-    </div>`).join('');
-  _q('refFriendRows').innerHTML = rows;
-}
-
-async function claimAllReferral() {
-  if (!initData) {
-    const p = parseInt((_q('refEarnAmt').textContent || '0').replace(/[^0-9]/g, '')) || 0;
-    userData.coins = (userData.coins || 0) + p;
-    updateUI();
-    toast(`+${p.toLocaleString()} TR!`, 'ok');
-    _q('refEarnCard').style.display = 'none';
-    return;
-  }
-  try {
-    const r = await api('POST', '/api/claim-referral', {init_data: initData});
-    userData.coins = (userData.coins || 0) + r.claimed;
-    updateUI();
-    toast(`+${r.claimed.toLocaleString()} TR!`, 'ok');
-    _q('refEarnCard').style.display = 'none';
-    loadFriends();
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-function copyRef() { navigator.clipboard?.writeText(_q('refLink').textContent).then(() => toast(lang === 'ru' ? 'Скопировано!' : 'Copied!', 'ok')); }
-function shareRef() {
-  const lk = userData?.referral_link || 'https://t.me/treward_ton_bot';
-  const tx = lang === 'ru' ? '🏆 Зарабатывай TR монеты в TRewards!' : '🏆 Join TRewards and earn TR coins!';
-  if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`);
-  else window.open(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`, '_blank');
-}
-
-// ─── WALLET / WITHDRAW ────────────────────────────────────────
-// TR coins → withdrawal (admin sends TON manually)
-// ton_balance = TON coins = ads balance (SAME THING)
-const TIERS = [
-  {coins:1000000,  ton:0.10, net:0.07, fee:0.03},
-  {coins:2000000,  ton:0.20, net:0.17, fee:0.03},
-  {coins:3000000,  ton:0.30, net:0.27, fee:0.03},
-  {coins:10000000, ton:1.00, net:1.00, fee:0.00},
-];
-
-function buildTierGrid() {
-  _q('tierGrid').innerHTML = TIERS.map((t, i) => `
-    <div class="tier-item" id="tier-${i}" onclick="selectTier(${i})">
-      <div class="tier-coins">${(t.coins / 1000000).toFixed(0)}M TR</div>
-      <div class="tier-ton">${t.ton} TON</div>
-      <div class="tier-net">Net: ${t.net} TON</div>
-      <div class="tier-fee">${t.fee > 0 ? `Fee: ${t.fee} TON` : (lang === 'ru' ? 'Без комиссии 🎉' : 'No Fee 🎉')}</div>
-    </div>`).join('');
-}
-
-function selectTier(i) {
-  selectedTier = i;
-  document.querySelectorAll('.tier-item').forEach((el, j) => el.classList.toggle('selected', j === i));
-}
-
-function doWithdraw() {
-  if (selectedTier < 0) { toast(lang === 'ru' ? 'Выберите уровень' : 'Select a tier', 'err'); return; }
-  const ti = TIERS[selectedTier];
-  if ((userData?.coins || 0) < ti.coins) { toast(lang === 'ru' ? 'Недостаточно монет' : 'Insufficient coins', 'err'); return; }
-  const addr = _q('walletAddr').value.trim();
-  if (!addr) { toast(lang === 'ru' ? 'Введите адрес кошелька' : 'Enter wallet address', 'err'); return; }
-  pendingWithdraw = {ti, addr};
-  _q('confirmBody').innerHTML = `
-    <div class="stat-row"><span class="stat-label">${lang === 'ru' ? 'Спишется TR' : 'Coins deducted'}</span><span class="stat-val" style="color:var(--err)">-${ti.coins.toLocaleString()} TR</span></div>
-    <div class="stat-row"><span class="stat-label">${lang === 'ru' ? 'Сумма TON' : 'TON amount'}</span><span class="stat-val">${ti.ton} TON</span></div>
-    <div class="stat-row"><span class="stat-label">${lang === 'ru' ? 'Комиссия' : 'Network fee'}</span><span class="stat-val" style="color:var(--err)">${ti.fee > 0 ? '-' + ti.fee + ' TON' : (lang === 'ru' ? 'Бесплатно!' : 'Free!')}</span></div>
-    <div class="stat-row"><span class="stat-label"><b>${lang === 'ru' ? 'Вы получите' : 'You receive'}</b></span><span class="stat-val" style="color:var(--ok)">${ti.net} TON</span></div>
-    <div style="margin-top:10px;font-size:11px;color:var(--t3)">${lang === 'ru' ? 'Кошелёк' : 'To'}: ${addr.slice(0,12)}...${addr.slice(-6)}</div>`;
-  _q('confirmOverlay').style.display = 'flex';
-}
-
-function closeConfirm() { _q('confirmOverlay').style.display = 'none'; }
-
-async function confirmWithdraw() {
-  if (!pendingWithdraw) return;
-  closeConfirm();
-  if (!initData) { toast(lang === 'ru' ? 'Запрос отправлен!' : 'Withdrawal queued!', 'ok'); return; }
-  try {
-    const r = await api('POST', '/api/withdraw', {init_data: initData, tier_index: selectedTier, wallet_address: pendingWithdraw.addr});
-    userData.coins -= r.coins_deducted;
-    updateUI();
-    toast(lang === 'ru' ? 'Запрос отправлен!' : 'Withdrawal queued!', 'ok');
-    selectedTier = -1;
-    document.querySelectorAll('.tier-item').forEach(el => el.classList.remove('selected'));
-    _q('walletAddr').value = '';
-    loadTransactions();
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-// ─── CONVERT TR → TON ─────────────────────────────────────────
-function updateConvPrev() {
-  const v = parseFloat(_q('convAmt').value) || 0;
-  _q('convPrev').textContent = v > 0 ? ((v / 1000000) * 0.15).toFixed(4) : '0.0000';
-}
-
-function doConvert() {
-  const v = parseFloat(_q('convAmt').value) || 0;
-  if (v < 1000000) { toast(lang === 'ru' ? 'Минимум 1 000 000 TR' : 'Minimum 1,000,000 TR', 'err'); return; }
-  if (v > (userData?.coins || 0)) { toast(lang === 'ru' ? 'Недостаточно TR' : 'Insufficient TR', 'err'); return; }
-  const ton = (v / 1000000) * 0.15;
-  pendingConvert = {tr: v, ton};
-  _q('convConfirmBody').innerHTML = `
-    <div class="stat-row"><span class="stat-label">${lang === 'ru' ? 'Спишется TR' : 'TR deducted'}</span><span class="stat-val" style="color:var(--err)">-${v.toLocaleString()} TR</span></div>
-    <div class="stat-row"><span class="stat-label">${lang === 'ru' ? 'Курс' : 'Rate'}</span><span class="stat-val" style="color:var(--t2)">1M TR = 0.15 TON</span></div>
-    <div class="stat-row"><span class="stat-label"><b>${lang === 'ru' ? 'Вы получите' : 'You receive'}</b></span><span class="stat-val" style="color:var(--ton)">${ton.toFixed(4)} TON</span></div>`;
-  _q('convOverlay').style.display = 'flex';
-}
-
-function closeConvert() { _q('convOverlay').style.display = 'none'; }
-
-async function confirmConvert() {
-  if (!pendingConvert) return;
-  closeConvert();
-  if (!initData) {
-    userData.coins = (userData.coins || 0) - pendingConvert.tr;
-    userData.ton_balance = (parseFloat(userData.ton_balance) || 0) + pendingConvert.ton;
-    updateUI();
-    toast(`+${pendingConvert.ton.toFixed(4)} TON!`, 'ok');
-    _q('convAmt').value = ''; _q('convPrev').textContent = '0.0000';
-    pendingConvert = null;
-    return;
-  }
-  try {
-    const r = await api('POST', '/api/convert', {init_data: initData, tr_amount: pendingConvert.tr});
-    userData.coins = r.new_tr_balance;
-    userData.ton_balance = r.new_ton_balance;
-    updateUI();
-    toast(`+${r.ton_received.toFixed(4)} TON!`, 'ok');
-    _q('convAmt').value = ''; _q('convPrev').textContent = '0.0000';
-    loadTransactions();
-  } catch(e) { toast(e.message, 'err'); }
-  pendingConvert = null;
-}
-
-// ─── TOP-UP (3 methods) ───────────────────────────────────────
-function closeAllTopups() {
-  ['topupXrocketOverlay', 'topupTonWalletOverlay', 'topupStarsOverlay'].forEach(id => {
-    const el = _q(id);
-    if (el) el.style.display = 'none';
-  });
-}
-
-function topUp(method) {
-  const amtEl = _q('topupTonAmt');
-  const amt = parseFloat(amtEl?.value) || 0;
-  pendingTopupAmt = amt;
-  pendingTopupMethod = method;
-
-  if (method === 'xrocket') {
-    // Show xrocket overlay immediately — instructions already inside
-    _q('xrocketAmt').textContent = amt > 0 ? amt : '—';
-    _q('topupXrocketOverlay').style.display = 'flex';
-    return;
-  }
-
-  if (method === 'ton_wallet') {
-    // Show ton wallet overlay immediately
-    const addr = userData?.ton_wallet_address;
-    const commentId = userData?.ton_comment_id || '------';
-    if (!addr) {
-      _q('tonWalletTopupContent').innerHTML = `
-        <div style="text-align:center;padding:20px 0">
-          <div style="font-size:36px;margin-bottom:12px">🔗</div>
-          <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:8px">${T[lang].connectFirst}</div>
-          <p style="font-size:12px;color:var(--t2);margin-bottom:16px">${T[lang].connectWalletInstr}</p>
-          <button class="btn btn-ton" onclick="closeAllTopups();openConnectWallet();" style="width:100%">${T[lang].connectWalletBtn}</button>
-        </div>`;
-    } else {
-      _q('tonWalletTopupContent').innerHTML = `
-        <div style="font-size:12px;color:var(--t2);text-align:center;margin-bottom:8px">
-          ${lang === 'ru' ? 'Отправьте' : 'Send'} <b style="color:var(--ton)">${amt > 0 ? amt + ' TON' : 'TON'}</b> ${lang === 'ru' ? 'на адрес ниже' : 'to the address below'}
-        </div>
-        <div style="font-size:11px;color:var(--t2);margin-bottom:4px">✅ 1 TON = 1 TON ${lang === 'ru' ? 'зачисляется автоматически' : 'credited automatically'} · ${lang === 'ru' ? 'Минимум' : 'Minimum'}: 0.50 TON</div>
-        <div class="ton-topup-info">
-          <div style="font-size:11px;color:var(--t2);margin-bottom:4px">${T[lang].receivingAddr}</div>
-          <div class="ton-topup-addr" id="tonReceivingAddr">${lang === 'ru' ? 'Загрузка...' : 'Loading...'}</div>
-          <button class="btn btn-outline btn-sm" onclick="copyReceivingAddr()" style="margin-top:6px">${T[lang].copyAddr}</button>
-        </div>
-        <div class="comment-id-box">
-          <div style="font-size:11px;color:var(--t2);margin-bottom:6px">${T[lang].mustEnterComment}</div>
-          <div class="comment-id-num">${commentId}</div>
-          <div class="comment-id-warn">${T[lang].commentWarn}</div>
-          <button class="btn btn-outline btn-sm" onclick="copyCommentId('${commentId}')" style="margin-top:8px">${T[lang].copyCommentID}</button>
-        </div>
-        <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:var(--r);padding:10px;margin-top:8px;font-size:11px;color:var(--err)">
-          ${T[lang].tonAutoNote}
-        </div>`;
-      // Fetch receiving address
-      if (initData) {
-        api('POST', '/api/create-topup', {init_data: initData, amount: Math.max(amt, 0.5), method: 'ton_wallet'})
-          .then(r => { const el = _q('tonReceivingAddr'); if (el) el.textContent = r.receiving_address || 'Contact support'; })
-          .catch(() => { const el = _q('tonReceivingAddr'); if (el) el.textContent = 'Contact @treward_ton for address'; });
-      } else {
-        const el = _q('tonReceivingAddr');
-        if (el) el.textContent = 'EQ_YOUR_RECEIVING_WALLET_ADDRESS';
-      }
-    }
-    _q('topupTonWalletOverlay').style.display = 'flex';
-    return;
-  }
-
-  if (method === 'stars') {
-    const starsNeeded = Math.max(50, Math.round(amt * 65));
-    _q('starsTopupContent').innerHTML = `
-      <div class="stars-rate">${T[lang].starsRate}</div>
-      <div style="margin-bottom:12px">
-        <input type="number" id="starsInputAmt" placeholder="${T[lang].starsOrAmount}" min="50" step="1" value="${starsNeeded}" style="margin-bottom:4px">
-        <div style="font-size:11px;color:var(--t2);text-align:center">= <span id="starsToTon">${(starsNeeded / 65).toFixed(4)}</span> TON</div>
-      </div>
-      <div style="font-size:11px;color:var(--t2);margin-bottom:4px">✅ 65 Stars = 1 TON ${lang === 'ru' ? 'зачисляется автоматически' : 'credited automatically'} · ${lang === 'ru' ? 'Минимум' : 'Minimum'}: 50 Stars</div>
-      <div style="background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.15);border-radius:var(--r);padding:12px;margin-bottom:14px;font-size:12px;color:var(--t2)">
-        ${T[lang].starsViaBot}
-      </div>
-      <button class="btn btn-stars" onclick="confirmStarsTopup()" style="width:100%;padding:14px">${T[lang].payStarsBtn}</button>`;
-    _q('topupStarsOverlay').style.display = 'flex';
-    setTimeout(() => {
-      const inp = _q('starsInputAmt');
-      if (inp) inp.oninput = () => {
-        const s = parseInt(inp.value) || 0;
-        const stTon = _q('starsToTon');
-        if (stTon) stTon.textContent = (s / 65).toFixed(4);
-      };
-    }, 100);
-    return;
-  }
-}
-
-function copyReceivingAddr() {
-  const el = _q('tonReceivingAddr');
-  if (el) navigator.clipboard?.writeText(el.textContent).then(() => toast(lang === 'ru' ? 'Адрес скопирован!' : 'Address copied!', 'ok'));
-}
-
-function copyCommentId(id) {
-  navigator.clipboard?.writeText(id).then(() => toast(lang === 'ru' ? 'ID скопирован!' : 'Comment ID copied!', 'ok'));
-}
-
-async function confirmXrocketTopup() {
-  const amt = pendingTopupAmt;
-  closeAllTopups();
-  if (amt < 0.5) { toast(lang === 'ru' ? 'Минимум 0.50 TON' : 'Minimum 0.50 TON', 'err'); return; }
-  if (!initData) { toast(lang === 'ru' ? 'Открываем xRocket...' : 'Opening xRocket...', 'ok'); return; }
-  try {
-    const r = await api('POST', '/api/create-topup', {init_data: initData, amount: amt, method: 'xrocket'});
-    if (tg?.openLink) tg.openLink(r.invoice_url);
-    else window.open(r.invoice_url, '_blank');
-    toast(lang === 'ru' ? 'Открываем xRocket Pay...' : 'Opening xRocket Pay...', 'ok');
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-function confirmStarsTopup() {
-  const lk = 'https://t.me/treward_ton_bot';
-  if (tg?.openTelegramLink) tg.openTelegramLink(lk);
-  else window.open(lk, '_blank');
-  toast(lang === 'ru' ? 'Отправьте /stars боту' : 'Send /stars to the bot', 'ok');
-  closeAllTopups();
-}
-
-// ─── TRANSACTIONS ─────────────────────────────────────────────
-async function loadTransactions() {
-  if (!initData) {
-    _q('txList').innerHTML = `<div style="text-align:center;color:var(--t3);padding:20px">${T[lang].noTransactions}</div>`;
-    return;
-  }
-  try {
-    const txs = await api('GET', '/api/transactions?init_data=' + encodeURIComponent(initData));
-    const el = _q('txList');
-    if (!txs || !txs.length) {
-      el.innerHTML = `<div style="text-align:center;color:var(--t3);padding:20px;font-size:13px">${T[lang].noTransactions}</div>`;
-      return;
-    }
-    const ico = {streak:'🔥', spin:'🎰', task:'⚡', daily_task:'✅', promo:'🎁', referral:'👥',
-      withdrawal:'💸', topup:'➕', topup_stars:'⭐', topup_ton_wallet:'💎',
-      watch_ad:'📺', convert:'⇄', check_create:'🧾', check_claim:'💎'};
-    el.innerHTML = txs.map(t => {
-      const cr = (t.amount || 0) > 0 || (t.ton_amount || 0) > 0;
-      const am = t.ton_amount
-        ? `${cr ? '+' : ''}${parseFloat(t.ton_amount).toFixed(4)} TON`
-        : `${cr ? '+' : ''}${(t.amount || 0).toLocaleString()} TR`;
-      return `<div class="tx-item">
-        <div class="tx-icon" style="background:rgba(255,184,0,.08)">${ico[t.type] || '💫'}</div>
-        <div class="tx-info">
-          <div class="tx-desc">${t.description || t.type}</div>
-          <div class="tx-date">${new Date(t.created_at).toLocaleDateString()}</div>
-        </div>
-        <div class="tx-amt ${cr ? 'tx-credit' : 'tx-debit'}">${am}</div>
-      </div>`;
-    }).join('');
-  } catch(e) {}
-}
-
-// ─── CHECK SYSTEM ─────────────────────────────────────────────
-function selectCheckType(type) {
-  selectedCheckType = type;
-  _q('ct-personal').classList.toggle('selected', type === 'personal');
-  _q('ct-multi').classList.toggle('selected', type === 'multi');
-  _q('checkMultiWrap').style.display = type === 'multi' ? '' : 'none';
-  updateCheckPreview();
-}
-
-function updateCheckPreview() {
-  if (selectedCheckType === 'multi') {
-    const amt = parseFloat(_q('checkAmt').value) || 0;
-    const ppl = parseInt(_q('checkPeople').value) || 0;
-    _q('checkPerPerson').textContent = ppl > 0 ? (amt / ppl).toFixed(4) : '—';
-  }
-}
-
-async function createCheck() {
-  const amt = parseFloat(_q('checkAmt').value) || 0;
-  if (amt <= 0) { toast(lang === 'ru' ? 'Введите корректную сумму' : 'Enter a valid amount', 'err'); return; }
-  if (amt > (parseFloat(userData?.ton_balance) || 0)) { toast(lang === 'ru' ? 'Недостаточно TON' : 'Insufficient TON balance', 'err'); return; }
-  let people = 1;
-  if (selectedCheckType === 'multi') {
-    people = parseInt(_q('checkPeople').value) || 0;
-    if (people < 2) { toast(lang === 'ru' ? 'Минимум 2 получателя' : 'Enter at least 2 recipients', 'err'); return; }
-  }
-  if (!initData) {
-    const checkId = 'CHECK' + Date.now();
-    const link = `https://t.me/treward_ton_bot?start=c_${checkId}`;
-    newCheckLinkVal = link;
-    userData.ton_balance = (parseFloat(userData.ton_balance) || 0) - amt;
-    updateUI();
-    _q('newCheckLink').textContent = link;
-    _q('checkCreatedOverlay').style.display = 'flex';
-    _q('checkAmt').value = '';
-    await loadChecks();
-    return;
-  }
-  try {
-    const r = await api('POST', '/api/create-check', {init_data: initData, amount: amt, check_type: selectedCheckType, recipients: people});
-    userData.ton_balance = r.new_ton_balance;
-    updateUI();
-    newCheckLinkVal = r.link;
-    _q('newCheckLink').textContent = r.link;
-    _q('checkCreatedOverlay').style.display = 'flex';
-    _q('checkAmt').value = '';
-    if (selectedCheckType === 'multi') _q('checkPeople').value = '';
-    loadChecks();
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-function closeCheckCreated() { _q('checkCreatedOverlay').style.display = 'none'; }
-function copyCheckLink() { navigator.clipboard?.writeText(newCheckLinkVal).then(() => toast(lang === 'ru' ? 'Скопировано!' : 'Link copied!', 'ok')); }
-function shareCheckLink() {
-  const tx = lang === 'ru' ? '💎 Получи свой TON чек в TRewards!' : '💎 Claim your TON check on TRewards!';
-  if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(newCheckLinkVal)}&text=${encodeURIComponent(tx)}`);
-  else window.open(`https://t.me/share/url?url=${encodeURIComponent(newCheckLinkVal)}&text=${encodeURIComponent(tx)}`, '_blank');
-}
-
-async function loadChecks() {
-  if (!initData) {
-    renderMyChecks([
-      {id:'C001', amount:0.5, check_type:'personal', recipients:1, status:'active', link:'https://t.me/bot?start=c_C001', claimed_count:0},
-      {id:'C002', amount:1.0, check_type:'multi',    recipients:5, status:'active', link:'https://t.me/bot?start=c_C002', claimed_count:2},
-    ]);
-    renderReceivedChecks([]);
-    return;
-  }
-  try {
-    const r = await api('GET', '/api/checks?init_data=' + encodeURIComponent(initData));
-    renderMyChecks(r.my_checks || []);
-    renderReceivedChecks(r.received_checks || []);
-  } catch(e) {}
-}
-
-function renderMyChecks(checks) {
-  const el = _q('myChecksList');
-  if (!checks.length) { el.innerHTML = `<div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px">${T[lang].noChecksYet}</div>`; return; }
-  el.innerHTML = checks.map(c => `
-    <div class="check-item">
-      <div class="check-item-hdr">
-        <div class="check-item-amt">${parseFloat(c.amount).toFixed(4)} TON</div>
-        <div class="check-item-type ${c.check_type}">${c.check_type === 'personal' ? '👤 ' + T[lang].personal : '👥 Multi (' + c.recipients + ')'}</div>
-      </div>
-      <div class="check-item-link">${c.link || '—'}</div>
-      <div class="check-item-foot">
-        <div class="check-item-status ${c.status === 'active' ? 'active' : 'claimed'}">${c.status === 'active' ? '● Active' : '✓ Claimed'}</div>
-        <div style="display:flex;gap:6px">
-          ${c.status === 'active' ? `<button class="btn btn-outline btn-sm" onclick="copySpecificLink('${c.link || ''}')">Copy</button>` : ''}
-          ${c.check_type === 'multi' ? `<span style="font-size:11px;color:var(--t2)">${c.claimed_count || 0}/${c.recipients}</span>` : ''}
-        </div>
-      </div>
-    </div>`).join('');
-}
-
-function renderReceivedChecks(checks) {
-  const el = _q('receivedChecksList');
-  if (!checks.length) { el.innerHTML = `<div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px">${T[lang].noChecksClaim}</div>`; return; }
-  el.innerHTML = checks.map(c => `
-    <div class="check-item">
-      <div class="check-item-hdr">
-        <div class="check-item-amt">${parseFloat(c.amount_per_person || c.amount).toFixed(4)} TON</div>
-        <div class="check-item-type ${c.check_type}">${c.check_type === 'personal' ? '👤 ' + T[lang].personal : '👥 Multi'}</div>
-      </div>
-      <div class="check-item-foot">
-        <div style="font-size:11px;color:var(--t2)">${lang === 'ru' ? 'От:' : 'From:'} ${c.creator_name || 'Unknown'}</div>
-        <button class="btn btn-ton btn-sm" onclick="openClaimCheck('${c.id}','${parseFloat(c.amount_per_person || c.amount).toFixed(4)}','${c.check_type}','${c.recipients || 1}')">💰 ${T[lang].claim}</button>
-      </div>
-    </div>`).join('');
-}
-
-function copySpecificLink(link) { navigator.clipboard?.writeText(link).then(() => toast(lang === 'ru' ? 'Скопировано!' : 'Copied!', 'ok')); }
-
-function openClaimCheck(id, amt, type, recs) {
-  pendingClaimCheckId = id;
-  _q('claimCheckAmt').textContent = amt + ' TON';
-  _q('claimCheckInfo').textContent = type === 'personal'
-    ? (lang === 'ru' ? 'Личный чек — только для вас' : 'Personal check — only for you')
-    : `Multi check — ${recs} ${lang === 'ru' ? 'получателей' : 'recipients'}`;
-  _q('claimCheckOverlay').style.display = 'flex';
-}
-
-async function openClaimCheckById(checkId) {
-  pendingClaimCheckId = checkId;
-  _q('claimCheckAmt').textContent = lang === 'ru' ? 'Загрузка...' : 'Loading...';
-  _q('claimCheckInfo').textContent = lang === 'ru' ? 'Получение деталей...' : 'Fetching check details...';
-  _q('claimCheckOverlay').style.display = 'flex';
-  if (!initData) return;
-  try {
-    const r = await api('GET', '/api/check/' + checkId + '?init_data=' + encodeURIComponent(initData));
-    _q('claimCheckAmt').textContent = parseFloat(r.amount_per_person || r.amount).toFixed(4) + ' TON';
-    _q('claimCheckInfo').textContent = r.check_type === 'personal'
-      ? (lang === 'ru' ? 'Личный чек' : 'Personal check')
-      : `Multi check — ${r.recipients} ${lang === 'ru' ? 'получателей' : 'recipients'}`;
-  } catch(e) { toast(e.message, 'err'); closeClaimCheck(); }
-}
-
-function closeClaimCheck() { _q('claimCheckOverlay').style.display = 'none'; pendingClaimCheckId = null; }
-
-async function confirmClaimCheck() {
-  if (!pendingClaimCheckId) return;
-  if (!initData) {
-    toast(lang === 'ru' ? 'Получено! +0.5 TON' : 'Claimed! +0.5 TON', 'ok');
-    userData.ton_balance = (parseFloat(userData.ton_balance) || 0) + 0.5;
-    updateUI(); closeClaimCheck(); return;
-  }
-  try {
-    const r = await api('POST', '/api/claim-check', {init_data: initData, check_id: pendingClaimCheckId});
-    userData.ton_balance = r.new_ton_balance;
-    updateUI();
-    toast(`💎 +${parseFloat(r.amount_received).toFixed(4)} TON!`, 'ok');
-    closeClaimCheck(); loadChecks(); goTab('check');
-  } catch(e) { toast(e.message, 'err'); closeClaimCheck(); }
-}
-
-// ─── AD PANEL ─────────────────────────────────────────────────
-function updateAdCostDisplay() {
-  const type = _q('adType').value;
-  const isDailyTask = type === 'daily';
-  _q('adLimitWrap').style.display = isDailyTask ? 'none' : '';
-  _q('adDailyWrap').style.display = isDailyTask ? '' : 'none';
-  if (isDailyTask) {
-    const days = parseInt(_q('adDays')?.value) || 1;
-    _q('adCost').textContent = (days * 5).toFixed(3) + ' TON';
-  } else {
-    const lim = parseInt(_q('adLimit').value) || 1000;
-    _q('adCost').textContent = (lim * 0.001).toFixed(3) + ' TON';
-  }
-}
-
-async function openAd() {
-  _q('adOverlay').style.display = 'flex';
-  if (!initData) return;
-  try {
-    const r = await api('GET', '/api/advertiser?init_data=' + encodeURIComponent(initData));
-    // ton_balance IS the ads balance — same thing
-    _q('adBal').textContent = parseFloat(r.ad_balance).toFixed(4);
-    renderMyTasks(r.tasks || []);
-  } catch(e) {}
-}
-
-function closeAd() { _q('adOverlay').style.display = 'none'; }
-
-function switchAdTab(t) {
-  document.querySelectorAll('.adt-item').forEach((el, i) => el.classList.toggle('active', (t === 'add' && i === 0) || (t === 'my' && i === 1)));
-  _q('adTabAdd').style.display = t === 'add' ? '' : 'none';
-  _q('adTabMy').style.display = t === 'my' ? '' : 'none';
-}
-
-function renderMyTasks(tasks) {
-  const el = _q('myTasksList');
-  if (!tasks.length) { el.innerHTML = `<div style="text-align:center;color:var(--t3);padding:20px;font-size:12px">${lang === 'ru' ? 'Нет заданий' : 'No tasks yet'}</div>`; return; }
-  const sc = {active:'var(--ok)', paused:'var(--gold)', completed:'var(--t3)'};
-  el.innerHTML = tasks.map(t => `
-    <div class="task-item" style="margin-bottom:8px">
-      <div class="task-info">
-        <div class="task-name">${t.name}</div>
-        <div class="task-reward">${t.completed_count}/${t.completion_limit || t.days_limit || '∞'} — <span style="color:${sc[t.status]}">${t.status}</span></div>
-        <div class="prog-wrap"><div class="prog-bar" style="width:${t.completion_limit ? ((t.completed_count / t.completion_limit) * 100) : 50}%"></div></div>
-      </div>
-    </div>`).join('');
-}
-
-async function publishTask() {
-  const nm = _q('adName').value.trim(), ty = _q('adType').value, ur = _q('adUrl').value.trim();
-  if (!nm) { toast(lang === 'ru' ? 'Введите название' : 'Enter task name', 'err'); return; }
-  if (!ur || !ur.startsWith('http')) { toast(lang === 'ru' ? 'Введите корректный URL' : 'Enter valid URL', 'err'); return; }
-  let li = parseInt(_q('adLimit').value) || 1000, days = 0;
-  if (ty === 'daily') { days = parseInt(_q('adDays').value) || 0; if (days < 1) { toast(lang === 'ru' ? 'Введите количество дней' : 'Enter number of days', 'err'); return; } }
-  if (!initData) { toast(lang === 'ru' ? 'Задание опубликовано!' : 'Task published!', 'ok'); return; }
-  try {
-    const payload = {init_data: initData, name: nm, task_type: ty, url: ur};
-    if (ty === 'daily') payload.days_limit = days; else payload.completion_limit = li;
-    const r = await api('POST', '/api/create-task', payload);
-    userData.ton_balance = (parseFloat(userData.ton_balance) || 0) - r.cost;
-    _q('adBal').textContent = parseFloat(userData.ton_balance).toFixed(4);
-    updateUI();
-    toast(`${lang === 'ru' ? 'Задание опубликовано! Стоимость:' : 'Task published! Cost:'} ${r.cost} TON`, 'ok');
-    _q('adName').value = ''; _q('adUrl').value = '';
-    switchAdTab('my');
-    const ad = await api('GET', '/api/advertiser?init_data=' + encodeURIComponent(initData));
-    renderMyTasks(ad.tasks || []);
-  } catch(e) { toast(e.message, 'err'); }
-}
-
-// ─── API ──────────────────────────────────────────────────────
-async function api(method, path, body) {
-  const opts = {method, headers: {'Content-Type': 'application/json', 'X-Telegram-Init-Data': initData}};
-  if (body && method !== 'GET') opts.body = JSON.stringify(body);
-  const res = await fetch(API + path, opts);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || data.message || 'Error');
-  return data;
-}
-
-// ─── TOAST ────────────────────────────────────────────────────
-let _tt;
-function toast(msg, type = 'ok') {
-  const el = _q('toast');
-  el.textContent = msg;
-  el.className = 'show ' + type;
-  clearTimeout(_tt);
-  _tt = setTimeout(() => el.className = '', 3000);
-}
-
-// ─── START ────────────────────────────────────────────────────
+async function api(method,path,body){const opts={method,headers:{'Content-Type':'application/json'}};if(body&&method!=='GET')opts.body=JSON.stringify(body);const res=await fetch(API+path,opts);const data=await res.json();if(!res.ok)throw new Error(data.detail||data.message||'Error');return data;}
+let _tt;function toast(msg,type='ok'){const el=_q('toast');el.textContent=msg;el.className='show '+type;clearTimeout(_tt);_tt=setTimeout(()=>{el.className='';},3000);}
 init();
 </script>
 </body>

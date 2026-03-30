@@ -1,14 +1,14 @@
 {
   "name": "trewards-bot",
-  "version": "1.0.0",
-  "description": "TRewards Telegram Bot — AWS Lambda",
+  "version": "2.0.0",
+  "description": "TRewards Telegram Bot — AWS Lambda (ES Module)",
+  "type": "module",
   "main": "bot.js",
   "scripts": {
     "dev": "node bot.js",
-    "zip": "zip -r bot.zip bot.js node_modules package.json"
+    "zip": "zip -r bot.zip bot.js package.json"
   },
-  "dependencies": {
-    "node-telegram-bot-api": "^0.64.0",
-    "pg": "^8.11.5"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
