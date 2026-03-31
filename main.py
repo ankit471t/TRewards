@@ -85,6 +85,33 @@ def require_admin(user_id: int):
         raise HTTPException(status_code=403, detail="Admin only")
 
 
+# ─── Week helpers (Sunday→Saturday, matching frontend) ────────────────────────
+
+def _sunday_week_id(d: date = None) -> str:
+    """
+    Week ID based on Sunday→Saturday weeks.
+    Returns YYYY-WNN where week 1 starts on the first Sunday of the year (or Jan 1 if it's Sunday).
+    Uses ISO-compatible approach: find the Sunday that started the current week.
+    """
+    if d is None:
+        d = date.today()
+    # Find the most recent Sunday (weekday 6 = Sunday in Python's isoweekday: Mon=1..Sun=7)
+    # Python: weekday() Mon=0..Sun=6
+    days_since_sunday = (d.weekday() + 1) % 7  # 0 if Sunday, 1 if Monday, ..., 6 if Saturday
+    week_start = d - timedelta(days=days_since_sunday)
+    # Use ISO week number of the week_start for consistency
+    year = week_start.isocalendar()[0]
+    # Simple week number: days from Jan 1 of that year
+    jan1 = date(year, 1, 1)
+    week_num = (week_start - jan1).days // 7 + 1
+    return f"{year}-W{week_num:02d}"
+
+
+def _prev_sunday_week_id() -> str:
+    d = date.today() - timedelta(days=7)
+    return _sunday_week_id(d)
+
+
 # ─── Pydantic models ──────────────────────────────────────────────────────────
 
 class UserRequest(BaseModel):
@@ -203,6 +230,7 @@ async def health():
 
 
 # ─── POST /api/user ───────────────────────────────────────────────────────────
+# referrer_id: numeric user ID passed as webapp URL param (not bot start param)
 
 @app.post("/api/user")
 async def upsert_user(req: UserRequest):
@@ -242,7 +270,8 @@ def _user_payload(user):
         "last_streak_date": user["last_streak_date"].isoformat() if user["last_streak_date"] else None,
         "ton_balance": float(user["ton_balance"]),
         "language": user["language"],
-        "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user['id']}",
+        # Referral link now points to the Mini App with ref= param (not bot /start)
+        "referral_link": f"https://t.me/{config.BOT_USERNAME}/{config.MINI_APP_SHORT_NAME}?startapp=ref_{user['id']}",
         "ton_wallet_address": user["ton_wallet_address"],
         "ton_comment_id": user["ton_comment_id"],
     }
@@ -575,14 +604,8 @@ async def watch_ad(req: WatchAdRequest):
 
 
 # ─── GET /api/friends ─────────────────────────────────────────────────────────
-# Friends page data:
-# - total_friends: all-time count of referrals
-# - weekly_friends: referrals this Sunday→Saturday week
-# - total_earned: sum of all referral commissions earned (coins)
-# - unclaimed: pending claimable referral TR
-# - friends list (last 10): name, their coins, your 30% share
-# - weekly leaderboard top 20
-# - previous week leaderboard top 20
+# Full friends page data. All tracking is webapp-based (no bot dependency).
+# Week = Sunday→Saturday. Leaderboard uses _sunday_week_id().
 
 @app.get("/api/friends")
 async def get_friends(init_data: str):
@@ -600,11 +623,16 @@ async def get_friends(init_data: str):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        curr_week = _current_week_id()
-        prev_week = _prev_week_id()
+        curr_week = _sunday_week_id()
+        prev_week = _prev_sunday_week_id()
 
-        # All queries in parallel
-        friends_rows, weekly_row, total_friends_count, lb_rows, prev_rows = await asyncio.gather(
+        (
+            friends_rows,
+            weekly_row,
+            total_friends_count,
+            lb_rows,
+            prev_rows,
+        ) = await asyncio.gather(
             # Last 10 friends with their earnings
             conn.fetch("""
                 SELECT id, username, first_name, coins
@@ -645,7 +673,7 @@ async def get_friends(init_data: str):
 
         weekly_friends = weekly_row["friend_count"] if weekly_row else 0
 
-        # Build friends list (last 10, show their coins and your 30% share)
+        # Build friends list (last 10)
         friend_list = [
             {
                 "id": f["id"],
@@ -656,7 +684,6 @@ async def get_friends(init_data: str):
             for f in friends_rows
         ]
 
-        # Build leaderboard with rank + is_me flag
         def build_lb(rows):
             result = []
             for i, r in enumerate(rows):
@@ -666,13 +693,12 @@ async def get_friends(init_data: str):
                     "weekly_friends": r["friend_count"],
                     "is_me": r["referrer_id"] == user_id,
                 })
-            # If current user not in top 20, find their rank and append
             return result
 
         lb = build_lb(lb_rows)
         prev_lb = build_lb(prev_rows)
 
-        # Check if user is in current week leaderboard, if not find their rank
+        # Append current user to leaderboard if not in top 20
         user_in_lb = any(x["is_me"] for x in lb)
         if not user_in_lb and weekly_row and weekly_row["friend_count"] > 0:
             user_rank = await conn.fetchval("""
@@ -682,20 +708,29 @@ async def get_friends(init_data: str):
             """, curr_week, weekly_row["friend_count"])
             lb.append({
                 "rank": user_rank,
-                "name": (user["first_name"] or "You") + " (You)",
+                "name": (user["first_name"] or "You"),
                 "weekly_friends": weekly_row["friend_count"],
                 "is_me": True,
             })
+
+        # unclaimed = accumulated but not yet claimed referral commissions
+        unclaimed = user["unclaimed_referral"] or 0
+        total_earned = user["referral_earnings"] or 0
+
+        mini_app_name = getattr(config, "MINI_APP_SHORT_NAME", "TRewards")
+        referral_link = f"https://t.me/{config.BOT_USERNAME}/{mini_app_name}?startapp=ref_{user_id}"
 
         result = {
             "friends": friend_list,
             "total_friends": total_friends_count,
             "weekly_friends": weekly_friends,
-            "total_earned": user["referral_earnings"],      # all-time TR earned from referrals
-            "unclaimed": user["unclaimed_referral"],        # pending claimable TR
-            "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user_id}",
+            "total_earned": total_earned,
+            "unclaimed": unclaimed,
+            "referral_link": referral_link,
             "leaderboard": lb,
             "prev_leaderboard": prev_lb,
+            "current_week": curr_week,
+            "prev_week": prev_week,
         }
         cache_set(cache_key, result, ttl=config.CACHE_TTL_FRIENDS)
         return result
@@ -714,7 +749,7 @@ async def claim_referral(req: ClaimReferralRequest):
         user = await get_user(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        unclaimed = user["unclaimed_referral"]
+        unclaimed = user["unclaimed_referral"] or 0
         if unclaimed <= 0:
             raise HTTPException(status_code=400, detail="No referral earnings to claim")
         async with conn.transaction():
@@ -821,6 +856,8 @@ async def convert_tr_to_ton(req: ConvertRequest):
 
 
 # ─── TON Check endpoints ──────────────────────────────────────────────────────
+# Check links use the Mini App URL (not bot /start).
+# Format: https://t.me/{BOT}/{APP}?startapp=chk_{check_id}
 
 @app.post("/api/create-check")
 async def create_check(req: CreateCheckRequest):
@@ -861,7 +898,8 @@ async def create_check(req: CreateCheckRequest):
             """, user_id, f"Created {req.check_type} check: {req.amount} TON", -req.amount)
 
         updated = await get_user(conn, user_id)
-        link = f"https://t.me/{config.BOT_USERNAME}?start=c_{check_id}"
+        mini_app_name = getattr(config, "MINI_APP_SHORT_NAME", "TRewards")
+        link = f"https://t.me/{config.BOT_USERNAME}/{mini_app_name}?startapp=chk_{check_id}"
         return {
             "success": True,
             "check_id": check_id,
@@ -875,7 +913,7 @@ async def create_check(req: CreateCheckRequest):
 
 @app.get("/api/check/{check_id}")
 async def get_check(check_id: str, init_data: str):
-    """Get check details for the claim overlay — called when user opens a check deep link."""
+    """Get check details for the claim overlay."""
     tg_user = verify_telegram_init_data(init_data)
     user_id = tg_user["id"]
 
@@ -911,14 +949,17 @@ async def get_check(check_id: str, init_data: str):
             "recipients": check["recipients"],
             "claimed_count": check["claimed_count"],
             "creator_name": creator_name,
+            "creator_id": check["creator_id"],
         }
 
 
 @app.post("/api/claim-check")
 async def claim_check(req: ClaimCheckRequest):
     """
-    Claim a TON check. Works for both existing users and new users.
-    If the claimer has no referrer, the check creator becomes their referrer automatically.
+    Claim a TON check (webapp-based flow, no bot dependency).
+    - TON credited to claimer's ton_balance immediately.
+    - If claimer has no referrer → check creator becomes their referrer.
+    - Weekly referral stats updated if new referral link is formed.
     """
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
@@ -926,7 +967,7 @@ async def claim_check(req: ClaimCheckRequest):
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Lock the check row to prevent double-claims
+        # Lock check row
         check = await conn.fetchrow(
             "SELECT * FROM ton_checks WHERE id = $1 FOR UPDATE", req.check_id
         )
@@ -968,24 +1009,25 @@ async def claim_check(req: ClaimCheckRequest):
                     status = $2
                 WHERE id = $3
             """, new_claimed_count, "claimed" if fully_claimed else "active", req.check_id)
-            # Transaction record for claimer
+            # Transaction record
             await conn.execute("""
                 INSERT INTO transactions (user_id, type, description, ton_amount)
                 VALUES ($1, 'check_claim', $2, $3)
-            """, user_id, f"Claimed TON check from {check['creator_id']}", amount_per_person)
+            """, user_id, f"Claimed TON check from user {check['creator_id']}", amount_per_person)
 
-            # Auto-referral: if claimer has no referrer, check creator becomes referrer
+            # Auto-referral: if claimer has no referrer, creator becomes referrer
             claimer = await conn.fetchrow(
                 "SELECT referrer_id FROM users WHERE id = $1", user_id
             )
+            referral_set = False
             if claimer and claimer["referrer_id"] is None and check["creator_id"] != user_id:
-                week_id = _current_week_id()
-                updated_rows = await conn.execute(
+                result = await conn.execute(
                     "UPDATE users SET referrer_id = $1 WHERE id = $2 AND referrer_id IS NULL",
                     check["creator_id"], user_id
                 )
-                # Only update leaderboard if referrer was actually set (wasn't already set)
-                if updated_rows == "UPDATE 1":
+                if result == "UPDATE 1":
+                    referral_set = True
+                    week_id = _sunday_week_id()
                     await conn.execute("""
                         INSERT INTO weekly_referral_stats (referrer_id, week_id, friend_count)
                         VALUES ($1, $2, 1)
@@ -994,7 +1036,6 @@ async def claim_check(req: ClaimCheckRequest):
                             friend_count = weekly_referral_stats.friend_count + 1,
                             updated_at = NOW()
                     """, check["creator_id"], week_id)
-                    # Invalidate creator's friends cache
                     cache_del(f"friends:{check['creator_id']}")
 
         updated = await get_user(conn, user_id)
@@ -1002,23 +1043,20 @@ async def claim_check(req: ClaimCheckRequest):
             "success": True,
             "amount_received": amount_per_person,
             "new_ton_balance": float(updated["ton_balance"]),
+            "referral_set": referral_set,
+            "creator_id": check["creator_id"],
         }
 
 
 @app.get("/api/checks")
 async def get_checks(init_data: str):
-    """
-    Returns:
-    - my_checks: last 10 checks created by user (with link)
-    - received_checks: active checks the user can still claim
-    """
     tg_user = verify_telegram_init_data(init_data)
     user_id = tg_user["id"]
 
     pool = await get_pool()
     async with pool.acquire() as conn:
+        mini_app_name = getattr(config, "MINI_APP_SHORT_NAME", "TRewards")
         my_checks, received = await asyncio.gather(
-            # My checks — last 10 created, include the bot deep-link
             conn.fetch("""
                 SELECT
                     c.id,
@@ -1028,13 +1066,15 @@ async def get_checks(init_data: str):
                     c.claimed_count,
                     c.status,
                     c.created_at,
-                    concat('https://t.me/', $2::text, '?start=c_', c.id) AS link
+                    concat(
+                        'https://t.me/', $2::text, '/', $3::text,
+                        '?startapp=chk_', c.id
+                    ) AS link
                 FROM ton_checks c
                 WHERE c.creator_id = $1
                 ORDER BY c.created_at DESC
                 LIMIT 10
-            """, user_id, config.BOT_USERNAME),
-            # Checks user can claim: active, not created by them, not already claimed
+            """, user_id, config.BOT_USERNAME, mini_app_name),
             conn.fetch("""
                 SELECT
                     c.id,
@@ -1064,7 +1104,7 @@ async def get_checks(init_data: str):
         }
 
 
-# ─── Stars invoice creation (for in-app openInvoice) ─────────────────────────
+# ─── Stars invoice creation ───────────────────────────────────────────────────
 
 @app.post("/api/create-stars-invoice")
 async def create_stars_invoice(req: StarsInvoiceRequest):
@@ -1167,20 +1207,7 @@ async def create_topup(req: TopUpRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
 
-    if req.method == "xrocket":
-        if req.amount < config.MIN_TOPUP_TON:
-            raise HTTPException(status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON")
-        invoice_url, invoice_id = await _create_xrocket_invoice(user_id, req.amount)
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO payments (user_id, provider, invoice_id, amount_ton, payload) "
-                "VALUES ($1,$2,$3,$4,$5) ON CONFLICT (invoice_id) DO NOTHING",
-                user_id, "xrocket", invoice_id, req.amount, json.dumps({"user_id": user_id})
-            )
-        return {"invoice_url": invoice_url, "invoice_id": invoice_id, "method": "xrocket"}
-
-    elif req.method == "ton_wallet":
+    if req.method == "ton_wallet":
         if req.amount < config.MIN_TOPUP_TON:
             raise HTTPException(status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON")
         pool = await get_pool()
@@ -1257,68 +1284,6 @@ async def ton_topup_webhook(request: Request):
 
         cache_del(f"user:{user_id}")
         return {"ok": True, "user_id": user_id, "amount_credited": amount_ton}
-
-
-# ─── POST /payment-webhook/xrocket ───────────────────────────────────────────
-
-@app.post("/payment-webhook/xrocket")
-async def xrocket_webhook(request: Request):
-    body = await request.body()
-    signature = request.headers.get("rocket-pay-signature", "")
-    if config.XROCKET_WEBHOOK_SECRET:
-        expected = hmac.new(
-            config.XROCKET_WEBHOOK_SECRET.encode(), body, hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(expected, signature):
-            raise HTTPException(status_code=401, detail="Invalid signature")
-    data = json.loads(body)
-    if data.get("type") != "invoice" or data.get("status") != "paid":
-        return {"ok": True}
-    if data.get("currency") != "TONCOIN":
-        return {"ok": True}
-    await _process_xrocket_payment(str(data["id"]), float(data.get("amount", 0)))
-    return {"ok": True}
-
-
-async def _process_xrocket_payment(invoice_id: str, amount: float):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        payment = await conn.fetchrow(
-            "SELECT * FROM payments WHERE invoice_id = $1", invoice_id
-        )
-        if not payment or payment["status"] == "paid":
-            return
-        async with conn.transaction():
-            await conn.execute(
-                "UPDATE payments SET status = 'paid', paid_at = NOW() WHERE invoice_id = $1",
-                invoice_id
-            )
-            await add_ton(conn, payment["user_id"], amount, "topup",
-                          f"Top-up via xRocket: {amount} TON")
-        cache_del(f"user:{payment['user_id']}")
-
-
-async def _create_xrocket_invoice(user_id: int, amount: float) -> tuple:
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(
-            "https://pay.xrocket.tg/app/invoice/create",
-            headers={
-                "Rocket-Pay-Key": config.XROCKET_API_KEY,
-                "Content-Type": "application/json"
-            },
-            json={
-                "currency": "TONCOIN",
-                "amount": amount,
-                "description": f"TRewards top-up for user {user_id}",
-                "payload": json.dumps({"user_id": user_id}),
-                "callbackUrl": f"{config.API_URL}/payment-webhook/xrocket"
-            }
-        )
-        data = resp.json()
-        if data.get("success"):
-            inv = data["data"]
-            return inv["link"], str(inv["id"])
-        raise HTTPException(status_code=500, detail=f"xRocket error: {data.get('message')}")
 
 
 # ─── GET /api/advertiser ──────────────────────────────────────────────────────
