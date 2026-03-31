@@ -53,8 +53,9 @@ def cache_del(key: str):
     _cache_ttl.pop(key, None)
 
 def cache_del_prefix(prefix: str):
-    for k in [k for k in list(_cache) if k.startswith(prefix)]:
-        cache_del(k)
+    for k in list(_cache):
+        if k.startswith(prefix):
+            cache_del(k)
 
 
 @app.on_event("startup")
@@ -131,7 +132,7 @@ class ConvertRequest(BaseModel):
 class TopUpRequest(BaseModel):
     init_data: str
     amount: float
-    method: str  # 'xrocket' | 'ton_wallet' | 'stars'
+    method: str
 
 class StarsTopUpRequest(BaseModel):
     init_data: str
@@ -170,6 +171,10 @@ class CreateCheckRequest(BaseModel):
 class ClaimCheckRequest(BaseModel):
     init_data: str
     check_id: str
+
+class StarsInvoiceRequest(BaseModel):
+    init_data: str
+    stars_amount: int
 
 class AdminPromoCreate(BaseModel):
     init_data: str
@@ -227,7 +232,6 @@ async def upsert_user(req: UserRequest):
 
 
 def _user_payload(user):
-    """Serialise user row to API response dict."""
     return {
         "id": user["id"],
         "username": user["username"],
@@ -236,7 +240,7 @@ def _user_payload(user):
         "spins": user["spins"],
         "streak": user["streak"],
         "last_streak_date": user["last_streak_date"].isoformat() if user["last_streak_date"] else None,
-        "ton_balance": float(user["ton_balance"]),      # TON coins = ad balance (same pool)
+        "ton_balance": float(user["ton_balance"]),
         "language": user["language"],
         "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user['id']}",
         "ton_wallet_address": user["ton_wallet_address"],
@@ -454,7 +458,7 @@ async def verify_join(req: VerifyJoinRequest):
 
         chat_id_raw = task["url"].split("t.me/")[-1].strip("/")
         if chat_id_raw.startswith("+"):
-            is_member = True  # invite links — assume joined
+            is_member = True
         else:
             try:
                 async with httpx.AsyncClient(timeout=10) as client:
@@ -571,6 +575,14 @@ async def watch_ad(req: WatchAdRequest):
 
 
 # ─── GET /api/friends ─────────────────────────────────────────────────────────
+# Friends page data:
+# - total_friends: all-time count of referrals
+# - weekly_friends: referrals this Sunday→Saturday week
+# - total_earned: sum of all referral commissions earned (coins)
+# - unclaimed: pending claimable referral TR
+# - friends list (last 10): name, their coins, your 30% share
+# - weekly leaderboard top 20
+# - previous week leaderboard top 20
 
 @app.get("/api/friends")
 async def get_friends(init_data: str):
@@ -591,64 +603,96 @@ async def get_friends(init_data: str):
         curr_week = _current_week_id()
         prev_week = _prev_week_id()
 
-        # Batch all queries
-        friends, weekly_row, lb_rows, prev_rows = await asyncio.gather(
-            conn.fetch(
-                "SELECT id, username, first_name, coins FROM users WHERE referrer_id = $1 ORDER BY coins DESC LIMIT 50",
-                user_id
-            ),
-            conn.fetchrow(
-                "SELECT friend_count FROM weekly_referral_stats WHERE referrer_id = $1 AND week_id = $2",
-                user_id, curr_week
-            ),
+        # All queries in parallel
+        friends_rows, weekly_row, total_friends_count, lb_rows, prev_rows = await asyncio.gather(
+            # Last 10 friends with their earnings
+            conn.fetch("""
+                SELECT id, username, first_name, coins
+                FROM users
+                WHERE referrer_id = $1
+                ORDER BY created_at DESC
+                LIMIT 10
+            """, user_id),
+            # This week's referral count
+            conn.fetchrow("""
+                SELECT friend_count
+                FROM weekly_referral_stats
+                WHERE referrer_id = $1 AND week_id = $2
+            """, user_id, curr_week),
+            # Total all-time referral count
+            conn.fetchval("""
+                SELECT COUNT(*) FROM users WHERE referrer_id = $1
+            """, user_id),
+            # Current week leaderboard top 20
             conn.fetch("""
                 SELECT w.referrer_id, u.first_name, u.username, w.friend_count
-                FROM weekly_referral_stats w JOIN users u ON u.id = w.referrer_id
-                WHERE w.week_id = $1 ORDER BY w.friend_count DESC LIMIT 20
+                FROM weekly_referral_stats w
+                JOIN users u ON u.id = w.referrer_id
+                WHERE w.week_id = $1
+                ORDER BY w.friend_count DESC
+                LIMIT 20
             """, curr_week),
+            # Previous week leaderboard top 20
             conn.fetch("""
                 SELECT w.referrer_id, u.first_name, u.username, w.friend_count
-                FROM weekly_referral_stats w JOIN users u ON u.id = w.referrer_id
-                WHERE w.week_id = $1 ORDER BY w.friend_count DESC LIMIT 20
+                FROM weekly_referral_stats w
+                JOIN users u ON u.id = w.referrer_id
+                WHERE w.week_id = $1
+                ORDER BY w.friend_count DESC
+                LIMIT 20
             """, prev_week),
         )
 
         weekly_friends = weekly_row["friend_count"] if weekly_row else 0
+
+        # Build friends list (last 10, show their coins and your 30% share)
         friend_list = [
             {
                 "id": f["id"],
-                "name": f["first_name"] or "Unknown",
+                "name": f["first_name"] or f["username"] or "Unknown",
                 "coins": f["coins"],
                 "your_share": int(f["coins"] * config.REFERRAL_COMMISSION),
-                "pending_share": 0
             }
-            for f in friends
+            for f in friends_rows
         ]
-        lb = [
-            {
-                "rank": i + 1,
-                "name": r["first_name"] or "Unknown",
-                "weekly_friends": r["friend_count"],
-                "is_me": r["referrer_id"] == user_id
-            }
-            for i, r in enumerate(lb_rows)
-        ]
-        prev_lb = [
-            {
-                "rank": i + 1,
-                "name": r["first_name"] or "Unknown",
-                "weekly_friends": r["friend_count"],
-                "is_me": r["referrer_id"] == user_id
-            }
-            for i, r in enumerate(prev_rows)
-        ]
+
+        # Build leaderboard with rank + is_me flag
+        def build_lb(rows):
+            result = []
+            for i, r in enumerate(rows):
+                result.append({
+                    "rank": i + 1,
+                    "name": r["first_name"] or r["username"] or "Unknown",
+                    "weekly_friends": r["friend_count"],
+                    "is_me": r["referrer_id"] == user_id,
+                })
+            # If current user not in top 20, find their rank and append
+            return result
+
+        lb = build_lb(lb_rows)
+        prev_lb = build_lb(prev_rows)
+
+        # Check if user is in current week leaderboard, if not find their rank
+        user_in_lb = any(x["is_me"] for x in lb)
+        if not user_in_lb and weekly_row and weekly_row["friend_count"] > 0:
+            user_rank = await conn.fetchval("""
+                SELECT COUNT(*) + 1
+                FROM weekly_referral_stats
+                WHERE week_id = $1 AND friend_count > $2
+            """, curr_week, weekly_row["friend_count"])
+            lb.append({
+                "rank": user_rank,
+                "name": (user["first_name"] or "You") + " (You)",
+                "weekly_friends": weekly_row["friend_count"],
+                "is_me": True,
+            })
 
         result = {
             "friends": friend_list,
-            "total_friends": len(friend_list),
+            "total_friends": total_friends_count,
             "weekly_friends": weekly_friends,
-            "total_earned": user["referral_earnings"],
-            "unclaimed": user["unclaimed_referral"],
+            "total_earned": user["referral_earnings"],      # all-time TR earned from referrals
+            "unclaimed": user["unclaimed_referral"],        # pending claimable TR
             "referral_link": f"https://t.me/{config.BOT_USERNAME}?start={user_id}",
             "leaderboard": lb,
             "prev_leaderboard": prev_lb,
@@ -755,13 +799,11 @@ async def convert_tr_to_ton(req: ConvertRequest):
             raise HTTPException(status_code=404, detail="User not found")
         if user["coins"] < req.tr_amount:
             raise HTTPException(status_code=400, detail="Insufficient TR balance")
-        ton_received = (req.tr_amount / 1_000_000) * 0.15
+        ton_received = round((req.tr_amount / 1_000_000) * 0.15, 4)
         async with conn.transaction():
             await conn.execute(
-                "UPDATE users SET coins = coins - $1 WHERE id = $2", req.tr_amount, user_id
-            )
-            await conn.execute(
-                "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2", ton_received, user_id
+                "UPDATE users SET coins = coins - $1, ton_balance = ton_balance + $2 WHERE id = $3",
+                req.tr_amount, ton_received, user_id
             )
             await conn.execute(
                 "INSERT INTO transactions (user_id, type, description, amount) VALUES ($1,'convert',$2,$3)",
@@ -778,53 +820,268 @@ async def convert_tr_to_ton(req: ConvertRequest):
         }
 
 
-# ─── POST /api/connect-wallet ─────────────────────────────────────────────────
+# ─── TON Check endpoints ──────────────────────────────────────────────────────
 
-@app.post("/api/connect-wallet")
-async def connect_wallet(req: ConnectWalletRequest):
+@app.post("/api/create-check")
+async def create_check(req: CreateCheckRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
-    addr = req.wallet_address.strip()
-    if not addr or len(addr) < 10:
-        raise HTTPException(status_code=400, detail="Invalid wallet address")
+
+    if req.amount < config.CHECK_MIN_AMOUNT:
+        raise HTTPException(status_code=400, detail=f"Minimum {config.CHECK_MIN_AMOUNT} TON")
+    if req.check_type not in ("personal", "multi"):
+        raise HTTPException(status_code=400, detail="Invalid check type")
+
+    recipients = 1 if req.check_type == "personal" else (req.recipients or 2)
+    if req.check_type == "multi" and recipients < 2:
+        raise HTTPException(status_code=400, detail="Multi check requires at least 2 recipients")
+
     cache_del(f"user:{user_id}")
+
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE users SET ton_wallet_address = $1 WHERE id = $2", addr, user_id
-        )
-        return {"success": True, "wallet_address": addr}
-# ─── ADD THIS ENDPOINT TO main.py ────────────────────────────────────────────
-# This creates a Telegram Stars invoice link for in-app payment (no redirect to bot)
+        user = await get_user(conn, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if float(user["ton_balance"]) < req.amount:
+            raise HTTPException(status_code=400, detail="Insufficient TON balance")
 
-class StarsInvoiceRequest(BaseModel):
-    init_data: str
-    stars_amount: int
+        check_id = secrets.token_urlsafe(12)
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2", req.amount, user_id
+            )
+            await conn.execute("""
+                INSERT INTO ton_checks (id, creator_id, check_type, amount, recipients, status)
+                VALUES ($1, $2, $3, $4, $5, 'active')
+            """, check_id, user_id, req.check_type, req.amount, recipients)
+            await conn.execute("""
+                INSERT INTO transactions (user_id, type, description, ton_amount)
+                VALUES ($1, 'check_create', $2, $3)
+            """, user_id, f"Created {req.check_type} check: {req.amount} TON", -req.amount)
+
+        updated = await get_user(conn, user_id)
+        link = f"https://t.me/{config.BOT_USERNAME}?start=c_{check_id}"
+        return {
+            "success": True,
+            "check_id": check_id,
+            "link": link,
+            "amount": req.amount,
+            "check_type": req.check_type,
+            "recipients": recipients,
+            "new_ton_balance": float(updated["ton_balance"]),
+        }
+
+
+@app.get("/api/check/{check_id}")
+async def get_check(check_id: str, init_data: str):
+    """Get check details for the claim overlay — called when user opens a check deep link."""
+    tg_user = verify_telegram_init_data(init_data)
+    user_id = tg_user["id"]
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        check = await conn.fetchrow("SELECT * FROM ton_checks WHERE id = $1", check_id)
+        if not check:
+            raise HTTPException(status_code=404, detail="Check not found")
+        if check["status"] != "active":
+            raise HTTPException(status_code=400, detail="This check has already been fully claimed")
+        if check["creator_id"] == user_id:
+            raise HTTPException(status_code=400, detail="You cannot claim your own check")
+        if check["claimed_count"] >= check["recipients"]:
+            raise HTTPException(status_code=400, detail="This check has been fully claimed")
+
+        existing = await conn.fetchrow(
+            "SELECT id FROM check_claims WHERE check_id = $1 AND claimer_id = $2", check_id, user_id
+        )
+        if existing:
+            raise HTTPException(status_code=400, detail="You have already claimed this check")
+
+        creator = await conn.fetchrow(
+            "SELECT first_name, username FROM users WHERE id = $1", check["creator_id"]
+        )
+        creator_name = (creator["first_name"] or creator["username"] or "Unknown") if creator else "Unknown"
+
+        amount_per_person = float(check["amount"]) / check["recipients"]
+        return {
+            "check_id": check_id,
+            "check_type": check["check_type"],
+            "amount": float(check["amount"]),
+            "amount_per_person": round(amount_per_person, 4),
+            "recipients": check["recipients"],
+            "claimed_count": check["claimed_count"],
+            "creator_name": creator_name,
+        }
+
+
+@app.post("/api/claim-check")
+async def claim_check(req: ClaimCheckRequest):
+    """
+    Claim a TON check. Works for both existing users and new users.
+    If the claimer has no referrer, the check creator becomes their referrer automatically.
+    """
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # Lock the check row to prevent double-claims
+        check = await conn.fetchrow(
+            "SELECT * FROM ton_checks WHERE id = $1 FOR UPDATE", req.check_id
+        )
+        if not check:
+            raise HTTPException(status_code=404, detail="Check not found")
+        if check["status"] != "active":
+            raise HTTPException(status_code=400, detail="This check is no longer active")
+        if check["creator_id"] == user_id:
+            raise HTTPException(status_code=400, detail="You cannot claim your own check")
+        if check["claimed_count"] >= check["recipients"]:
+            raise HTTPException(status_code=400, detail="This check has been fully claimed")
+
+        existing = await conn.fetchrow(
+            "SELECT id FROM check_claims WHERE check_id = $1 AND claimer_id = $2",
+            req.check_id, user_id
+        )
+        if existing:
+            raise HTTPException(status_code=400, detail="You have already claimed this check")
+
+        amount_per_person = round(float(check["amount"]) / check["recipients"], 8)
+        new_claimed_count = check["claimed_count"] + 1
+        fully_claimed = new_claimed_count >= check["recipients"]
+
+        async with conn.transaction():
+            # Credit TON to claimer
+            await conn.execute(
+                "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2",
+                amount_per_person, user_id
+            )
+            # Record the claim
+            await conn.execute(
+                "INSERT INTO check_claims (check_id, claimer_id, amount) VALUES ($1, $2, $3)",
+                req.check_id, user_id, amount_per_person
+            )
+            # Update check status
+            await conn.execute("""
+                UPDATE ton_checks
+                SET claimed_count = $1,
+                    status = $2
+                WHERE id = $3
+            """, new_claimed_count, "claimed" if fully_claimed else "active", req.check_id)
+            # Transaction record for claimer
+            await conn.execute("""
+                INSERT INTO transactions (user_id, type, description, ton_amount)
+                VALUES ($1, 'check_claim', $2, $3)
+            """, user_id, f"Claimed TON check from {check['creator_id']}", amount_per_person)
+
+            # Auto-referral: if claimer has no referrer, check creator becomes referrer
+            claimer = await conn.fetchrow(
+                "SELECT referrer_id FROM users WHERE id = $1", user_id
+            )
+            if claimer and claimer["referrer_id"] is None and check["creator_id"] != user_id:
+                week_id = _current_week_id()
+                updated_rows = await conn.execute(
+                    "UPDATE users SET referrer_id = $1 WHERE id = $2 AND referrer_id IS NULL",
+                    check["creator_id"], user_id
+                )
+                # Only update leaderboard if referrer was actually set (wasn't already set)
+                if updated_rows == "UPDATE 1":
+                    await conn.execute("""
+                        INSERT INTO weekly_referral_stats (referrer_id, week_id, friend_count)
+                        VALUES ($1, $2, 1)
+                        ON CONFLICT (referrer_id, week_id)
+                        DO UPDATE SET
+                            friend_count = weekly_referral_stats.friend_count + 1,
+                            updated_at = NOW()
+                    """, check["creator_id"], week_id)
+                    # Invalidate creator's friends cache
+                    cache_del(f"friends:{check['creator_id']}")
+
+        updated = await get_user(conn, user_id)
+        return {
+            "success": True,
+            "amount_received": amount_per_person,
+            "new_ton_balance": float(updated["ton_balance"]),
+        }
+
+
+@app.get("/api/checks")
+async def get_checks(init_data: str):
+    """
+    Returns:
+    - my_checks: last 10 checks created by user (with link)
+    - received_checks: active checks the user can still claim
+    """
+    tg_user = verify_telegram_init_data(init_data)
+    user_id = tg_user["id"]
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        my_checks, received = await asyncio.gather(
+            # My checks — last 10 created, include the bot deep-link
+            conn.fetch("""
+                SELECT
+                    c.id,
+                    c.check_type,
+                    c.amount,
+                    c.recipients,
+                    c.claimed_count,
+                    c.status,
+                    c.created_at,
+                    concat('https://t.me/', $2::text, '?start=c_', c.id) AS link
+                FROM ton_checks c
+                WHERE c.creator_id = $1
+                ORDER BY c.created_at DESC
+                LIMIT 10
+            """, user_id, config.BOT_USERNAME),
+            # Checks user can claim: active, not created by them, not already claimed
+            conn.fetch("""
+                SELECT
+                    c.id,
+                    c.check_type,
+                    c.amount,
+                    c.recipients,
+                    c.claimed_count,
+                    ROUND(c.amount / c.recipients, 4) AS amount_per_person,
+                    u.first_name AS creator_name
+                FROM ton_checks c
+                JOIN users u ON u.id = c.creator_id
+                WHERE c.status = 'active'
+                  AND c.creator_id != $1
+                  AND c.claimed_count < c.recipients
+                  AND NOT EXISTS (
+                      SELECT 1 FROM check_claims cc
+                      WHERE cc.check_id = c.id AND cc.claimer_id = $1
+                  )
+                ORDER BY c.created_at DESC
+                LIMIT 10
+            """, user_id),
+        )
+
+        return {
+            "my_checks": [dict(c) for c in my_checks],
+            "received_checks": [dict(c) for c in received],
+        }
+
+
+# ─── Stars invoice creation (for in-app openInvoice) ─────────────────────────
 
 @app.post("/api/create-stars-invoice")
 async def create_stars_invoice(req: StarsInvoiceRequest):
-    """
-    Creates a Telegram Stars invoice link that can be opened with
-    tg.openInvoice() inside the Mini App — no redirect to bot needed.
-    """
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
 
     if req.stars_amount < config.MIN_TOPUP_STARS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Minimum {config.MIN_TOPUP_STARS} Stars"
-        )
+        raise HTTPException(status_code=400, detail=f"Minimum {config.MIN_TOPUP_STARS} Stars")
 
     ton_amount = round(req.stars_amount / config.STARS_PER_TON, 4)
 
-    # Create invoice link via Telegram Bot API
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
             f"https://api.telegram.org/bot{config.BOT_TOKEN}/createInvoiceLink",
             json={
                 "title": "TRewards TON Top-Up",
-                "description": f"Top up {ton_amount} TON to your TRewards balance. Rate: 65 Stars = 1 TON.",
+                "description": f"Top up {ton_amount} TON to your TRewards balance.",
                 "payload": json.dumps({"type": "stars_topup", "user_id": user_id, "stars": req.stars_amount}),
                 "currency": "XTR",
                 "prices": [{"label": f"{ton_amount} TON ({req.stars_amount} Stars)", "amount": req.stars_amount}],
@@ -835,112 +1092,25 @@ async def create_stars_invoice(req: StarsInvoiceRequest):
     if not data.get("ok"):
         raise HTTPException(status_code=500, detail=f"Telegram API error: {data.get('description', 'Unknown')}")
 
-    invoice_link = data["result"]
     return {
-        "invoice_link": invoice_link,
+        "invoice_link": data["result"],
         "stars_amount": req.stars_amount,
-        "ton_amount": ton_amount
+        "ton_amount": ton_amount,
     }
-
-
-# ─── ALSO UPDATE the /payment-webhook/stars or handle in bot ─────────────────
-# When user pays via openInvoice(), Telegram sends successful_payment to the bot.
-# The bot's handleSuccessfulPayment() already credits TON — that flow still works.
-# No changes needed to the webhook handler.
-
-# ─── POST /api/disconnect-wallet ─────────────────────────────────────────────
-
-@app.post("/api/disconnect-wallet")
-async def disconnect_wallet(req: DisconnectWalletRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-    cache_del(f"user:{user_id}")
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute("UPDATE users SET ton_wallet_address = NULL WHERE id = $1", user_id)
-        return {"success": True}
-
-
-# ─── POST /api/create-topup ───────────────────────────────────────────────────
-
-@app.post("/api/create-topup")
-async def create_topup(req: TopUpRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-
-    # ── xRocket ──────────────────────────────────────────────────────────────
-    if req.method == "xrocket":
-        if req.amount < config.MIN_TOPUP_TON:
-            raise HTTPException(
-                status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON"
-            )
-        invoice_url, invoice_id = await _create_xrocket_invoice(user_id, req.amount)
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO payments (user_id, provider, invoice_id, amount_ton, payload) "
-                "VALUES ($1,$2,$3,$4,$5) ON CONFLICT (invoice_id) DO NOTHING",
-                user_id, "xrocket", invoice_id, req.amount, json.dumps({"user_id": user_id})
-            )
-        return {"invoice_url": invoice_url, "invoice_id": invoice_id, "method": "xrocket"}
-
-    # ── TON Wallet ────────────────────────────────────────────────────────────
-    elif req.method == "ton_wallet":
-        if req.amount < config.MIN_TOPUP_TON:
-            raise HTTPException(
-                status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON"
-            )
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            user = await get_user(conn, user_id)
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-            if not user["ton_wallet_address"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Connect your TON wallet first in the Wallet page"
-                )
-            comment_id = user["ton_comment_id"]
-            # Record pending request (idempotent)
-            await conn.execute("""
-                INSERT INTO ton_topup_requests (user_id, comment_id, amount_ton, status)
-                VALUES ($1, $2, $3, 'pending')
-                ON CONFLICT (comment_id) DO NOTHING
-            """, user_id, comment_id, req.amount)
-            return {
-                "method": "ton_wallet",
-                "receiving_address": config.TON_WALLET_RECEIVE,
-                "comment_id": comment_id,
-                "amount": req.amount,
-            }
-
-    # ── Stars ─────────────────────────────────────────────────────────────────
-    elif req.method == "stars":
-        stars_needed = max(config.MIN_TOPUP_STARS, int(req.amount * config.STARS_PER_TON))
-        return {
-            "method": "stars",
-            "stars_amount": stars_needed,
-            "ton_equivalent": round(stars_needed / config.STARS_PER_TON, 4)
-        }
-
-    else:
-        raise HTTPException(status_code=400, detail="Invalid payment method")
 
 
 # ─── POST /api/topup-stars ────────────────────────────────────────────────────
 
 @app.post("/api/topup-stars")
 async def topup_stars(req: StarsTopUpRequest):
-    """Called by bot after Telegram confirms successful_payment for Stars."""
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
     if req.stars_amount < config.MIN_TOPUP_STARS:
         raise HTTPException(status_code=400, detail=f"Minimum {config.MIN_TOPUP_STARS} stars")
-    ton_to_credit = req.stars_amount / config.STARS_PER_TON
+    ton_to_credit = round(req.stars_amount / config.STARS_PER_TON, 4)
     cache_del(f"user:{user_id}")
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Idempotency: deduplicate by telegram_charge_id
         existing = await conn.fetchrow(
             "SELECT id FROM stars_payments WHERE telegram_charge_id = $1",
             req.telegram_charge_id
@@ -961,15 +1131,92 @@ async def topup_stars(req: StarsTopUpRequest):
         }
 
 
+# ─── POST /api/connect-wallet ─────────────────────────────────────────────────
+
+@app.post("/api/connect-wallet")
+async def connect_wallet(req: ConnectWalletRequest):
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+    addr = req.wallet_address.strip()
+    if not addr or len(addr) < 10:
+        raise HTTPException(status_code=400, detail="Invalid wallet address")
+    cache_del(f"user:{user_id}")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET ton_wallet_address = $1 WHERE id = $2", addr, user_id
+        )
+        return {"success": True, "wallet_address": addr}
+
+
+@app.post("/api/disconnect-wallet")
+async def disconnect_wallet(req: DisconnectWalletRequest):
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+    cache_del(f"user:{user_id}")
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET ton_wallet_address = NULL WHERE id = $1", user_id)
+        return {"success": True}
+
+
+# ─── POST /api/create-topup ───────────────────────────────────────────────────
+
+@app.post("/api/create-topup")
+async def create_topup(req: TopUpRequest):
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+
+    if req.method == "xrocket":
+        if req.amount < config.MIN_TOPUP_TON:
+            raise HTTPException(status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON")
+        invoice_url, invoice_id = await _create_xrocket_invoice(user_id, req.amount)
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO payments (user_id, provider, invoice_id, amount_ton, payload) "
+                "VALUES ($1,$2,$3,$4,$5) ON CONFLICT (invoice_id) DO NOTHING",
+                user_id, "xrocket", invoice_id, req.amount, json.dumps({"user_id": user_id})
+            )
+        return {"invoice_url": invoice_url, "invoice_id": invoice_id, "method": "xrocket"}
+
+    elif req.method == "ton_wallet":
+        if req.amount < config.MIN_TOPUP_TON:
+            raise HTTPException(status_code=400, detail=f"Minimum top-up is {config.MIN_TOPUP_TON} TON")
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            user = await get_user(conn, user_id)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            comment_id = user["ton_comment_id"]
+            await conn.execute("""
+                INSERT INTO ton_topup_requests (user_id, comment_id, amount_ton, status)
+                VALUES ($1, $2, $3, 'pending')
+                ON CONFLICT (comment_id) DO NOTHING
+            """, user_id, comment_id, req.amount)
+            return {
+                "method": "ton_wallet",
+                "receiving_address": config.TON_WALLET_RECEIVE,
+                "comment_id": comment_id,
+                "amount": req.amount,
+            }
+
+    elif req.method == "stars":
+        stars_needed = max(config.MIN_TOPUP_STARS, int(req.amount * config.STARS_PER_TON))
+        return {
+            "method": "stars",
+            "stars_amount": stars_needed,
+            "ton_equivalent": round(stars_needed / config.STARS_PER_TON, 4)
+        }
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid payment method")
+
+
 # ─── POST /payment-webhook/ton-topup ─────────────────────────────────────────
 
 @app.post("/payment-webhook/ton-topup")
 async def ton_topup_webhook(request: Request):
-    """
-    TONAPI / custom webhook — verifies comment ID and credits TON to user.
-    Expected JSON: { "comment_id": "123456", "amount_ton": 1.5, "tx_hash": "abc..." }
-    Set X-Webhook-Secret header == TONAPI_WEBHOOK_SECRET env var.
-    """
     secret = request.headers.get("X-Webhook-Secret", "")
     if config.TONAPI_WEBHOOK_SECRET and secret != config.TONAPI_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
@@ -988,10 +1235,8 @@ async def ton_topup_webhook(request: Request):
             "SELECT id FROM users WHERE ton_comment_id = $1", comment_id
         )
         if not user:
-            logger.warning(f"TON topup: no user for comment_id={comment_id}")
             return {"ok": True, "skipped": True}
 
-        # Idempotency check
         existing = await conn.fetchrow(
             "SELECT id FROM ton_topup_requests WHERE comment_id = $1 AND status = 'credited'",
             comment_id
@@ -1011,7 +1256,6 @@ async def ton_topup_webhook(request: Request):
                           f"TON wallet top-up: {amount_ton} TON")
 
         cache_del(f"user:{user_id}")
-        logger.info(f"TON topup credited: user={user_id}, amount={amount_ton}, comment={comment_id}")
         return {"ok": True, "user_id": user_id, "amount_credited": amount_ton}
 
 
@@ -1052,7 +1296,6 @@ async def _process_xrocket_payment(invoice_id: str, amount: float):
             await add_ton(conn, payment["user_id"], amount, "topup",
                           f"Top-up via xRocket: {amount} TON")
         cache_del(f"user:{payment['user_id']}")
-        logger.info(f"xRocket payment: user={payment['user_id']}, {amount} TON")
 
 
 async def _create_xrocket_invoice(user_id: int, amount: float) -> tuple:
@@ -1150,173 +1393,6 @@ async def set_language(req: LanguageRequest):
     async with pool.acquire() as conn:
         await conn.execute("UPDATE users SET language = $1 WHERE id = $2", req.language, user_id)
     return {"success": True}
-
-
-# ─── TON Check endpoints ──────────────────────────────────────────────────────
-
-@app.post("/api/create-check")
-async def create_check(req: CreateCheckRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-    if req.amount < config.CHECK_MIN_AMOUNT:
-        raise HTTPException(status_code=400, detail=f"Minimum {config.CHECK_MIN_AMOUNT} TON")
-    if req.check_type not in ("personal", "multi"):
-        raise HTTPException(status_code=400, detail="Invalid check type")
-    recipients = 1 if req.check_type == "personal" else (req.recipients or 2)
-    if req.check_type == "multi" and recipients < 2:
-        raise HTTPException(status_code=400, detail="Multi check requires at least 2 recipients")
-    cache_del(f"user:{user_id}")
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        if float(user["ton_balance"]) < req.amount:
-            raise HTTPException(status_code=400, detail="Insufficient TON balance")
-        check_id = secrets.token_urlsafe(12)
-        async with conn.transaction():
-            await conn.execute(
-                "UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2", req.amount, user_id
-            )
-            await conn.execute(
-                "INSERT INTO ton_checks (id, creator_id, check_type, amount, recipients) VALUES ($1,$2,$3,$4,$5)",
-                check_id, user_id, req.check_type, req.amount, recipients
-            )
-            await conn.execute(
-                "INSERT INTO transactions (user_id, type, description, ton_amount) VALUES ($1,'check_create',$2,$3)",
-                user_id, f"Created {req.check_type} check: {req.amount} TON", -req.amount
-            )
-        updated = await get_user(conn, user_id)
-        link = f"https://t.me/{config.BOT_USERNAME}?start=c_{check_id}"
-        return {
-            "success": True, "check_id": check_id, "link": link,
-            "new_ton_balance": float(updated["ton_balance"])
-        }
-
-
-@app.get("/api/check/{check_id}")
-async def get_check(check_id: str, init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    user_id = tg_user["id"]
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        check = await conn.fetchrow("SELECT * FROM ton_checks WHERE id = $1", check_id)
-        if not check:
-            raise HTTPException(status_code=404, detail="Check not found")
-        if check["status"] != "active":
-            raise HTTPException(status_code=400, detail="Check already claimed or expired")
-        existing = await conn.fetchrow(
-            "SELECT id FROM check_claims WHERE check_id = $1 AND claimer_id = $2", check_id, user_id
-        )
-        if existing:
-            raise HTTPException(status_code=400, detail="Already claimed this check")
-        if check["check_type"] == "personal" and check["claimed_count"] >= 1:
-            raise HTTPException(status_code=400, detail="This check has already been claimed")
-        creator = await conn.fetchrow(
-            "SELECT first_name, username FROM users WHERE id = $1", check["creator_id"]
-        )
-        return {
-            "check_id": check_id, "check_type": check["check_type"],
-            "amount": float(check["amount"]),
-            "amount_per_person": float(check["amount"]) / check["recipients"],
-            "recipients": check["recipients"], "claimed_count": check["claimed_count"],
-            "creator_name": creator["first_name"] if creator else "Unknown"
-        }
-
-
-@app.post("/api/claim-check")
-async def claim_check(req: ClaimCheckRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-    cache_del(f"user:{user_id}")
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        check = await conn.fetchrow(
-            "SELECT * FROM ton_checks WHERE id = $1 FOR UPDATE", req.check_id
-        )
-        if not check:
-            raise HTTPException(status_code=404, detail="Check not found")
-        if check["status"] != "active":
-            raise HTTPException(status_code=400, detail="Check is no longer active")
-        if check["creator_id"] == user_id:
-            raise HTTPException(status_code=400, detail="Cannot claim your own check")
-        existing = await conn.fetchrow(
-            "SELECT id FROM check_claims WHERE check_id = $1 AND claimer_id = $2",
-            req.check_id, user_id
-        )
-        if existing:
-            raise HTTPException(status_code=400, detail="Already claimed this check")
-        if check["claimed_count"] >= check["recipients"]:
-            raise HTTPException(status_code=400, detail="Check is fully claimed")
-        amount_per_person = float(check["amount"]) / check["recipients"]
-        new_claimed = check["claimed_count"] + 1
-        fully_claimed = new_claimed >= check["recipients"]
-        async with conn.transaction():
-            await conn.execute(
-                "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2",
-                amount_per_person, user_id
-            )
-            await conn.execute(
-                "INSERT INTO check_claims (check_id, claimer_id, amount) VALUES ($1,$2,$3)",
-                req.check_id, user_id, amount_per_person
-            )
-            await conn.execute(
-                "UPDATE ton_checks SET claimed_count = $1, status = $2 WHERE id = $3",
-                new_claimed, "claimed" if fully_claimed else "active", req.check_id
-            )
-            await conn.execute(
-                "INSERT INTO transactions (user_id, type, description, ton_amount) VALUES ($1,'check_claim',$2,$3)",
-                user_id, f"Claimed check {req.check_id}", amount_per_person
-            )
-            # Auto-referral: if claimer has no referrer, creator becomes their referrer
-            claimer = await conn.fetchrow("SELECT referrer_id FROM users WHERE id = $1", user_id)
-            if claimer and not claimer["referrer_id"] and check["creator_id"] != user_id:
-                week_id = _current_week_id()
-                await conn.execute(
-                    "UPDATE users SET referrer_id = $1 WHERE id = $2 AND referrer_id IS NULL",
-                    check["creator_id"], user_id
-                )
-                await conn.execute("""
-                    INSERT INTO weekly_referral_stats (referrer_id, week_id, friend_count)
-                    VALUES ($1,$2,1)
-                    ON CONFLICT (referrer_id, week_id)
-                    DO UPDATE SET friend_count = weekly_referral_stats.friend_count + 1, updated_at = NOW()
-                """, check["creator_id"], week_id)
-        updated = await get_user(conn, user_id)
-        return {
-            "success": True, "amount_received": amount_per_person,
-            "new_ton_balance": float(updated["ton_balance"])
-        }
-
-
-@app.get("/api/checks")
-async def get_checks(init_data: str):
-    tg_user = verify_telegram_init_data(init_data)
-    user_id = tg_user["id"]
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        my_checks, received = await asyncio.gather(
-            conn.fetch("""
-                SELECT c.*, concat('https://t.me/', $2::text, '?start=c_', c.id) AS link
-                FROM ton_checks c WHERE c.creator_id = $1 ORDER BY c.created_at DESC LIMIT 20
-            """, user_id, config.BOT_USERNAME),
-            conn.fetch("""
-                SELECT c.*, u.first_name AS creator_name,
-                       (c.amount / c.recipients) AS amount_per_person
-                FROM ton_checks c JOIN users u ON u.id = c.creator_id
-                WHERE c.status = 'active' AND c.creator_id != $1
-                  AND NOT EXISTS (
-                      SELECT 1 FROM check_claims cc
-                      WHERE cc.check_id = c.id AND cc.claimer_id = $1
-                  )
-                  AND c.claimed_count < c.recipients
-                ORDER BY c.created_at DESC LIMIT 10
-            """, user_id),
-        )
-        return {
-            "my_checks": [dict(c) for c in my_checks],
-            "received_checks": [dict(c) for c in received]
-        }
 
 
 # ─── Admin endpoints ──────────────────────────────────────────────────────────
