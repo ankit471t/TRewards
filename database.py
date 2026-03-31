@@ -274,9 +274,8 @@ async def init_db():
             )
         """)
 
-        # ── weekly_referral_stats — leaderboard only ──────────────────────────
-        # Stores per-referrer friend counts per Sunday-week for leaderboard queries.
-        # Source of truth for stats on the user row (total_friends, weekly_friends).
+        # ── weekly_referral_stats ─────────────────────────────────────────────
+        # Stores per-referrer friend counts per Sunday-week for the leaderboard.
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS weekly_referral_stats (
                 id           SERIAL PRIMARY KEY,
@@ -285,6 +284,21 @@ async def init_db():
                 friend_count INTEGER DEFAULT 0,
                 updated_at   TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(referrer_id, week_id)
+            )
+        """)
+
+        # ── referral_commissions — per-friend commission tracking ─────────────
+        # This table tracks how many TR coins each specific friend has generated
+        # for the referrer, enabling accurate per-friend share display on the
+        # friends page.  Populated by add_coins() when distributing commissions.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS referral_commissions (
+                id           SERIAL PRIMARY KEY,
+                referrer_id  BIGINT REFERENCES users(id),
+                friend_id    BIGINT REFERENCES users(id),
+                coins_earned BIGINT DEFAULT 0,
+                updated_at   TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(referrer_id, friend_id)
             )
         """)
 
@@ -306,6 +320,8 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_users_comment_id        ON users(ton_comment_id)",
             "CREATE INDEX IF NOT EXISTS idx_users_created_at        ON users(created_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_stars_charge            ON stars_payments(telegram_charge_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ref_commissions_ref     ON referral_commissions(referrer_id)",
+            "CREATE INDEX IF NOT EXISTS idx_ref_commissions_friend  ON referral_commissions(friend_id)",
         ]
         for idx in indexes:
             try:
@@ -325,12 +341,20 @@ async def get_user(conn, user_id: int):
 async def create_user(conn, user_id: int, username: str, first_name: str,
                       last_name: str, referrer_id: int = None):
     """
-    Upsert user. On genuine first insert:
+    Upsert user.  On genuine first insert:
       - Stores referral_link on the user row.
+      - Sets referrer_id so the referral chain is tracked.
       - Increments referrer's total_friends and weekly_friends atomically.
-      - Resets weekly_friends if referrer is in a new Sun-Sat week.
-      - Updates weekly_referral_stats for leaderboard.
-    On return visits (conflict) only name fields are refreshed.
+      - Resets weekly_friends if referrer crossed a new Sun–Sat week boundary.
+      - Updates weekly_referral_stats for the leaderboard.
+
+    On return visits (ON CONFLICT) only name fields are refreshed;
+    referrer_id is intentionally NOT overwritten on existing rows.
+
+    FIX (vs original): the upsert now returns the *inserted* referrer_id via
+    RETURNING so we can detect whether this was a genuine new-user insert
+    (referrer_id = the one we passed) vs an existing user whose referrer_id
+    might already be set to something else.
     """
     if referrer_id == user_id:
         referrer_id = None
@@ -354,6 +378,9 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         f"?startapp=ref_{user_id}"
     )
 
+    # xmax = 0 means a new row was inserted; xmax > 0 means an existing row was updated.
+    # We use this to detect whether this is a brand-new user so we only increment
+    # the referrer's counters once.
     user = await conn.fetchrow("""
         INSERT INTO users (
             id, username, first_name, last_name,
@@ -365,50 +392,65 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
             first_name    = EXCLUDED.first_name,
             last_name     = EXCLUDED.last_name,
             referral_link = COALESCE(users.referral_link, EXCLUDED.referral_link)
-        RETURNING *
+        RETURNING *, (xmax = 0) AS is_new_insert
     """, user_id, username, first_name, last_name, referrer_id, comment_id, ref_link)
 
-    # Only increment referrer counters when this is a new referral
-    if referrer_id and user["referrer_id"] == referrer_id:
-        week_id    = _current_week_id()
-        week_start = _current_week_start()
+    # Only credit the referrer when:
+    #   1. This is a brand-new user row (is_new_insert = true)
+    #   2. The row actually has the referrer_id we provided (i.e. not NULL)
+    is_new = user["is_new_insert"]
+    actual_referrer = user["referrer_id"]
 
-        # Increment total_friends unconditionally.
-        # Increment weekly_friends — auto-reset to 1 if we moved to a new week.
-        await conn.execute("""
-            UPDATE users
-            SET
-                total_friends           = total_friends + 1,
-                weekly_friends          = CASE
-                    WHEN weekly_friends_reset_at IS NULL
-                      OR weekly_friends_reset_at < $2
-                    THEN 1
-                    ELSE weekly_friends + 1
-                END,
-                weekly_friends_reset_at = $2
-            WHERE id = $1
-        """, referrer_id, week_start)
-
-        # Keep weekly_referral_stats in sync for leaderboard
-        await conn.execute("""
-            INSERT INTO weekly_referral_stats (referrer_id, week_id, friend_count)
-            VALUES ($1, $2, 1)
-            ON CONFLICT (referrer_id, week_id)
-            DO UPDATE SET
-                friend_count = weekly_referral_stats.friend_count + 1,
-                updated_at   = NOW()
-        """, referrer_id, week_id)
+    if is_new and actual_referrer:
+        await _credit_new_referral(conn, actual_referrer)
 
     return user
+
+
+async def _credit_new_referral(conn, referrer_id: int):
+    """
+    Called exactly once per new referred user.
+    Increments total_friends and weekly_friends on the referrer row,
+    and upserts weekly_referral_stats for the leaderboard.
+    """
+    week_id    = _current_week_id()
+    week_start = _current_week_start()
+
+    await conn.execute("""
+        UPDATE users
+        SET
+            total_friends           = total_friends + 1,
+            weekly_friends          = CASE
+                WHEN weekly_friends_reset_at IS NULL
+                  OR weekly_friends_reset_at < $2
+                THEN 1
+                ELSE weekly_friends + 1
+            END,
+            weekly_friends_reset_at = $2
+        WHERE id = $1
+    """, referrer_id, week_start)
+
+    await conn.execute("""
+        INSERT INTO weekly_referral_stats (referrer_id, week_id, friend_count)
+        VALUES ($1, $2, 1)
+        ON CONFLICT (referrer_id, week_id)
+        DO UPDATE SET
+            friend_count = weekly_referral_stats.friend_count + 1,
+            updated_at   = NOW()
+    """, referrer_id, week_id)
 
 
 async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: str):
     """
     Credit coins to user and record the transaction.
-    Distributes REFERRAL_COMMISSION of amount to the referrer across three columns:
+
+    Distributes REFERRAL_COMMISSION of amount to the referrer across:
       unclaimed_referral  — claimable pool (decremented on claim)
       tr_earned_from_refs — all-time stat shown on friends page (never decremented)
       referral_earnings   — legacy alias kept for backward compat
+
+    FIX (vs original): also upserts referral_commissions so the friends page
+    can show accurate per-friend contribution instead of a rough estimate.
     """
     await conn.execute(
         "UPDATE users SET coins = coins + $1 WHERE id = $2", amount, user_id
@@ -423,6 +465,9 @@ async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: 
         if user and user["referrer_id"]:
             commission = int(amount * REFERRAL_COMMISSION)
             if commission > 0:
+                referrer_id = user["referrer_id"]
+
+                # Credit the referrer's claimable + all-time pools
                 await conn.execute("""
                     UPDATE users
                     SET
@@ -430,7 +475,17 @@ async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: 
                         tr_earned_from_refs = tr_earned_from_refs + $1,
                         referral_earnings   = referral_earnings   + $1
                     WHERE id = $2
-                """, commission, user["referrer_id"])
+                """, commission, referrer_id)
+
+                # Track per-friend commission for the friends page
+                await conn.execute("""
+                    INSERT INTO referral_commissions (referrer_id, friend_id, coins_earned)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (referrer_id, friend_id)
+                    DO UPDATE SET
+                        coins_earned = referral_commissions.coins_earned + $3,
+                        updated_at   = NOW()
+                """, referrer_id, user_id, commission)
 
 
 async def add_spins(conn, user_id: int, amount: int):
@@ -454,7 +509,7 @@ async def ensure_weekly_friends_reset(conn, user_id: int):
     """
     If the stored weekly_friends_reset_at is before this week's Sunday,
     reset weekly_friends to 0 and update the reset date.
-    Call this at the start of /api/friends to ensure the counter is current.
+    Call this at the start of /api/friends to keep the counter current.
     Returns the (possibly updated) user row.
     """
     week_start = _current_week_start()
@@ -472,19 +527,57 @@ async def ensure_weekly_friends_reset(conn, user_id: int):
     return await get_user(conn, user_id)
 
 
+# ─── Friends page helpers ─────────────────────────────────────────────────────
+
+async def get_friends_page_data(conn, user_id: int, curr_week: str, prev_week: str):
+    """
+    Merged from friends.patch.js — returns all data needed for the friends page
+    in one coordinated DB fetch.
+
+    Returns:
+        friends      — last 10 referrals with per-friend commission earned
+        leaderboard  — current week top-20 + user's own row if not in top 20
+        prev_lb      — previous week top-20
+    """
+    friends_rows, lb_rows, prev_rows = await conn.fetch("""
+        SELECT
+            u.id,
+            u.first_name,
+            u.username,
+            u.coins,
+            COALESCE(rc.coins_earned, 0) AS your_share
+        FROM users u
+        LEFT JOIN referral_commissions rc
+               ON rc.referrer_id = $1 AND rc.friend_id = u.id
+        WHERE u.referrer_id = $1
+        ORDER BY u.created_at DESC
+        LIMIT 10
+    """, user_id), await conn.fetch("""
+        SELECT w.referrer_id, u.first_name, u.username, w.friend_count
+        FROM weekly_referral_stats w
+        JOIN users u ON u.id = w.referrer_id
+        WHERE w.week_id = $1
+        ORDER BY w.friend_count DESC
+        LIMIT 20
+    """, curr_week), await conn.fetch("""
+        SELECT w.referrer_id, u.first_name, u.username, w.friend_count
+        FROM weekly_referral_stats w
+        JOIN users u ON u.id = w.referrer_id
+        WHERE w.week_id = $1
+        ORDER BY w.friend_count DESC
+        LIMIT 20
+    """, prev_week)
+
+    return friends_rows, lb_rows, prev_rows
+
+
 # ─── Week helpers (Sunday → Saturday) ────────────────────────────────────────
-#
-# All three layers use identical logic:
-#   days_since_sunday = (d.weekday() + 1) % 7   → 0 on Sun, 1 Mon … 6 Sat
-#   week_start = d - timedelta(days=days_since_sunday)
-#   week_num   = (week_start - Jan1 of that year).days // 7 + 1
-#   week_id    = "YYYY-WNN"
 
 def _sunday_week_id(d: date) -> str:
     """Sunday-based week ID for an arbitrary date, e.g. '2025-W22'."""
     days_since_sunday = (d.weekday() + 1) % 7
     week_start = d - timedelta(days=days_since_sunday)
-    year = week_start.isocalendar()[0]
+    year = week_start.year
     jan1 = date(year, 1, 1)
     week_num = (week_start - jan1).days // 7 + 1
     return f"{year}-W{week_num:02d}"
