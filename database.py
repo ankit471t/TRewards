@@ -2,7 +2,7 @@ import asyncpg
 import logging
 import random
 from datetime import date, timedelta
-from config import DATABASE_URL
+from config import DATABASE_URL, REFERRAL_COMMISSION
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +235,8 @@ async def init_db():
         """)
 
         # ── weekly_referral_stats ─────────────────────────────────────────────
+        # week_id uses Sunday-based weeks (YYYY-WNN) matching:
+        #   frontend getSundayWeekId() and main.py _sunday_week_id()
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS weekly_referral_stats (
                 id          SERIAL PRIMARY KEY,
@@ -282,7 +284,12 @@ async def get_user(conn, user_id: int):
 
 async def create_user(conn, user_id: int, username: str, first_name: str,
                       last_name: str, referrer_id: int = None):
-    """Upsert user, handle referral, generate unique comment ID."""
+    """
+    Upsert user, handle referral, generate unique comment ID.
+
+    Weekly referral stats use _current_week_id() (Sunday-based), matching
+    main.py _sunday_week_id() and the frontend getSundayWeekId().
+    """
     if referrer_id == user_id:
         referrer_id = None
     if referrer_id:
@@ -310,7 +317,8 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         RETURNING *
     """, user_id, username, first_name, last_name, referrer_id, comment_id)
 
-    # Update weekly referral stats only on first-time referral
+    # Update weekly referral stats only on first-time referral.
+    # Uses Sunday-based week ID to stay consistent across all three layers.
     if referrer_id and user["referrer_id"] == referrer_id:
         week_id = _current_week_id()
         await conn.execute("""
@@ -325,7 +333,12 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
 
 
 async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: str):
-    """Add coins and record transaction. Credits 30% referral commission."""
+    """
+    Add coins and record transaction.
+    Credits REFERRAL_COMMISSION to referrer's unclaimed balance.
+    Rate is read from config.py (REFERRAL_COMMISSION = 0.30) rather than
+    hardcoded, so a single config change propagates everywhere.
+    """
     await conn.execute(
         "UPDATE users SET coins = coins + $1 WHERE id = $2", amount, user_id
     )
@@ -337,7 +350,7 @@ async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: 
     if amount > 0:
         user = await conn.fetchrow("SELECT referrer_id FROM users WHERE id = $1", user_id)
         if user and user["referrer_id"]:
-            commission = int(amount * 0.30)
+            commission = int(amount * REFERRAL_COMMISSION)
             if commission > 0:
                 await conn.execute("""
                     UPDATE users
@@ -364,19 +377,42 @@ async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: 
     """, user_id, tx_type, description, amount)
 
 
-# ─── Week helpers ──────────────────────────────────────────────────────────────
+# ─── Week helpers (Sunday→Saturday) ──────────────────────────────────────────
+#
+# All three layers must agree on which "week" a referral belongs to:
+#
+#   Frontend (JS):  getSundayWeekId(d)  →  days_since_sunday = d.getDay()
+#   main.py:        _sunday_week_id(d)  →  days_since_sunday = (weekday+1) % 7
+#   database.py:    _sunday_week_id(d)  →  same formula (this file)
+#
+# Old database.py used  day_of_year // 7 + 1  which is NOT Sunday-aligned and
+# drifts from the other two implementations. Replaced below.
+#
+# Formula:
+#   days_since_sunday = (d.weekday() + 1) % 7   # 0 on Sun, 1 on Mon … 6 on Sat
+#   week_start = d - timedelta(days=days_since_sunday)
+#   year = week_start.isocalendar()[0]           # handles Jan 1 edge cases
+#   week_num = (week_start - date(year,1,1)).days // 7 + 1
+#   return f"{year}-W{week_num:02d}"
+
+def _sunday_week_id(d: date) -> str:
+    """
+    Return the Sunday-based week ID for an arbitrary date, e.g. '2025-W22'.
+    Mirrors frontend getSundayWeekId() and main.py _sunday_week_id() exactly.
+    """
+    days_since_sunday = (d.weekday() + 1) % 7   # 0 if d is Sunday
+    week_start = d - timedelta(days=days_since_sunday)
+    year = week_start.isocalendar()[0]
+    jan1 = date(year, 1, 1)
+    week_num = (week_start - jan1).days // 7 + 1
+    return f"{year}-W{week_num:02d}"
+
 
 def _current_week_id() -> str:
-    d = date.today()
-    jan1 = date(d.year, 1, 1)
-    day_of_year = (d - jan1).days
-    week_num = day_of_year // 7 + 1
-    return f"{d.year}-W{week_num:02d}"
+    """Sunday-based week ID for today."""
+    return _sunday_week_id(date.today())
 
 
 def _prev_week_id() -> str:
-    d = date.today() - timedelta(days=7)
-    jan1 = date(d.year, 1, 1)
-    day_of_year = (d - jan1).days
-    week_num = day_of_year // 7 + 1
-    return f"{d.year}-W{week_num:02d}"
+    """Sunday-based week ID for last week."""
+    return _sunday_week_id(date.today() - timedelta(days=7))
