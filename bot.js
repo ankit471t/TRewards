@@ -1,5 +1,5 @@
 // TRewards Bot — AWS Lambda (ES Module)
-// Handles: /start, /amiadminyes, Stars payments, admin wizard
+// Handles: /start, /stars, Stars payments, broadcast only
 
 const BOT_TOKEN    = process.env.BOT_TOKEN;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://trewards.onrender.com';
@@ -11,7 +11,7 @@ const API_URL      = process.env.API_URL || 'https://trewards-api.onrender.com';
 const STARS_PER_TON = 65;
 const MIN_STARS     = 50;
 
-// In-memory admin wizard sessions (Lambda warm instances)
+// In-memory admin wizard sessions (broadcast only)
 const adminSessions = {};
 
 function isAdmin(uid) { return ADMIN_IDS.includes(uid); }
@@ -52,9 +52,7 @@ async function getOrCreateUser(tgUser, referrerId = null) {
     if (Array.isArray(r) && r.length > 0) validRef = safeRef;
   }
 
-  // Generate unique 6-digit comment ID for new users
   let commentId = String(Math.floor(100000 + Math.random() * 900000));
-  // Check uniqueness (only matters if truly new)
   let attempt = 0;
   while (attempt < 5) {
     const existing = await sb(`users?ton_comment_id=eq.${commentId}&select=id`);
@@ -78,7 +76,6 @@ async function getOrCreateUser(tgUser, referrerId = null) {
 
   const user = Array.isArray(rows) ? rows[0] : rows;
 
-  // Update weekly referral stats if this is a new referral
   if (validRef && user && !user.referrer_id) {
     const weekId = getCurrentWeekId();
     await sb('weekly_referral_stats', {
@@ -105,16 +102,20 @@ async function handleStart(msg, param) {
   const tgUser    = msg.from;
   const firstName = tgUser.first_name || tgUser.username || 'User';
 
-  // Deep-link: c_<checkId>
+  // Deep-link: c_<checkId> — open app to claim check
   if (param && param.startsWith('c_')) {
-    const checkUrl = `${FRONTEND_URL}?check=${encodeURIComponent(param.slice(2))}`;
+    const checkId = param.slice(2);
+    // Register user first (so they become referral of check creator)
+    await getOrCreateUser(tgUser, null).catch(e => console.error('upsert error:', e));
+    
+    const appUrl = `${FRONTEND_URL}?tgWebAppStartParam=${encodeURIComponent(param)}`;
     await tgApi('sendMessage', {
       chat_id: chatId,
       text: `💎 You have a <b>TON check</b> waiting!\n\nOpen the app to claim it instantly.`,
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [[
-          { text: '💰 Claim Check', web_app: { url: checkUrl } }
+          { text: '💰 Claim Check Now', web_app: { url: FRONTEND_URL } }
         ]]
       }
     });
@@ -145,7 +146,6 @@ async function handleStart(msg, param) {
 // ─── Telegram Stars payment flow ──────────────────────────────────────────────
 async function handleStarsCommand(msg) {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
 
   await tgApi('sendMessage', {
     chat_id: chatId,
@@ -183,226 +183,6 @@ async function sendStarsInvoice(chatId, starsAmount) {
   });
 }
 
-// ─── Admin panel ──────────────────────────────────────────────────────────────
-async function sendAdminPanel(chatId) {
-  try {
-    const [totalRes, todayRes, revenueRes, pendingRes, activeTasksRes] = await Promise.all([
-      sb('users?select=id'),
-      sb(`users?created_at=gte.${new Date(Date.now() - 86400000).toISOString()}&select=id`),
-      sb('payments?status=eq.paid&select=amount_ton'),
-      sb('withdrawals?status=eq.pending&select=id,net_ton,wallet_address,users(username,first_name)'),
-      sb('tasks?status=eq.active&select=id'),
-    ]);
-
-    const totalUsers  = Array.isArray(totalRes)      ? totalRes.length   : 0;
-    const newToday    = Array.isArray(todayRes)       ? todayRes.length   : 0;
-    const revenue     = Array.isArray(revenueRes)
-      ? revenueRes.reduce((s, r) => s + parseFloat(r.amount_ton || 0), 0).toFixed(4)
-      : '0.0000';
-    const pendingWd   = Array.isArray(pendingRes)     ? pendingRes.length : 0;
-    const activeTasks = Array.isArray(activeTasksRes) ? activeTasksRes.length : 0;
-
-    await tgApi('sendMessage', {
-      chat_id: chatId,
-      text:
-        `👑 <b>TRewards Admin Panel</b>\n\n` +
-        `👥 Total users: <b>${totalUsers}</b>\n` +
-        `🆕 New today: <b>${newToday}</b>\n` +
-        `💰 Revenue: <b>${revenue} TON</b>\n` +
-        `⏳ Pending withdrawals: <b>${pendingWd}</b>\n` +
-        `📋 Active tasks: <b>${activeTasks}</b>`,
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '➕ Create Promo',  callback_data: 'admin_create_promo' },
-            { text: '📋 List Promos',   callback_data: 'admin_list_promos'  },
-          ],
-          [
-            { text: '🗑 Delete Promo',  callback_data: 'admin_delete_promo' },
-            { text: '📜 Activations',   callback_data: 'admin_activations'  },
-          ],
-          [
-            { text: '💸 Payments',      callback_data: 'admin_payments'     },
-            { text: '👥 User Stats',    callback_data: 'admin_users'        },
-          ],
-          [{ text: '⏳ Withdrawals',    callback_data: 'admin_withdrawals'  }],
-          [{ text: '📣 Broadcast',      callback_data: 'admin_broadcast'    }],
-        ]
-      }
-    });
-  } catch (e) {
-    console.error('Admin panel error:', e);
-    await tgApi('sendMessage', {
-      chat_id: chatId,
-      text: '⚠️ Could not load stats. Check SUPABASE_URL and SUPABASE_KEY.'
-    });
-  }
-}
-
-// ─── Callback query handler ───────────────────────────────────────────────────
-async function handleCallback(query) {
-  const chatId = query.message.chat.id;
-  const userId = query.from.id;
-  const data   = query.data;
-
-  await tgApi('answerCallbackQuery', { callback_query_id: query.id });
-
-  // ── Stars payment callbacks ────────────────────────────────────────────────
-  const starsMap = { stars_65: 65, stars_130: 130, stars_325: 325, stars_650: 650 };
-  if (data in starsMap) {
-    await sendStarsInvoice(chatId, starsMap[data]);
-    return;
-  }
-  if (data === 'stars_custom') {
-    adminSessions[userId] = { step: 'stars_custom_amount', data: {} };
-    await tgApi('sendMessage', {
-      chat_id: chatId,
-      text: `⭐ Enter Stars amount (minimum ${MIN_STARS}):`,
-    });
-    return;
-  }
-
-  // ── Admin-only below ──────────────────────────────────────────────────────
-  if (!isAdmin(userId)) {
-    await tgApi('sendMessage', { chat_id: chatId, text: '❌ Access denied.' });
-    return;
-  }
-
-  if (data === 'admin_list_promos') {
-    const rows = await sb('promo_codes?order=created_at.desc&limit=20');
-    if (!Array.isArray(rows) || !rows.length) {
-      await tgApi('sendMessage', { chat_id: chatId, text: 'No promo codes yet.' });
-      return;
-    }
-    let text = '<b>📋 Promo Codes:</b>\n\n';
-    rows.forEach(p => {
-      text += `${p.is_active ? '✅' : '❌'} <code>${p.code}</code> — ${p.reward_type} · ${p.reward_amount} · ${p.current_activations || 0}/${p.max_activations}\n`;
-    });
-    await tgApi('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
-    return;
-  }
-
-  if (data === 'admin_activations') {
-    const rows = await sb('promo_activations?select=user_id,activated_at,promo_codes(code)&order=activated_at.desc&limit=20');
-    if (!Array.isArray(rows) || !rows.length) {
-      await tgApi('sendMessage', { chat_id: chatId, text: 'No activations yet.' });
-      return;
-    }
-    let text = '<b>📜 Recent Activations:</b>\n\n';
-    rows.forEach(a => {
-      text += `• ${a.user_id} → <code>${a.promo_codes?.code || '?'}</code> · ${new Date(a.activated_at).toLocaleDateString()}\n`;
-    });
-    await tgApi('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
-    return;
-  }
-
-  if (data === 'admin_payments') {
-    const rows = await sb('payments?status=eq.paid&select=amount_ton,provider,paid_at,users(username,first_name)&order=paid_at.desc&limit=20');
-    if (!Array.isArray(rows) || !rows.length) {
-      await tgApi('sendMessage', { chat_id: chatId, text: 'No payments yet.' });
-      return;
-    }
-    let text = '<b>💸 Recent Payments:</b>\n\n';
-    rows.forEach(p => {
-      const who = p.users?.username ? `@${p.users.username}` : (p.users?.first_name || '?');
-      text += `• ${who}: ${p.amount_ton} TON via ${p.provider}\n`;
-    });
-    await tgApi('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
-    return;
-  }
-
-  if (data === 'admin_users') {
-    const [all, today, week] = await Promise.all([
-      sb('users?select=id,coins'),
-      sb(`users?created_at=gte.${new Date(Date.now() - 86400000).toISOString()}&select=id`),
-      sb(`users?created_at=gte.${new Date(Date.now() - 604800000).toISOString()}&select=id`),
-    ]);
-    const totalCoins = Array.isArray(all) ? all.reduce((s, u) => s + parseInt(u.coins || 0), 0) : 0;
-    await tgApi('sendMessage', {
-      chat_id: chatId,
-      parse_mode: 'HTML',
-      text:
-        `<b>👥 User Stats:</b>\n\n` +
-        `Total: <b>${Array.isArray(all) ? all.length : 0}</b>\n` +
-        `Today: <b>${Array.isArray(today) ? today.length : 0}</b>\n` +
-        `This week: <b>${Array.isArray(week) ? week.length : 0}</b>\n` +
-        `Total TR coins: <b>${totalCoins.toLocaleString()}</b>`
-    });
-    return;
-  }
-
-  if (data === 'admin_withdrawals') {
-    const rows = await sb('withdrawals?status=eq.pending&select=id,net_ton,wallet_address,created_at,users(username,first_name)&order=created_at.asc&limit=20');
-    if (!Array.isArray(rows) || !rows.length) {
-      await tgApi('sendMessage', { chat_id: chatId, text: '✅ No pending withdrawals!' });
-      return;
-    }
-    let text = '<b>⏳ Pending Withdrawals:</b>\n\n';
-    rows.forEach(w => {
-      const who = w.users?.username ? `@${w.users.username}` : (w.users?.first_name || '?');
-      text += `#${w.id} ${who}: ${parseFloat(w.net_ton).toFixed(4)} TON → <code>${w.wallet_address}</code>\n`;
-    });
-    await tgApi('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
-    return;
-  }
-
-  if (data === 'admin_create_promo') {
-    adminSessions[userId] = { step: 'promo_name', data: {} };
-    await tgApi('sendMessage', {
-      chat_id: chatId, parse_mode: 'HTML',
-      text: '<b>📝 Create Promo Code</b>\n\nStep 1/4: Enter the promo code (e.g. LAUNCH2025):'
-    });
-    return;
-  }
-
-  if (data === 'admin_delete_promo') {
-    adminSessions[userId] = { step: 'delete_promo', data: {} };
-    await tgApi('sendMessage', { chat_id: chatId, text: '🗑 Enter the promo code to deactivate:' });
-    return;
-  }
-
-  if (data === 'admin_broadcast') {
-    adminSessions[userId] = { step: 'broadcast_message', data: {} };
-    await tgApi('sendMessage', {
-      chat_id: chatId, parse_mode: 'HTML',
-      text: '<b>📣 Send Broadcast</b>\n\nType your message (HTML supported):\n\n<i>/cancel to abort.</i>'
-    });
-    return;
-  }
-
-  if (data === 'promo_type_coins' || data === 'promo_type_ton') {
-    const session = adminSessions[userId];
-    if (session?.step === 'promo_reward_type') {
-      session.data.reward_type = data === 'promo_type_coins' ? 'coins' : 'ton';
-      session.step = 'promo_amount';
-      await tgApi('sendMessage', {
-        chat_id: chatId,
-        text: `Step 3/4: Enter reward amount (${session.data.reward_type === 'coins' ? 'TR coins' : 'TON'}):`
-      });
-    }
-    return;
-  }
-
-  if (data === 'broadcast_confirm') {
-    const session = adminSessions[userId];
-    if (!session || session.step !== 'broadcast_confirm') return;
-    delete adminSessions[userId];
-    const { message, button_text, button_url } = session.data;
-    const users = await sb('users?select=id');
-    const total = Array.isArray(users) ? users.length : 0;
-    await tgApi('sendMessage', { chat_id: chatId, text: `📤 Sending to ${total} users...` });
-    sendBroadcastFromBot(users.map(u => u.id), message, button_text, button_url);
-    return;
-  }
-
-  if (data === 'broadcast_cancel') {
-    delete adminSessions[userId];
-    await tgApi('sendMessage', { chat_id: chatId, text: '❌ Broadcast cancelled.' });
-    return;
-  }
-}
-
 // ─── Stars pre-checkout answer ────────────────────────────────────────────────
 async function handlePreCheckout(query) {
   await tgApi('answerPreCheckoutQuery', {
@@ -417,13 +197,11 @@ async function handleSuccessfulPayment(msg) {
   const payment = msg.successful_payment;
   if (!payment || payment.currency !== 'XTR') return;
 
-  const chargeId   = payment.telegram_payment_charge_id;
-  const starsAmount = payment.total_amount;  // in XTR smallest unit (== stars)
-  const tonAmount  = (starsAmount / STARS_PER_TON).toFixed(4);
+  const chargeId    = payment.telegram_payment_charge_id;
+  const starsAmount = payment.total_amount;
+  const tonAmount   = (starsAmount / STARS_PER_TON).toFixed(4);
 
-  // Credit via backend API (idempotent)
   try {
-    // We need initData — for bot-side we call Supabase directly
     const existing = await sb(`stars_payments?telegram_charge_id=eq.${chargeId}&select=id`);
     if (Array.isArray(existing) && existing.length > 0) {
       await tgApi('sendMessage', {
@@ -434,7 +212,6 @@ async function handleSuccessfulPayment(msg) {
       return;
     }
 
-    // Credit TON in Supabase
     const user = await sb(`users?id=eq.${userId}&select=ton_balance`);
     if (Array.isArray(user) && user.length > 0) {
       const newBal = parseFloat(user[0].ton_balance || 0) + parseFloat(tonAmount);
@@ -497,7 +274,7 @@ async function sendBroadcastFromBot(userIds, message, buttonText, buttonUrl) {
     await Promise.allSettled(batch.map(async uid => {
       const body = { chat_id: uid, text: message, parse_mode: 'HTML' };
       if (buttonText && buttonUrl) {
-        body.reply_markup = JSON.stringify({ inline_keyboard: [[{ text: buttonText, url: buttonUrl }]] });
+        body.reply_markup = { inline_keyboard: [[{ text: buttonText, url: buttonUrl }]] };
       }
       const r = await tgApi('sendMessage', body);
       r.ok ? sent++ : failed++;
@@ -507,7 +284,7 @@ async function sendBroadcastFromBot(userIds, message, buttonText, buttonUrl) {
   console.log(`Broadcast done: sent=${sent}, failed=${failed}`);
 }
 
-// ─── Admin wizard ─────────────────────────────────────────────────────────────
+// ─── Admin wizard (broadcast only) ────────────────────────────────────────────
 async function handleAdminWizard(msg) {
   const chatId  = msg.chat.id;
   const userId  = msg.from.id;
@@ -521,7 +298,7 @@ async function handleAdminWizard(msg) {
     return true;
   }
 
-  // Stars custom amount
+  // Stars custom amount (non-admin too)
   if (session.step === 'stars_custom_amount') {
     const stars = parseInt(text);
     if (isNaN(stars) || stars < MIN_STARS) {
@@ -530,79 +307,6 @@ async function handleAdminWizard(msg) {
     }
     delete adminSessions[userId];
     await sendStarsInvoice(chatId, stars);
-    return true;
-  }
-
-  // Promo wizard
-  if (session.step === 'promo_name') {
-    if (!/^[A-Z0-9_]{3,30}$/i.test(text)) {
-      await tgApi('sendMessage', { chat_id: chatId, text: '❌ 3–30 alphanumeric chars only. Try again:' });
-      return true;
-    }
-    session.data.code = text.toUpperCase();
-    session.step = 'promo_reward_type';
-    await tgApi('sendMessage', {
-      chat_id: chatId, parse_mode: 'HTML',
-      text: `Step 2/4: Select reward type for <code>${session.data.code}</code>:`,
-      reply_markup: { inline_keyboard: [[
-        { text: '🪙 TR Coins', callback_data: 'promo_type_coins' },
-        { text: '💎 TON',      callback_data: 'promo_type_ton'   }
-      ]]}
-    });
-    return true;
-  }
-
-  if (session.step === 'promo_amount') {
-    const amount = parseFloat(text);
-    if (isNaN(amount) || amount <= 0) {
-      await tgApi('sendMessage', { chat_id: chatId, text: '❌ Enter a positive number:' });
-      return true;
-    }
-    session.data.amount = amount;
-    session.step = 'promo_max_activations';
-    await tgApi('sendMessage', { chat_id: chatId, text: 'Step 4/4: Enter max activations allowed:' });
-    return true;
-  }
-
-  if (session.step === 'promo_max_activations') {
-    const max = parseInt(text);
-    if (isNaN(max) || max <= 0) {
-      await tgApi('sendMessage', { chat_id: chatId, text: '❌ Enter a positive integer:' });
-      return true;
-    }
-    await sb('promo_codes', {
-      method: 'POST',
-      prefer: 'return=minimal',
-      body: JSON.stringify({
-        code: session.data.code,
-        reward_type: session.data.reward_type,
-        reward_amount: session.data.amount,
-        max_activations: max,
-        created_by: userId,
-        is_active: true,
-        current_activations: 0,
-      }),
-    });
-    delete adminSessions[userId];
-    await tgApi('sendMessage', {
-      chat_id: chatId, parse_mode: 'HTML',
-      text: `✅ Promo <b>${session.data.code}</b> created!\n${session.data.amount} ${session.data.reward_type === 'coins' ? 'TR coins' : 'TON'} · max ${max} uses`
-    });
-    return true;
-  }
-
-  if (session.step === 'delete_promo') {
-    const code = text.toUpperCase().trim();
-    await sb(`promo_codes?code=eq.${code}`, {
-      method: 'PATCH',
-      prefer: 'return=minimal',
-      body: JSON.stringify({ is_active: false }),
-    });
-    delete adminSessions[userId];
-    await tgApi('sendMessage', {
-      chat_id: chatId, parse_mode: 'HTML',
-      text: `✅ <code>${code}</code> deactivated.`
-    });
     return true;
   }
 
@@ -645,7 +349,7 @@ async function askBroadcastConfirm(chatId, session) {
     ? session.data.message.slice(0, 150) + '...'
     : session.data.message;
   const btnInfo = session.data.button_text
-    ? `\n🔗 ${session.data.button_text} → ${session.data.button_url}`
+    ? `\n🔗 ${session.data.button_text} → ${session.data.button_url || 'N/A'}`
     : '';
   await tgApi('sendMessage', {
     chat_id: chatId,
@@ -660,10 +364,69 @@ async function askBroadcastConfirm(chatId, session) {
   });
 }
 
+// ─── Callback query handler ───────────────────────────────────────────────────
+async function handleCallback(query) {
+  const chatId = query.message.chat.id;
+  const userId = query.from.id;
+  const data   = query.data;
+
+  await tgApi('answerCallbackQuery', { callback_query_id: query.id });
+
+  // ── Stars payment callbacks (available to all) ─────────────────────────────
+  const starsMap = { stars_65: 65, stars_130: 130, stars_325: 325, stars_650: 650 };
+  if (data in starsMap) {
+    await sendStarsInvoice(chatId, starsMap[data]);
+    return;
+  }
+  if (data === 'stars_custom') {
+    adminSessions[userId] = { step: 'stars_custom_amount', data: {} };
+    await tgApi('sendMessage', {
+      chat_id: chatId,
+      text: `⭐ Enter Stars amount (minimum ${MIN_STARS}):`,
+    });
+    return;
+  }
+
+  // ── Broadcast confirm/cancel (admin only) ─────────────────────────────────
+  if (data === 'broadcast_confirm') {
+    if (!isAdmin(userId)) return;
+    const session = adminSessions[userId];
+    if (!session || session.step !== 'broadcast_confirm') return;
+    delete adminSessions[userId];
+    const { message, button_text, button_url } = session.data;
+    const users = await sb('users?select=id');
+    const total = Array.isArray(users) ? users.length : 0;
+    await tgApi('sendMessage', { chat_id: chatId, text: `📤 Sending to ${total} users...` });
+    sendBroadcastFromBot(users.map(u => u.id), message, button_text, button_url);
+    return;
+  }
+
+  if (data === 'broadcast_cancel') {
+    delete adminSessions[userId];
+    await tgApi('sendMessage', { chat_id: chatId, text: '❌ Broadcast cancelled.' });
+    return;
+  }
+}
+
+// ─── Admin broadcast panel ────────────────────────────────────────────────────
+async function sendAdminBroadcastPanel(chatId) {
+  const users = await sb('users?select=id').catch(() => []);
+  const total = Array.isArray(users) ? users.length : 0;
+  await tgApi('sendMessage', {
+    chat_id: chatId,
+    text: `👑 <b>TRewards Admin</b>\n\n👥 Total users: <b>${total}</b>\n\nUse the button below to send a broadcast:`,
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [[
+        { text: '📣 Send Broadcast', callback_data: 'admin_start_broadcast' }
+      ]]
+    }
+  });
+}
+
 // ─── Main Lambda handler ──────────────────────────────────────────────────────
 export const handler = async (event) => {
   try {
-    // Verify webhook secret
     const secret = process.env.WEBHOOK_SECRET_TOKEN;
     if (secret) {
       const provided = (event.headers || {})['x-telegram-bot-api-secret-token'];
@@ -673,17 +436,39 @@ export const handler = async (event) => {
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     if (!body) return { statusCode: 200, body: 'ok' };
 
+    // ── pre_checkout_query ────────────────────────────────────────────────────
+    if (body.pre_checkout_query) {
+      await handlePreCheckout(body.pre_checkout_query);
+      return { statusCode: 200, body: 'ok' };
+    }
+
+    // ── Callback queries ──────────────────────────────────────────────────────
+    if (body.callback_query) {
+      const q = body.callback_query;
+      const uid = q.from.id;
+
+      // Handle broadcast_start from admin panel button
+      if (q.data === 'admin_start_broadcast') {
+        await tgApi('answerCallbackQuery', { callback_query_id: q.id });
+        if (!isAdmin(uid)) return { statusCode: 200, body: 'ok' };
+        adminSessions[uid] = { step: 'broadcast_message', data: {} };
+        await tgApi('sendMessage', {
+          chat_id: q.message.chat.id,
+          parse_mode: 'HTML',
+          text: '<b>📣 Send Broadcast</b>\n\nType your message (HTML supported):\n\n<i>/cancel to abort.</i>'
+        });
+        return { statusCode: 200, body: 'ok' };
+      }
+
+      await handleCallback(q);
+      return { statusCode: 200, body: 'ok' };
+    }
+
     // ── Message handling ──────────────────────────────────────────────────────
     if (body.message) {
       const msg  = body.message;
       const text = msg.text || '';
       const uid  = msg.from?.id;
-
-      // Stars pre-checkout
-      if (body.pre_checkout_query) {
-        await handlePreCheckout(body.pre_checkout_query);
-        return { statusCode: 200, body: 'ok' };
-      }
 
       // Stars successful payment
       if (msg.successful_payment) {
@@ -698,43 +483,25 @@ export const handler = async (event) => {
         return { statusCode: 200, body: 'ok' };
       }
 
-      // /stars — buy TON with Stars
+      // /stars — buy TON with Stars (available from bot)
       if (text === '/stars') {
         await handleStarsCommand(msg);
         return { statusCode: 200, body: 'ok' };
       }
 
-      // /amiadminyes — admin panel
+      // /amiadminyes — admin broadcast panel only
       if (text === '/amiadminyes') {
-        if (isAdmin(uid)) await sendAdminPanel(msg.chat.id);
+        if (isAdmin(uid)) await sendAdminBroadcastPanel(msg.chat.id);
         else await tgApi('sendMessage', { chat_id: msg.chat.id, text: '❌ Access denied.' });
         return { statusCode: 200, body: 'ok' };
       }
 
-      // Admin wizard (text steps) — check stars custom too
+      // Wizard steps (broadcast + stars custom)
       const session = adminSessions[uid];
-      if (session && !text.startsWith('/')) {
+      if (session) {
         await handleAdminWizard(msg);
         return { statusCode: 200, body: 'ok' };
       }
-      if (session?.step === 'stars_custom_amount') {
-        await handleAdminWizard(msg);
-        return { statusCode: 200, body: 'ok' };
-      }
-      if (isAdmin(uid) && !text.startsWith('/')) {
-        await handleAdminWizard(msg);
-      }
-    }
-
-    // ── pre_checkout_query at top level ───────────────────────────────────────
-    if (body.pre_checkout_query) {
-      await handlePreCheckout(body.pre_checkout_query);
-      return { statusCode: 200, body: 'ok' };
-    }
-
-    // ── Callback queries ──────────────────────────────────────────────────────
-    if (body.callback_query) {
-      await handleCallback(body.callback_query);
     }
 
     return { statusCode: 200, body: 'ok' };

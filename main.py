@@ -794,7 +794,59 @@ async def connect_wallet(req: ConnectWalletRequest):
             "UPDATE users SET ton_wallet_address = $1 WHERE id = $2", addr, user_id
         )
         return {"success": True, "wallet_address": addr}
+# ─── ADD THIS ENDPOINT TO main.py ────────────────────────────────────────────
+# This creates a Telegram Stars invoice link for in-app payment (no redirect to bot)
 
+class StarsInvoiceRequest(BaseModel):
+    init_data: str
+    stars_amount: int
+
+@app.post("/api/create-stars-invoice")
+async def create_stars_invoice(req: StarsInvoiceRequest):
+    """
+    Creates a Telegram Stars invoice link that can be opened with
+    tg.openInvoice() inside the Mini App — no redirect to bot needed.
+    """
+    tg_user = verify_telegram_init_data(req.init_data)
+    user_id = tg_user["id"]
+
+    if req.stars_amount < config.MIN_TOPUP_STARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum {config.MIN_TOPUP_STARS} Stars"
+        )
+
+    ton_amount = round(req.stars_amount / config.STARS_PER_TON, 4)
+
+    # Create invoice link via Telegram Bot API
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            f"https://api.telegram.org/bot{config.BOT_TOKEN}/createInvoiceLink",
+            json={
+                "title": "TRewards TON Top-Up",
+                "description": f"Top up {ton_amount} TON to your TRewards balance. Rate: 65 Stars = 1 TON.",
+                "payload": json.dumps({"type": "stars_topup", "user_id": user_id, "stars": req.stars_amount}),
+                "currency": "XTR",
+                "prices": [{"label": f"{ton_amount} TON ({req.stars_amount} Stars)", "amount": req.stars_amount}],
+            }
+        )
+        data = resp.json()
+
+    if not data.get("ok"):
+        raise HTTPException(status_code=500, detail=f"Telegram API error: {data.get('description', 'Unknown')}")
+
+    invoice_link = data["result"]
+    return {
+        "invoice_link": invoice_link,
+        "stars_amount": req.stars_amount,
+        "ton_amount": ton_amount
+    }
+
+
+# ─── ALSO UPDATE the /payment-webhook/stars or handle in bot ─────────────────
+# When user pays via openInvoice(), Telegram sends successful_payment to the bot.
+# The bot's handleSuccessfulPayment() already credits TON — that flow still works.
+# No changes needed to the webhook handler.
 
 # ─── POST /api/disconnect-wallet ─────────────────────────────────────────────
 
