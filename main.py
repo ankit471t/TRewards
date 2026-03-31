@@ -19,7 +19,8 @@ import config
 from database import (
     get_pool, init_db, get_user, create_user,
     add_coins, add_spins, add_ton,
-    _current_week_id, _prev_week_id
+    ensure_weekly_friends_reset,
+    _current_week_id, _prev_week_id, _sunday_week_id, _current_week_start
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -85,31 +86,13 @@ def require_admin(user_id: int):
         raise HTTPException(status_code=403, detail="Admin only")
 
 
-# ─── Week helpers (Sunday→Saturday, matching frontend) ────────────────────────
+# ─── Week label helper ────────────────────────────────────────────────────────
 
-def _sunday_week_id(d: date = None) -> str:
-    """
-    Week ID based on Sunday→Saturday weeks.
-    Returns YYYY-WNN where week 1 starts on the first Sunday of the year (or Jan 1 if it's Sunday).
-    Uses ISO-compatible approach: find the Sunday that started the current week.
-    """
-    if d is None:
-        d = date.today()
-    # Find the most recent Sunday (weekday 6 = Sunday in Python's isoweekday: Mon=1..Sun=7)
-    # Python: weekday() Mon=0..Sun=6
-    days_since_sunday = (d.weekday() + 1) % 7  # 0 if Sunday, 1 if Monday, ..., 6 if Saturday
-    week_start = d - timedelta(days=days_since_sunday)
-    # Use ISO week number of the week_start for consistency
-    year = week_start.isocalendar()[0]
-    # Simple week number: days from Jan 1 of that year
-    jan1 = date(year, 1, 1)
-    week_num = (week_start - jan1).days // 7 + 1
-    return f"{year}-W{week_num:02d}"
-
-
-def _prev_sunday_week_id() -> str:
-    d = date.today() - timedelta(days=7)
-    return _sunday_week_id(d)
+def week_label(week_id: str) -> str:
+    if not week_id:
+        return ""
+    parts = week_id.split("-W")
+    return f"Week {parts[1]}, {parts[0]}" if len(parts) == 2 else week_id
 
 
 # ─── Pydantic models ──────────────────────────────────────────────────────────
@@ -230,7 +213,6 @@ async def health():
 
 
 # ─── POST /api/user ───────────────────────────────────────────────────────────
-# referrer_id: numeric user ID passed as webapp URL param (not bot start param)
 
 @app.post("/api/user")
 async def upsert_user(req: UserRequest):
@@ -260,6 +242,11 @@ async def upsert_user(req: UserRequest):
 
 
 def _user_payload(user):
+    # referral_link is stored on the user row; fall back to constructed URL if missing
+    ref_link = user["referral_link"] or (
+        f"https://t.me/{config.BOT_USERNAME}/{config.MINI_APP_SHORT_NAME}"
+        f"?startapp=ref_{user['id']}"
+    )
     return {
         "id": user["id"],
         "username": user["username"],
@@ -270,8 +257,7 @@ def _user_payload(user):
         "last_streak_date": user["last_streak_date"].isoformat() if user["last_streak_date"] else None,
         "ton_balance": float(user["ton_balance"]),
         "language": user["language"],
-        # Referral link now points to the Mini App with ref= param (not bot /start)
-        "referral_link": f"https://t.me/{config.BOT_USERNAME}/{config.MINI_APP_SHORT_NAME}?startapp=ref_{user['id']}",
+        "referral_link": ref_link,
         "ton_wallet_address": user["ton_wallet_address"],
         "ton_comment_id": user["ton_comment_id"],
     }
@@ -604,36 +590,43 @@ async def watch_ad(req: WatchAdRequest):
 
 
 # ─── GET /api/friends ─────────────────────────────────────────────────────────
-# Full friends page data. All tracking is webapp-based (no bot dependency).
-# Week = Sunday→Saturday. Leaderboard uses _sunday_week_id().
+#
+# All stats are read from columns on the users table (set atomically in
+# create_user / add_coins), not computed on the fly from joins.
+# This keeps the endpoint fast and the numbers consistent.
+#
+# Response shape used by the HTML friends page:
+#   total_friends    → "Total Friends" stat box
+#   weekly_friends   → "This Week" stat box
+#   total_earned     → "TR Earned" stat box  (tr_earned_from_refs)
+#   unclaimed        → amount shown on the "Claim All" button card
+#   referral_link    → stored on user row
+#   leaderboard      → current week top-20 + user's own rank
+#   prev_leaderboard → previous week top-20 + user's own rank
+#   friends          → last 10 referrals with per-friend share info
 
 @app.get("/api/friends")
 async def get_friends(init_data: str):
     tg_user = verify_telegram_init_data(init_data)
     user_id = tg_user["id"]
 
-    cache_key = f"friends:{user_id}"
-    cached = cache_get(cache_key)
-    if cached is not None:
-        return cached
-
+    # Don't cache — weekly_friends may need resetting and unclaimed changes often
     pool = await get_pool()
     async with pool.acquire() as conn:
-        user = await get_user(conn, user_id)
+        # Ensure weekly counter is reset if we crossed a Sunday boundary
+        user = await ensure_weekly_friends_reset(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        curr_week = _sunday_week_id()
-        prev_week = _prev_sunday_week_id()
+        curr_week = _current_week_id()
+        prev_week = _prev_week_id()
 
         (
             friends_rows,
-            weekly_row,
-            total_friends_count,
             lb_rows,
             prev_rows,
         ) = await asyncio.gather(
-            # Last 10 friends with their earnings
+            # Last 10 friends with their total coins (for per-friend share display)
             conn.fetch("""
                 SELECT id, username, first_name, coins
                 FROM users
@@ -641,17 +634,7 @@ async def get_friends(init_data: str):
                 ORDER BY created_at DESC
                 LIMIT 10
             """, user_id),
-            # This week's referral count
-            conn.fetchrow("""
-                SELECT friend_count
-                FROM weekly_referral_stats
-                WHERE referrer_id = $1 AND week_id = $2
-            """, user_id, curr_week),
-            # Total all-time referral count
-            conn.fetchval("""
-                SELECT COUNT(*) FROM users WHERE referrer_id = $1
-            """, user_id),
-            # Current week leaderboard top 20
+            # Current week leaderboard — top 20
             conn.fetch("""
                 SELECT w.referrer_id, u.first_name, u.username, w.friend_count
                 FROM weekly_referral_stats w
@@ -660,7 +643,7 @@ async def get_friends(init_data: str):
                 ORDER BY w.friend_count DESC
                 LIMIT 20
             """, curr_week),
-            # Previous week leaderboard top 20
+            # Previous week leaderboard — top 20
             conn.fetch("""
                 SELECT w.referrer_id, u.first_name, u.username, w.friend_count
                 FROM weekly_referral_stats w
@@ -671,19 +654,19 @@ async def get_friends(init_data: str):
             """, prev_week),
         )
 
-        weekly_friends = weekly_row["friend_count"] if weekly_row else 0
-
-        # Build friends list (last 10)
+        # ── Build friends list ─────────────────────────────────────────────────
         friend_list = [
             {
                 "id": f["id"],
                 "name": f["first_name"] or f["username"] or "Unknown",
                 "coins": f["coins"],
+                # 30% share of the friend's total coins shows per-row contribution
                 "your_share": int(f["coins"] * config.REFERRAL_COMMISSION),
             }
             for f in friends_rows
         ]
 
+        # ── Build leaderboards ────────────────────────────────────────────────
         def build_lb(rows):
             result = []
             for i, r in enumerate(rows):
@@ -695,45 +678,47 @@ async def get_friends(init_data: str):
                 })
             return result
 
-        lb = build_lb(lb_rows)
+        lb      = build_lb(lb_rows)
         prev_lb = build_lb(prev_rows)
 
         # Append current user to leaderboard if not in top 20
         user_in_lb = any(x["is_me"] for x in lb)
-        if not user_in_lb and weekly_row and weekly_row["friend_count"] > 0:
+        if not user_in_lb and (user["weekly_friends"] or 0) > 0:
             user_rank = await conn.fetchval("""
                 SELECT COUNT(*) + 1
                 FROM weekly_referral_stats
                 WHERE week_id = $1 AND friend_count > $2
-            """, curr_week, weekly_row["friend_count"])
+            """, curr_week, user["weekly_friends"])
             lb.append({
                 "rank": user_rank,
-                "name": (user["first_name"] or "You"),
-                "weekly_friends": weekly_row["friend_count"],
+                "name": user["first_name"] or "You",
+                "weekly_friends": user["weekly_friends"],
                 "is_me": True,
             })
 
-        # unclaimed = accumulated but not yet claimed referral commissions
-        unclaimed = user["unclaimed_referral"] or 0
-        total_earned = user["referral_earnings"] or 0
+        # ── Stats directly from user row columns ──────────────────────────────
+        ref_link = user["referral_link"] or (
+            f"https://t.me/{config.BOT_USERNAME}/{config.MINI_APP_SHORT_NAME}"
+            f"?startapp=ref_{user_id}"
+        )
 
-        mini_app_name = getattr(config, "MINI_APP_SHORT_NAME", "TRewards")
-        referral_link = f"https://t.me/{config.BOT_USERNAME}/{mini_app_name}?startapp=ref_{user_id}"
-
-        result = {
-            "friends": friend_list,
-            "total_friends": total_friends_count,
-            "weekly_friends": weekly_friends,
-            "total_earned": total_earned,
-            "unclaimed": unclaimed,
-            "referral_link": referral_link,
-            "leaderboard": lb,
+        return {
+            # Stat boxes
+            "total_friends":  user["total_friends"]  or 0,
+            "weekly_friends": user["weekly_friends"] or 0,
+            "total_earned":   user["tr_earned_from_refs"] or 0,   # "TR Earned" box
+            # Claim button
+            "unclaimed":      user["unclaimed_referral"] or 0,
+            # Referral link (from DB column)
+            "referral_link":  ref_link,
+            # Leaderboards
+            "leaderboard":      lb,
             "prev_leaderboard": prev_lb,
-            "current_week": curr_week,
-            "prev_week": prev_week,
+            "current_week":     curr_week,
+            "prev_week":        prev_week,
+            # Friends list
+            "friends": friend_list,
         }
-        cache_set(cache_key, result, ttl=config.CACHE_TTL_FRIENDS)
-        return result
 
 
 # ─── POST /api/claim-referral ─────────────────────────────────────────────────
@@ -743,25 +728,32 @@ async def claim_referral(req: ClaimReferralRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
     cache_del(f"user:{user_id}")
-    cache_del(f"friends:{user_id}")
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         user = await get_user(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+
         unclaimed = user["unclaimed_referral"] or 0
         if unclaimed <= 0:
             raise HTTPException(status_code=400, detail="No referral earnings to claim")
+
         async with conn.transaction():
-            await conn.execute(
-                "UPDATE users SET unclaimed_referral = 0, coins = coins + $1 WHERE id = $2",
-                unclaimed, user_id
-            )
-            await conn.execute(
-                "INSERT INTO transactions (user_id, type, description, amount) "
-                "VALUES ($1,'referral','Referral commission claimed',$2)",
-                user_id, unclaimed
-            )
+            # Move unclaimed → coins; zero out the claimable pool.
+            # tr_earned_from_refs is NOT touched — it is a cumulative total.
+            await conn.execute("""
+                UPDATE users
+                SET
+                    unclaimed_referral = 0,
+                    coins              = coins + $1
+                WHERE id = $2
+            """, unclaimed, user_id)
+            await conn.execute("""
+                INSERT INTO transactions (user_id, type, description, amount)
+                VALUES ($1, 'referral', 'Referral commission claimed', $2)
+            """, user_id, unclaimed)
+
         return {"success": True, "claimed": unclaimed}
 
 
@@ -856,8 +848,6 @@ async def convert_tr_to_ton(req: ConvertRequest):
 
 
 # ─── TON Check endpoints ──────────────────────────────────────────────────────
-# Check links use the Mini App URL (not bot /start).
-# Format: https://t.me/{BOT}/{APP}?startapp=chk_{check_id}
 
 @app.post("/api/create-check")
 async def create_check(req: CreateCheckRequest):
@@ -898,8 +888,10 @@ async def create_check(req: CreateCheckRequest):
             """, user_id, f"Created {req.check_type} check: {req.amount} TON", -req.amount)
 
         updated = await get_user(conn, user_id)
-        mini_app_name = getattr(config, "MINI_APP_SHORT_NAME", "TRewards")
-        link = f"https://t.me/{config.BOT_USERNAME}/{mini_app_name}?startapp=chk_{check_id}"
+        link = (
+            f"https://t.me/{config.BOT_USERNAME}/{config.MINI_APP_SHORT_NAME}"
+            f"?startapp=chk_{check_id}"
+        )
         return {
             "success": True,
             "check_id": check_id,
@@ -913,7 +905,6 @@ async def create_check(req: CreateCheckRequest):
 
 @app.get("/api/check/{check_id}")
 async def get_check(check_id: str, init_data: str):
-    """Get check details for the claim overlay."""
     tg_user = verify_telegram_init_data(init_data)
     user_id = tg_user["id"]
 
@@ -955,19 +946,12 @@ async def get_check(check_id: str, init_data: str):
 
 @app.post("/api/claim-check")
 async def claim_check(req: ClaimCheckRequest):
-    """
-    Claim a TON check (webapp-based flow, no bot dependency).
-    - TON credited to claimer's ton_balance immediately.
-    - If claimer has no referrer → check creator becomes their referrer.
-    - Weekly referral stats updated if new referral link is formed.
-    """
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
     cache_del(f"user:{user_id}")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Lock check row
         check = await conn.fetchrow(
             "SELECT * FROM ton_checks WHERE id = $1 FOR UPDATE", req.check_id
         )
@@ -992,30 +976,25 @@ async def claim_check(req: ClaimCheckRequest):
         fully_claimed = new_claimed_count >= check["recipients"]
 
         async with conn.transaction():
-            # Credit TON to claimer
             await conn.execute(
                 "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2",
                 amount_per_person, user_id
             )
-            # Record the claim
             await conn.execute(
                 "INSERT INTO check_claims (check_id, claimer_id, amount) VALUES ($1, $2, $3)",
                 req.check_id, user_id, amount_per_person
             )
-            # Update check status
             await conn.execute("""
                 UPDATE ton_checks
-                SET claimed_count = $1,
-                    status = $2
+                SET claimed_count = $1, status = $2
                 WHERE id = $3
             """, new_claimed_count, "claimed" if fully_claimed else "active", req.check_id)
-            # Transaction record
             await conn.execute("""
                 INSERT INTO transactions (user_id, type, description, ton_amount)
                 VALUES ($1, 'check_claim', $2, $3)
             """, user_id, f"Claimed TON check from user {check['creator_id']}", amount_per_person)
 
-            # Auto-referral: if claimer has no referrer, creator becomes referrer
+            # Auto-referral: claimer with no referrer → check creator becomes referrer
             claimer = await conn.fetchrow(
                 "SELECT referrer_id FROM users WHERE id = $1", user_id
             )
@@ -1027,16 +1006,30 @@ async def claim_check(req: ClaimCheckRequest):
                 )
                 if result == "UPDATE 1":
                     referral_set = True
-                    week_id = _sunday_week_id()
+                    week_id    = _current_week_id()
+                    week_start = _current_week_start()
+                    # Update referrer's friend counters
+                    await conn.execute("""
+                        UPDATE users
+                        SET
+                            total_friends           = total_friends + 1,
+                            weekly_friends          = CASE
+                                WHEN weekly_friends_reset_at IS NULL
+                                  OR weekly_friends_reset_at < $2
+                                THEN 1
+                                ELSE weekly_friends + 1
+                            END,
+                            weekly_friends_reset_at = $2
+                        WHERE id = $1
+                    """, check["creator_id"], week_start)
                     await conn.execute("""
                         INSERT INTO weekly_referral_stats (referrer_id, week_id, friend_count)
                         VALUES ($1, $2, 1)
                         ON CONFLICT (referrer_id, week_id)
                         DO UPDATE SET
                             friend_count = weekly_referral_stats.friend_count + 1,
-                            updated_at = NOW()
+                            updated_at   = NOW()
                     """, check["creator_id"], week_id)
-                    cache_del(f"friends:{check['creator_id']}")
 
         updated = await get_user(conn, user_id)
         return {
@@ -1055,17 +1048,12 @@ async def get_checks(init_data: str):
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        mini_app_name = getattr(config, "MINI_APP_SHORT_NAME", "TRewards")
+        mini_app_name = config.MINI_APP_SHORT_NAME
         my_checks, received = await asyncio.gather(
             conn.fetch("""
                 SELECT
-                    c.id,
-                    c.check_type,
-                    c.amount,
-                    c.recipients,
-                    c.claimed_count,
-                    c.status,
-                    c.created_at,
+                    c.id, c.check_type, c.amount, c.recipients,
+                    c.claimed_count, c.status, c.created_at,
                     concat(
                         'https://t.me/', $2::text, '/', $3::text,
                         '?startapp=chk_', c.id
@@ -1077,11 +1065,7 @@ async def get_checks(init_data: str):
             """, user_id, config.BOT_USERNAME, mini_app_name),
             conn.fetch("""
                 SELECT
-                    c.id,
-                    c.check_type,
-                    c.amount,
-                    c.recipients,
-                    c.claimed_count,
+                    c.id, c.check_type, c.amount, c.recipients, c.claimed_count,
                     ROUND(c.amount / c.recipients, 4) AS amount_per_person,
                     u.first_name AS creator_name
                 FROM ton_checks c

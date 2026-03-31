@@ -2,7 +2,7 @@ import asyncpg
 import logging
 import random
 from datetime import date, timedelta
-from config import DATABASE_URL, REFERRAL_COMMISSION
+from config import DATABASE_URL, REFERRAL_COMMISSION, BOT_USERNAME, MINI_APP_SHORT_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ async def get_pool():
             max_size=20,
             command_timeout=30,
             max_inactive_connection_lifetime=300,
-            statement_cache_size=0,  # required for Supabase pgBouncer
+            statement_cache_size=0,
         )
     return _pool
 
@@ -30,37 +30,77 @@ async def init_db():
         # ── users ─────────────────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id                  BIGINT PRIMARY KEY,
-                username            TEXT,
-                first_name          TEXT,
-                last_name           TEXT,
-                coins               BIGINT DEFAULT 0,
-                spins               INTEGER DEFAULT 0,
-                streak              INTEGER DEFAULT 0,
-                last_streak_date    DATE,
-                streak_started      DATE,
-                referrer_id         BIGINT REFERENCES users(id),
-                referral_earnings   BIGINT DEFAULT 0,
-                unclaimed_referral  BIGINT DEFAULT 0,
-                ton_balance         NUMERIC(18,8) DEFAULT 0,
-                language            TEXT DEFAULT 'en',
-                ton_wallet_address  TEXT,
-                ton_comment_id      TEXT UNIQUE,
-                created_at          TIMESTAMPTZ DEFAULT NOW()
+                id                       BIGINT PRIMARY KEY,
+                username                 TEXT,
+                first_name               TEXT,
+                last_name                TEXT,
+                coins                    BIGINT DEFAULT 0,
+                spins                    INTEGER DEFAULT 0,
+                streak                   INTEGER DEFAULT 0,
+                last_streak_date         DATE,
+                streak_started           DATE,
+                referrer_id              BIGINT REFERENCES users(id),
+
+                referral_link            TEXT,
+                total_friends            BIGINT DEFAULT 0,
+                weekly_friends           INTEGER DEFAULT 0,
+                weekly_friends_reset_at  DATE,
+                tr_earned_from_refs      BIGINT DEFAULT 0,
+                referral_earnings        BIGINT DEFAULT 0,
+                unclaimed_referral       BIGINT DEFAULT 0,
+
+                ton_balance              NUMERIC(18,8) DEFAULT 0,
+                language                 TEXT DEFAULT 'en',
+                ton_wallet_address       TEXT,
+                ton_comment_id           TEXT UNIQUE,
+                created_at               TIMESTAMPTZ DEFAULT NOW()
             )
         """)
 
-        # Add columns if missing (safe migration)
         migrations = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS ton_wallet_address TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS ton_comment_id TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_link TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS total_friends BIGINT DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_friends INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_friends_reset_at DATE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS tr_earned_from_refs BIGINT DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_earnings BIGINT DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS unclaimed_referral BIGINT DEFAULT 0",
         ]
         for sql in migrations:
             try:
                 await conn.execute(sql)
             except Exception:
                 pass
+
+        # Back-fill referral_link for existing users
+        await conn.execute("""
+            UPDATE users
+            SET referral_link = concat(
+                'https://t.me/', $1::text, '/', $2::text,
+                '?startapp=ref_', id::text
+            )
+            WHERE referral_link IS NULL
+        """, BOT_USERNAME, MINI_APP_SHORT_NAME)
+
+        # Back-fill tr_earned_from_refs from referral_earnings
+        await conn.execute("""
+            UPDATE users
+            SET tr_earned_from_refs = referral_earnings
+            WHERE tr_earned_from_refs = 0 AND referral_earnings > 0
+        """)
+
+        # Back-fill total_friends from actual referral rows
+        await conn.execute("""
+            UPDATE users u
+            SET total_friends = (
+                SELECT COUNT(*) FROM users WHERE referrer_id = u.id
+            )
+            WHERE total_friends = 0
+              AND EXISTS (SELECT 1 FROM users WHERE referrer_id = u.id)
+        """)
 
         # ── transactions ──────────────────────────────────────────────────────
         await conn.execute("""
@@ -104,7 +144,7 @@ async def init_db():
             )
         """)
 
-        # ── daily_task_completions ─────────────────────────────────────────────
+        # ── daily_task_completions ────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS daily_task_completions (
                 id             SERIAL PRIMARY KEY,
@@ -141,7 +181,7 @@ async def init_db():
             )
         """)
 
-        # ── payments (xRocket) ────────────────────────────────────────────────
+        # ── payments ──────────────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 id         SERIAL PRIMARY KEY,
@@ -156,7 +196,7 @@ async def init_db():
             )
         """)
 
-        # ── ton_topup_requests (direct wallet top-up via comment ID) ──────────
+        # ── ton_topup_requests ────────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ton_topup_requests (
                 id             SERIAL PRIMARY KEY,
@@ -234,16 +274,16 @@ async def init_db():
             )
         """)
 
-        # ── weekly_referral_stats ─────────────────────────────────────────────
-        # week_id uses Sunday-based weeks (YYYY-WNN) matching:
-        #   frontend getSundayWeekId() and main.py _sunday_week_id()
+        # ── weekly_referral_stats — leaderboard only ──────────────────────────
+        # Stores per-referrer friend counts per Sunday-week for leaderboard queries.
+        # Source of truth for stats on the user row (total_friends, weekly_friends).
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS weekly_referral_stats (
-                id          SERIAL PRIMARY KEY,
-                referrer_id BIGINT REFERENCES users(id),
-                week_id     TEXT NOT NULL,
+                id           SERIAL PRIMARY KEY,
+                referrer_id  BIGINT REFERENCES users(id),
+                week_id      TEXT NOT NULL,
                 friend_count INTEGER DEFAULT 0,
-                updated_at  TIMESTAMPTZ DEFAULT NOW(),
+                updated_at   TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(referrer_id, week_id)
             )
         """)
@@ -285,10 +325,12 @@ async def get_user(conn, user_id: int):
 async def create_user(conn, user_id: int, username: str, first_name: str,
                       last_name: str, referrer_id: int = None):
     """
-    Upsert user, handle referral, generate unique comment ID.
-
-    Weekly referral stats use _current_week_id() (Sunday-based), matching
-    main.py _sunday_week_id() and the frontend getSundayWeekId().
+    Upsert user. On genuine first insert:
+      - Stores referral_link on the user row.
+      - Increments referrer's total_friends and weekly_friends atomically.
+      - Resets weekly_friends if referrer is in a new Sun-Sat week.
+      - Updates weekly_referral_stats for leaderboard.
+    On return visits (conflict) only name fields are refreshed.
     """
     if referrer_id == user_id:
         referrer_id = None
@@ -297,7 +339,7 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         if not ref:
             referrer_id = None
 
-    # Generate unique 6-digit numeric comment ID
+    # Unique 6-digit comment ID for TON wallet top-ups
     comment_id = str(random.randint(100000, 999999))
     while True:
         existing = await conn.fetchrow(
@@ -307,26 +349,54 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
             break
         comment_id = str(random.randint(100000, 999999))
 
-    user = await conn.fetchrow("""
-        INSERT INTO users (id, username, first_name, last_name, referrer_id, ton_comment_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO UPDATE SET
-            username   = EXCLUDED.username,
-            first_name = EXCLUDED.first_name,
-            last_name  = EXCLUDED.last_name
-        RETURNING *
-    """, user_id, username, first_name, last_name, referrer_id, comment_id)
+    ref_link = (
+        f"https://t.me/{BOT_USERNAME}/{MINI_APP_SHORT_NAME}"
+        f"?startapp=ref_{user_id}"
+    )
 
-    # Update weekly referral stats only on first-time referral.
-    # Uses Sunday-based week ID to stay consistent across all three layers.
+    user = await conn.fetchrow("""
+        INSERT INTO users (
+            id, username, first_name, last_name,
+            referrer_id, ton_comment_id, referral_link
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) DO UPDATE SET
+            username      = EXCLUDED.username,
+            first_name    = EXCLUDED.first_name,
+            last_name     = EXCLUDED.last_name,
+            referral_link = COALESCE(users.referral_link, EXCLUDED.referral_link)
+        RETURNING *
+    """, user_id, username, first_name, last_name, referrer_id, comment_id, ref_link)
+
+    # Only increment referrer counters when this is a new referral
     if referrer_id and user["referrer_id"] == referrer_id:
-        week_id = _current_week_id()
+        week_id    = _current_week_id()
+        week_start = _current_week_start()
+
+        # Increment total_friends unconditionally.
+        # Increment weekly_friends — auto-reset to 1 if we moved to a new week.
+        await conn.execute("""
+            UPDATE users
+            SET
+                total_friends           = total_friends + 1,
+                weekly_friends          = CASE
+                    WHEN weekly_friends_reset_at IS NULL
+                      OR weekly_friends_reset_at < $2
+                    THEN 1
+                    ELSE weekly_friends + 1
+                END,
+                weekly_friends_reset_at = $2
+            WHERE id = $1
+        """, referrer_id, week_start)
+
+        # Keep weekly_referral_stats in sync for leaderboard
         await conn.execute("""
             INSERT INTO weekly_referral_stats (referrer_id, week_id, friend_count)
             VALUES ($1, $2, 1)
             ON CONFLICT (referrer_id, week_id)
-            DO UPDATE SET friend_count = weekly_referral_stats.friend_count + 1,
-                          updated_at = NOW()
+            DO UPDATE SET
+                friend_count = weekly_referral_stats.friend_count + 1,
+                updated_at   = NOW()
         """, referrer_id, week_id)
 
     return user
@@ -334,10 +404,11 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
 
 async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: str):
     """
-    Add coins and record transaction.
-    Credits REFERRAL_COMMISSION to referrer's unclaimed balance.
-    Rate is read from config.py (REFERRAL_COMMISSION = 0.30) rather than
-    hardcoded, so a single config change propagates everywhere.
+    Credit coins to user and record the transaction.
+    Distributes REFERRAL_COMMISSION of amount to the referrer across three columns:
+      unclaimed_referral  — claimable pool (decremented on claim)
+      tr_earned_from_refs — all-time stat shown on friends page (never decremented)
+      referral_earnings   — legacy alias kept for backward compat
     """
     await conn.execute(
         "UPDATE users SET coins = coins + $1 WHERE id = $2", amount, user_id
@@ -354,8 +425,10 @@ async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: 
             if commission > 0:
                 await conn.execute("""
                     UPDATE users
-                    SET unclaimed_referral = unclaimed_referral + $1,
-                        referral_earnings  = referral_earnings  + $1
+                    SET
+                        unclaimed_referral  = unclaimed_referral  + $1,
+                        tr_earned_from_refs = tr_earned_from_refs + $1,
+                        referral_earnings   = referral_earnings   + $1
                     WHERE id = $2
                 """, commission, user["referrer_id"])
 
@@ -367,7 +440,7 @@ async def add_spins(conn, user_id: int, amount: int):
 
 
 async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: str):
-    """Add TON balance (= ad balance) and record transaction."""
+    """Add TON balance and record transaction."""
     await conn.execute(
         "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2", amount, user_id
     )
@@ -377,30 +450,39 @@ async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: 
     """, user_id, tx_type, description, amount)
 
 
-# ─── Week helpers (Sunday→Saturday) ──────────────────────────────────────────
+async def ensure_weekly_friends_reset(conn, user_id: int):
+    """
+    If the stored weekly_friends_reset_at is before this week's Sunday,
+    reset weekly_friends to 0 and update the reset date.
+    Call this at the start of /api/friends to ensure the counter is current.
+    Returns the (possibly updated) user row.
+    """
+    week_start = _current_week_start()
+    await conn.execute("""
+        UPDATE users
+        SET
+            weekly_friends          = 0,
+            weekly_friends_reset_at = $2
+        WHERE id = $1
+          AND (
+              weekly_friends_reset_at IS NULL
+              OR weekly_friends_reset_at < $2
+          )
+    """, user_id, week_start)
+    return await get_user(conn, user_id)
+
+
+# ─── Week helpers (Sunday → Saturday) ────────────────────────────────────────
 #
-# All three layers must agree on which "week" a referral belongs to:
-#
-#   Frontend (JS):  getSundayWeekId(d)  →  days_since_sunday = d.getDay()
-#   main.py:        _sunday_week_id(d)  →  days_since_sunday = (weekday+1) % 7
-#   database.py:    _sunday_week_id(d)  →  same formula (this file)
-#
-# Old database.py used  day_of_year // 7 + 1  which is NOT Sunday-aligned and
-# drifts from the other two implementations. Replaced below.
-#
-# Formula:
-#   days_since_sunday = (d.weekday() + 1) % 7   # 0 on Sun, 1 on Mon … 6 on Sat
+# All three layers use identical logic:
+#   days_since_sunday = (d.weekday() + 1) % 7   → 0 on Sun, 1 Mon … 6 Sat
 #   week_start = d - timedelta(days=days_since_sunday)
-#   year = week_start.isocalendar()[0]           # handles Jan 1 edge cases
-#   week_num = (week_start - date(year,1,1)).days // 7 + 1
-#   return f"{year}-W{week_num:02d}"
+#   week_num   = (week_start - Jan1 of that year).days // 7 + 1
+#   week_id    = "YYYY-WNN"
 
 def _sunday_week_id(d: date) -> str:
-    """
-    Return the Sunday-based week ID for an arbitrary date, e.g. '2025-W22'.
-    Mirrors frontend getSundayWeekId() and main.py _sunday_week_id() exactly.
-    """
-    days_since_sunday = (d.weekday() + 1) % 7   # 0 if d is Sunday
+    """Sunday-based week ID for an arbitrary date, e.g. '2025-W22'."""
+    days_since_sunday = (d.weekday() + 1) % 7
     week_start = d - timedelta(days=days_since_sunday)
     year = week_start.isocalendar()[0]
     jan1 = date(year, 1, 1)
@@ -408,11 +490,15 @@ def _sunday_week_id(d: date) -> str:
     return f"{year}-W{week_num:02d}"
 
 
+def _current_week_start() -> date:
+    """The Sunday that opened the current week."""
+    d = date.today()
+    return d - timedelta(days=(d.weekday() + 1) % 7)
+
+
 def _current_week_id() -> str:
-    """Sunday-based week ID for today."""
     return _sunday_week_id(date.today())
 
 
 def _prev_week_id() -> str:
-    """Sunday-based week ID for last week."""
     return _sunday_week_id(date.today() - timedelta(days=7))
