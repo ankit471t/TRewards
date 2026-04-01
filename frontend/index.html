@@ -172,17 +172,6 @@ option{background:var(--bg2)}
 .wsi.purple .wsv{color:var(--purple)}
 .chk-card{border-radius:var(--r2);padding:16px;margin-bottom:12px}
 .chk-card.create{background:linear-gradient(135deg,#0A1A0A,#0D250D);border:1px solid rgba(68,255,136,.18)}
-.chk-item{background:var(--bg3);border:1px solid rgba(168,85,247,.18);border-radius:var(--r);padding:14px;margin-bottom:8px}
-.chk-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.chk-amt{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;color:var(--ton)}
-.chk-type{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:700}
-.chk-type.personal{background:rgba(168,85,247,.15);color:var(--purple);border:1px solid rgba(168,85,247,.3)}
-.chk-type.multi{background:rgba(0,152,234,.15);color:var(--ton);border:1px solid rgba(0,152,234,.3)}
-.chk-link{font-size:11px;color:var(--t3);font-family:monospace;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chk-foot{display:flex;align-items:center;justify-content:space-between}
-.chk-st{font-size:11px;font-weight:600}
-.chk-st.active{color:var(--ok)}
-.chk-st.claimed{color:var(--t3)}
 .ct-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .ct-btn{border-radius:var(--r);padding:14px;text-align:center;cursor:pointer;border:1.5px solid rgba(255,184,0,.18);background:var(--bg3);transition:all .2s}
 .ct-btn.selected{border-color:var(--gold);background:rgba(255,184,0,.06)}
@@ -291,7 +280,6 @@ option{background:var(--bg2)}
 
 <!-- FRIENDS PAGE -->
 <div class="tab" id="tab-friends">
-  <!-- Stats row -->
   <div class="ws">
     <div class="wsi">
       <div class="wsv" id="totalFriendsVal">0</div>
@@ -307,24 +295,16 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!--
-    FIX: Single "Claim All" card — NO per-friend claim buttons.
-    Shown only when unclaimed > 0.
-    your_share values come from referral_commissions table (accurate).
-  -->
   <div class="re-card" id="refEarnCard" style="display:none">
     <div class="re-ttl" data-i="refEarnings">🤑 REFERRAL EARNINGS</div>
     <div class="re-amt" id="refEarnAmt">0 TR</div>
     <div style="font-size:11px;color:rgba(68,255,136,.45);margin-bottom:14px" data-i="refPendingDesc">Pending from friends (30% share)</div>
-    <!-- Per-friend rows — display only, no individual claim buttons -->
     <div id="refFriendRows"></div>
-    <!-- Single global claim button -->
     <button class="btn btn-ok" onclick="claimAllReferral()" style="width:100%;margin-top:12px;padding:13px">
       💰 <span data-i="claimAll">Claim All Earnings</span>
     </button>
   </div>
 
-  <!-- Referral link -->
   <div class="card">
     <div class="sec-title" data-i="yourLink">YOUR REFERRAL LINK</div>
     <div class="ref-box">
@@ -337,7 +317,6 @@ option{background:var(--bg2)}
     <p style="font-size:11px;color:var(--t2);text-align:center;margin-top:8px" data-i="refDesc">Earn 30% of your friends' TR rewards</p>
   </div>
 
-  <!-- Weekly leaderboard -->
   <div class="lb-card">
     <div class="lb-title" data-i="weeklyLB">🏆 WEEKLY LEADERBOARD</div>
     <div class="lb-week" id="currentWeekLabel">Week —</div>
@@ -346,7 +325,6 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- Previous week leaderboard -->
   <div class="lb-card" style="border-color:rgba(255,184,0,.15)">
     <div class="lb-title" style="color:var(--t2)" data-i="prevWeekLB">📜 PREVIOUS WEEK</div>
     <div class="lb-week" id="prevWeekLabel">Week —</div>
@@ -355,7 +333,6 @@ option{background:var(--bg2)}
     </div>
   </div>
 
-  <!-- Friends list -->
   <div class="sec-title" data-i="yourFriends">YOUR FRIENDS</div>
   <div id="friendsList"></div>
 </div>
@@ -393,7 +370,7 @@ option{background:var(--bg2)}
   <div id="txList"></div>
 </div>
 
-<!-- CHECK PAGE -->
+<!-- CHECK PAGE — Create only; My Checks and Received Checks removed -->
 <div class="tab" id="tab-check">
   <div class="chk-card create">
     <div class="sec-title" style="color:var(--ok)" data-i="createCheck">🧾 CREATE TON CHECK</div>
@@ -424,16 +401,6 @@ option{background:var(--bg2)}
       💡 TON deducted from balance. New claimers become your referrals!
     </div>
     <button class="btn btn-ok" onclick="createCheck()" style="width:100%;padding:13px" data-i="createCheckBtn">🧾 Create Check</button>
-  </div>
-
-  <div class="sec-title" data-i="myChecks">MY CHECKS</div>
-  <div id="myChecksList">
-    <div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noChecksYet">No checks created yet</div>
-  </div>
-
-  <div class="sec-title" style="color:var(--ton);margin-top:8px" data-i="receivedChecks">RECEIVED CHECKS</div>
-  <div id="receivedChecksList">
-    <div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px" data-i="noChecksClaim">No checks to claim</div>
   </div>
 </div>
 
@@ -648,8 +615,8 @@ let _tapCount=0;document.addEventListener('click',()=>{_tapCount++;if(_tapCount%
 // i18n
 // ═══════════════════════════════════════════════════════════════════════════
 const T={
-  en:{balance:'TR BALANCE',days:'days',spins:'spins',dailyStreak:'DAILY STREAK',streakDesc:'Claim daily for +1,000 TR + 1 spin',claimStreak:'Claim Streak',spinWheel:'SPIN WHEEL',spinsLeft:'Spins available:',spinNow:'SPIN NOW',quickActions:'QUICK ACTIONS',inviteFriend:'Invite Friend',withdraw:'Withdraw',earnMore:'Earn More',tonCheck:'TON Check',promoCode:'PROMO CODE',enterCode:'Enter code...',redeem:'Redeem',dailyTasks:'📅 DAILY TASKS',dailyTaskDesc:'+5,000 TR + 1 spin each (resets daily)',tasksTitle:'ADVERTISER TASKS',loading:'Loading...',filterAll:'All',filterDaily:'📅 Daily',filterChannel:'Channel',filterGroup:'Group',filterGame:'Game',filterVisit:'Website',totalFriends:'Total Friends',thisWeek:'This Week',trEarned:'TR Earned',refEarnings:'🤑 REFERRAL EARNINGS',refPendingDesc:'Pending from friends (30% share)',refDesc:"Earn 30% of your friends' TR rewards",claimAll:'Claim All Earnings',yourLink:'YOUR REFERRAL LINK',copy:'Copy',inviteViaTelegram:'Invite via Telegram',weeklyLB:'🏆 WEEKLY LEADERBOARD',prevWeekLB:'📜 PREVIOUS WEEK',noData:'No data',yourFriends:'YOUR FRIENDS',walletBalance:'WALLET BALANCE',tonCoinNote:'TON coins',tonCoinNoteDesc:'are used for advertising and creating checks. TR coins are your task rewards.',convertTitle:'⇄ CONVERT TR → TON',youReceive:'You receive',minConvert:'Minimum: 1,000,000 TR',convertNow:'Convert Now',topUpTON:'TOP UP TON',tonWalletMethod:'TON Wallet',tonWalletDesc:'Direct TON transfer',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Minimum: 0.50 TON or 50 Stars',withdrawTR:'WITHDRAW TR COINS',walletAddrPH:'TON wallet address (EQ...)',withdrawNow:'Withdraw Now',withdrawNote:'Processed within 24 hours. 0.03 TON fee.',txHistory:'TRANSACTION HISTORY',createCheck:'🧾 CREATE TON CHECK',createCheckDesc:'Create a TON check that others can claim',personal:'Personal',personalDesc:'Only 1 person claims',multiple:'Multiple',multipleDesc:'Split among many',eachReceives:'Each receives:',checkTip:'💡 TON deducted from balance. New claimers become your referrals!',createCheckBtn:'🧾 Create Check',myChecks:'MY CHECKS',noChecksYet:'No checks created yet',receivedChecks:'RECEIVED CHECKS',noChecksClaim:'No checks to claim',navHome:'Home',navTasks:'Tasks',navCheck:'Check',navFriends:'Friends',navWallet:'Wallet',adTask:'TASK',advertise:'ADVERTISE',addTask:'Add Task',myTasks:'My Tasks',tonBalLabel:'TON Balance:',taskNamePH:'Task name...',dailyCostNote:'Cost: 5 TON per day',costLabel:'Cost:',publishTask:'Publish Task',confirmWithdraw:'CONFIRM WITHDRAWAL',cancel:'Cancel',confirm:'Confirm',verifyTitle:'VERIFY MEMBERSHIP',verifyDesc:"Join the channel/group then tap I've Joined",openLink:'Open Link',iJoined:"✅ I've Joined",confirmConvert:'CONFIRM CONVERT',checkCreated:'✅ CHECK CREATED!',yourCheckLink:'Your check link:',copyBtn:'📋 Copy',shareBtn:'📤 Share',claimCheck:'💎 CLAIM CHECK',aboutToReceive:'You are about to receive',claimNow:'💰 Claim Now',watchAds:'WATCH ADS',watch:'Watch',claim:'Claim',start:'Start',done:'✓',daily_checkin:'Daily Check-In',daily_update:'Check for Updates',daily_share:'Share with Friends',noTransactions:'No transactions yet',noFriendsYet:'No friends yet',noTasksAvail:'No tasks available',visitOpt:'Visit Website (+3000 TR)',channelOpt:'Join Channel (+5000 TR)',groupOpt:'Join Group (+5000 TR)',gameOpt:'Play Game Bot (+5000 TR)',dailyOpt:'Daily Task (shown every day)',congratsTitle:'CONGRATULATIONS!',congratsSub:'TON has been added to your wallet!'},
-  ru:{balance:'TR БАЛАНС',days:'дней',spins:'вращений',dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ',streakDesc:'+1,000 TR + 1 вращение каждый день',claimStreak:'Получить бонус',spinWheel:'КОЛЕСО ФОРТУНЫ',spinsLeft:'Вращений:',spinNow:'КРУТИТЬ',quickActions:'БЫСТРЫЕ ДЕЙСТВИЯ',inviteFriend:'Пригласить',withdraw:'Вывести',earnMore:'Заработать',tonCheck:'TON Чек',promoCode:'ПРОМОКОД',enterCode:'Введите код...',redeem:'Применить',dailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ',dailyTaskDesc:'+5,000 TR + 1 вращение (сброс ежедневно)',tasksTitle:'ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ',loading:'Загрузка...',filterAll:'Все',filterDaily:'📅 Ежедн.',filterChannel:'Канал',filterGroup:'Группа',filterGame:'Игра',filterVisit:'Сайт',totalFriends:'Всего друзей',thisWeek:'На этой неделе',trEarned:'TR Заработано',refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ',refPendingDesc:'Ожидается от друзей (30% доля)',refDesc:'Зарабатывайте 30% от наград друзей',claimAll:'Получить всё',yourLink:'ВАША РЕФЕРАЛЬНАЯ ССЫЛКА',copy:'Копировать',inviteViaTelegram:'Пригласить в Telegram',weeklyLB:'🏆 ЕЖЕНЕДЕЛЬНЫЙ РЕЙТИНГ',prevWeekLB:'📜 ПРОШЛАЯ НЕДЕЛЯ',noData:'Нет данных',yourFriends:'ВАШИ ДРУЗЬЯ',walletBalance:'БАЛАНС КОШЕЛЬКА',tonCoinNote:'TON монеты',tonCoinNoteDesc:'используются для рекламы и создания чеков.',convertTitle:'⇄ КОНВЕРТИРОВАТЬ TR → TON',youReceive:'Вы получите',minConvert:'Минимум: 1 000 000 TR',convertNow:'Конвертировать',topUpTON:'ПОПОЛНИТЬ TON',tonWalletMethod:'TON Кошелёк',tonWalletDesc:'Прямой перевод TON',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Минимум: 0.50 TON или 50 Stars',withdrawTR:'ВЫВОД TR МОНЕТ',walletAddrPH:'TON адрес кошелька (EQ...)',withdrawNow:'Вывести',withdrawNote:'Обработка в течение 24 часов. Комиссия 0.03 TON.',txHistory:'ИСТОРИЯ ОПЕРАЦИЙ',createCheck:'🧾 СОЗДАТЬ TON ЧЕК',createCheckDesc:'Создайте TON чек для получения другими',personal:'Личный',personalDesc:'Только 1 человек',multiple:'Групповой',multipleDesc:'Разделить между несколькими',eachReceives:'Каждый получит:',checkTip:'💡 TON спишется с баланса. Новые пользователи станут вашими рефералами!',createCheckBtn:'🧾 Создать чек',myChecks:'МОИ ЧЕКИ',noChecksYet:'Чеки ещё не созданы',receivedChecks:'ПОЛУЧЕННЫЕ ЧЕКИ',noChecksClaim:'Нет чеков',navHome:'Главная',navTasks:'Задания',navCheck:'Чек',navFriends:'Друзья',navWallet:'Кошелёк',adTask:'ЗАДАНИЕ',advertise:'РЕКЛАМА',addTask:'Добавить задание',myTasks:'Мои задания',tonBalLabel:'Баланс TON:',taskNamePH:'Название задания...',dailyCostNote:'Стоимость: 5 TON в день',costLabel:'Стоимость:',publishTask:'Опубликовать',confirmWithdraw:'ПОДТВЕРДИТЬ ВЫВОД',cancel:'Отмена',confirm:'Подтвердить',verifyTitle:'ПОДТВЕРДИТЬ УЧАСТИЕ',verifyDesc:'Вступите в канал/группу, затем нажмите Я вступил',openLink:'Открыть ссылку',iJoined:'✅ Я вступил',confirmConvert:'ПОДТВЕРДИТЬ КОНВЕРТАЦИЮ',checkCreated:'✅ ЧЕК СОЗДАН!',yourCheckLink:'Ваша ссылка на чек:',copyBtn:'📋 Копировать',shareBtn:'📤 Поделиться',claimCheck:'💎 ПОЛУЧИТЬ ЧЕК',aboutToReceive:'Вы получите',claimNow:'💰 Получить',watchAds:'СМОТРЕТЬ РЕКЛАМУ',watch:'Смотреть',claim:'Получить',start:'Начать',done:'✓',daily_checkin:'Ежедневная отметка',daily_update:'Проверить обновления',daily_share:'Поделиться',noTransactions:'Операций пока нет',noFriendsYet:'Друзей пока нет',noTasksAvail:'Нет доступных заданий',visitOpt:'Посетить сайт (+3000 TR)',channelOpt:'Подписаться на канал (+5000 TR)',groupOpt:'Вступить в группу (+5000 TR)',gameOpt:'Сыграть в игру (+5000 TR)',dailyOpt:'Ежедневное задание',congratsTitle:'ПОЗДРАВЛЯЕМ!',congratsSub:'TON зачислен на ваш кошелёк!'}
+  en:{balance:'TR BALANCE',days:'days',spins:'spins',dailyStreak:'DAILY STREAK',streakDesc:'Claim daily for +1,000 TR + 1 spin',claimStreak:'Claim Streak',spinWheel:'SPIN WHEEL',spinsLeft:'Spins available:',spinNow:'SPIN NOW',quickActions:'QUICK ACTIONS',inviteFriend:'Invite Friend',withdraw:'Withdraw',earnMore:'Earn More',tonCheck:'TON Check',promoCode:'PROMO CODE',enterCode:'Enter code...',redeem:'Redeem',dailyTasks:'📅 DAILY TASKS',dailyTaskDesc:'+5,000 TR + 1 spin each (resets daily)',tasksTitle:'ADVERTISER TASKS',loading:'Loading...',filterAll:'All',filterDaily:'📅 Daily',filterChannel:'Channel',filterGroup:'Group',filterGame:'Game',filterVisit:'Website',totalFriends:'Total Friends',thisWeek:'This Week',trEarned:'TR Earned',refEarnings:'🤑 REFERRAL EARNINGS',refPendingDesc:'Pending from friends (30% share)',refDesc:"Earn 30% of your friends' TR rewards",claimAll:'Claim All Earnings',yourLink:'YOUR REFERRAL LINK',copy:'Copy',inviteViaTelegram:'Invite via Telegram',weeklyLB:'🏆 WEEKLY LEADERBOARD',prevWeekLB:'📜 PREVIOUS WEEK',noData:'No data',yourFriends:'YOUR FRIENDS',walletBalance:'WALLET BALANCE',tonCoinNote:'TON coins',tonCoinNoteDesc:'are used for advertising and creating checks. TR coins are your task rewards.',convertTitle:'⇄ CONVERT TR → TON',youReceive:'You receive',minConvert:'Minimum: 1,000,000 TR',convertNow:'Convert Now',topUpTON:'TOP UP TON',tonWalletMethod:'TON Wallet',tonWalletDesc:'Direct TON transfer',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Minimum: 0.50 TON or 50 Stars',withdrawTR:'WITHDRAW TR COINS',walletAddrPH:'TON wallet address (EQ...)',withdrawNow:'Withdraw Now',withdrawNote:'Processed within 24 hours. 0.03 TON fee.',txHistory:'TRANSACTION HISTORY',createCheck:'🧾 CREATE TON CHECK',createCheckDesc:'Create a TON check that others can claim',personal:'Personal',personalDesc:'Only 1 person claims',multiple:'Multiple',multipleDesc:'Split among many',eachReceives:'Each receives:',checkTip:'💡 TON deducted from balance. New claimers become your referrals!',createCheckBtn:'🧾 Create Check',navHome:'Home',navTasks:'Tasks',navCheck:'Check',navFriends:'Friends',navWallet:'Wallet',adTask:'TASK',advertise:'ADVERTISE',addTask:'Add Task',myTasks:'My Tasks',tonBalLabel:'TON Balance:',taskNamePH:'Task name...',dailyCostNote:'Cost: 5 TON per day',costLabel:'Cost:',publishTask:'Publish Task',confirmWithdraw:'CONFIRM WITHDRAWAL',cancel:'Cancel',confirm:'Confirm',verifyTitle:'VERIFY MEMBERSHIP',verifyDesc:"Join the channel/group then tap I've Joined",openLink:'Open Link',iJoined:"✅ I've Joined",confirmConvert:'CONFIRM CONVERT',checkCreated:'✅ CHECK CREATED!',yourCheckLink:'Your check link:',copyBtn:'📋 Copy',shareBtn:'📤 Share',claimCheck:'💎 CLAIM CHECK',aboutToReceive:'You are about to receive',claimNow:'💰 Claim Now',watchAds:'WATCH ADS',watch:'Watch',claim:'Claim',start:'Start',done:'✓',daily_checkin:'Daily Check-In',daily_update:'Check for Updates',daily_share:'Share with Friends',noTransactions:'No transactions yet',noFriendsYet:'No friends yet',noTasksAvail:'No tasks available',visitOpt:'Visit Website (+3000 TR)',channelOpt:'Join Channel (+5000 TR)',groupOpt:'Join Group (+5000 TR)',gameOpt:'Play Game Bot (+5000 TR)',dailyOpt:'Daily Task (shown every day)',congratsTitle:'CONGRATULATIONS!',congratsSub:'TON has been added to your wallet!'},
+  ru:{balance:'TR БАЛАНС',days:'дней',spins:'вращений',dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ',streakDesc:'+1,000 TR + 1 вращение каждый день',claimStreak:'Получить бонус',spinWheel:'КОЛЕСО ФОРТУНЫ',spinsLeft:'Вращений:',spinNow:'КРУТИТЬ',quickActions:'БЫСТРЫЕ ДЕЙСТВИЯ',inviteFriend:'Пригласить',withdraw:'Вывести',earnMore:'Заработать',tonCheck:'TON Чек',promoCode:'ПРОМОКОД',enterCode:'Введите код...',redeem:'Применить',dailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ',dailyTaskDesc:'+5,000 TR + 1 вращение (сброс ежедневно)',tasksTitle:'ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ',loading:'Загрузка...',filterAll:'Все',filterDaily:'📅 Ежедн.',filterChannel:'Канал',filterGroup:'Группа',filterGame:'Игра',filterVisit:'Сайт',totalFriends:'Всего друзей',thisWeek:'На этой неделе',trEarned:'TR Заработано',refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ',refPendingDesc:'Ожидается от друзей (30% доля)',refDesc:'Зарабатывайте 30% от наград друзей',claimAll:'Получить всё',yourLink:'ВАША РЕФЕРАЛЬНАЯ ССЫЛКА',copy:'Копировать',inviteViaTelegram:'Пригласить в Telegram',weeklyLB:'🏆 ЕЖЕНЕДЕЛЬНЫЙ РЕЙТИНГ',prevWeekLB:'📜 ПРОШЛАЯ НЕДЕЛЯ',noData:'Нет данных',yourFriends:'ВАШИ ДРУЗЬЯ',walletBalance:'БАЛАНС КОШЕЛЬКА',tonCoinNote:'TON монеты',tonCoinNoteDesc:'используются для рекламы и создания чеков.',convertTitle:'⇄ КОНВЕРТИРОВАТЬ TR → TON',youReceive:'Вы получите',minConvert:'Минимум: 1 000 000 TR',convertNow:'Конвертировать',topUpTON:'ПОПОЛНИТЬ TON',tonWalletMethod:'TON Кошелёк',tonWalletDesc:'Прямой перевод TON',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Минимум: 0.50 TON или 50 Stars',withdrawTR:'ВЫВОД TR МОНЕТ',walletAddrPH:'TON адрес кошелька (EQ...)',withdrawNow:'Вывести',withdrawNote:'Обработка в течение 24 часов. Комиссия 0.03 TON.',txHistory:'ИСТОРИЯ ОПЕРАЦИЙ',createCheck:'🧾 СОЗДАТЬ TON ЧЕК',createCheckDesc:'Создайте TON чек для получения другими',personal:'Личный',personalDesc:'Только 1 человек',multiple:'Групповой',multipleDesc:'Разделить между несколькими',eachReceives:'Каждый получит:',checkTip:'💡 TON спишется с баланса. Новые пользователи станут вашими рефералами!',createCheckBtn:'🧾 Создать чек',navHome:'Главная',navTasks:'Задания',navCheck:'Чек',navFriends:'Друзья',navWallet:'Кошелёк',adTask:'ЗАДАНИЕ',advertise:'РЕКЛАМА',addTask:'Добавить задание',myTasks:'Мои задания',tonBalLabel:'Баланс TON:',taskNamePH:'Название задания...',dailyCostNote:'Стоимость: 5 TON в день',costLabel:'Стоимость:',publishTask:'Опубликовать',confirmWithdraw:'ПОДТВЕРДИТЬ ВЫВОД',cancel:'Отмена',confirm:'Подтвердить',verifyTitle:'ПОДТВЕРДИТЬ УЧАСТИЕ',verifyDesc:'Вступите в канал/группу, затем нажмите Я вступил',openLink:'Открыть ссылку',iJoined:'✅ Я вступил',confirmConvert:'ПОДТВЕРДИТЬ КОНВЕРТАЦИЮ',checkCreated:'✅ ЧЕК СОЗДАН!',yourCheckLink:'Ваша ссылка на чек:',copyBtn:'📋 Копировать',shareBtn:'📤 Поделиться',claimCheck:'💎 ПОЛУЧИТЬ ЧЕК',aboutToReceive:'Вы получите',claimNow:'💰 Получить',watchAds:'СМОТРЕТЬ РЕКЛАМУ',watch:'Смотреть',claim:'Получить',start:'Начать',done:'✓',daily_checkin:'Ежедневная отметка',daily_update:'Проверить обновления',daily_share:'Поделиться',noTransactions:'Операций пока нет',noFriendsYet:'Друзей пока нет',noTasksAvail:'Нет доступных заданий',visitOpt:'Посетить сайт (+3000 TR)',channelOpt:'Подписаться на канал (+5000 TR)',groupOpt:'Вступить в группу (+5000 TR)',gameOpt:'Сыграть в игру (+5000 TR)',dailyOpt:'Ежедневное задание',congratsTitle:'ПОЗДРАВЛЯЕМ!',congratsSub:'TON зачислен на ваш кошелёк!'}
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -679,7 +646,7 @@ async function init(){
   if(startParam&&startParam.startsWith('chk_')){
     const checkId=startParam.slice(4);
     await loadUser(null);
-    await Promise.all([loadTasks(),loadFriends(),loadTransactions(),loadDailyTaskStatus(),loadChecks()]);
+    await Promise.all([loadTasks(),loadFriends(),loadTransactions(),loadDailyTaskStatus()]);
     updateWeekLabels();goTab('check');setTimeout(()=>openClaimCheckById(checkId),600);return;
   }
 
@@ -687,7 +654,7 @@ async function init(){
   if(startParam&&startParam.startsWith('ref_')){const parsed=parseInt(startParam.slice(4));if(!isNaN(parsed))refId=parsed;}
 
   await loadUser(refId);
-  await Promise.all([loadTasks(),loadFriends(),loadTransactions(),loadDailyTaskStatus(),loadChecks()]);
+  await Promise.all([loadTasks(),loadFriends(),loadTransactions(),loadDailyTaskStatus()]);
   updateWeekLabels();
 
   const csi=_q('customStarsAmt');
@@ -746,7 +713,6 @@ function goTab(t){
   if(t==='tasks')loadTasks();
   if(t==='friends')loadFriends();
   if(t==='wallet')loadTransactions();
-  if(t==='check')loadChecks();
 }
 
 function buildStreakDots(s){const c=_q('streakDots');c.innerHTML='';for(let i=1;i<=7;i++){const d=document.createElement('div');d.className='s-dot'+(i<s?' done':i===s?' today':'');d.textContent=i;c.appendChild(d);}}
@@ -796,14 +762,11 @@ async function redeemPromo(){const code=_q('promoInput').value.trim();if(!code)r
 // ═══════════════════════════════════════════════════════════════════════════
 // FRIENDS PAGE
 // ═══════════════════════════════════════════════════════════════════════════
-// FIX: Single loadFriends function — no duplicate renderFriendsList.
-// FIX: your_share comes from referral_commissions (real accuracy) via API.
-// FIX: Claim All button is global — no per-friend claim buttons.
-// FIX: unclaimed value drives claim card visibility (not estimated coins*0.30).
+// Friends = only users who registered via this user's referral link.
+// The backend enforces this via referrer_id foreign key.
 
 async function loadFriends(){
   if(!initData){
-    // Dev mode
     _q('totalFriendsVal').textContent='5';
     _q('weeklyFriendsVal').textContent='2';
     _q('friendsEarned').textContent='3,750';
@@ -813,7 +776,6 @@ async function loadFriends(){
     const devLink=`${MINI_APP_URL}?startapp=ref_1`;
     _q('refLink').textContent=devLink;
     if(userData)userData.referral_link=devLink;
-    // Show claim card with demo data
     buildRefEarnCard([{name:'Alice',coins:10000,your_share:3000},{name:'Bob',coins:2500,your_share:750}],3750);
     renderFriendsList([{name:'Alice',coins:10000,your_share:3000},{name:'Bob',coins:2500,your_share:750}]);
     return;
@@ -822,38 +784,30 @@ async function loadFriends(){
   try{
     const r=await api('GET','/api/friends?init_data='+encodeURIComponent(initData));
 
-    // ── Stat boxes (from DB columns, not computed) ──────────────────────────
     _q('totalFriendsVal').textContent=(r.total_friends||0).toLocaleString();
     _q('weeklyFriendsVal').textContent=(r.weekly_friends||0).toLocaleString();
     _q('friendsEarned').textContent=(r.total_earned||0).toLocaleString();
 
-    // ── Referral link ───────────────────────────────────────────────────────
     if(r.referral_link){_q('refLink').textContent=r.referral_link;if(userData)userData.referral_link=r.referral_link;}
 
-    // ── Week labels ─────────────────────────────────────────────────────────
     if(r.current_week)_q('currentWeekLabel').textContent=weekLabel(r.current_week);
     if(r.prev_week)_q('prevWeekLabel').textContent=weekLabel(r.prev_week);
 
-    // ── Claim card — driven by unclaimed_referral column ────────────────────
     buildRefEarnCard(r.friends||[],r.unclaimed||0);
 
-    // ── Leaderboards ────────────────────────────────────────────────────────
     renderLeaderboard(r.leaderboard||[],'weeklyLeaderboard');
     renderLeaderboard(r.prev_leaderboard||[],'prevWeeklyLeaderboard');
 
-    // ── Friends list ────────────────────────────────────────────────────────
     renderFriendsList(r.friends||[]);
   }catch(e){console.error('loadFriends',e);toast(e.message,'err');}
 }
 
-// ─── Claim card ── display only, no per-friend buttons ─────────────────────
 function buildRefEarnCard(friends,unclaimed){
   const card=_q('refEarnCard');
   if(!unclaimed||unclaimed<=0){card.style.display='none';return;}
   card.style.display='';
   _q('refEarnAmt').textContent=unclaimed.toLocaleString()+' TR';
   const contributing=(friends||[]).filter(f=>(f.your_share||0)>0).slice(0,5);
-  // Per-friend rows are DISPLAY ONLY — no individual claim buttons
   _q('refFriendRows').innerHTML=contributing.map(f=>`
     <div class="rf-row">
       <div class="rf-av">${(f.name||'?')[0].toUpperCase()}</div>
@@ -863,10 +817,8 @@ function buildRefEarnCard(friends,unclaimed){
       </div>
       <div class="rf-share">+${(f.your_share||0).toLocaleString()}</div>
     </div>`).join('');
-  // Claim button is already in the HTML above this — no need to inject it here
 }
 
-// ─── Claim All (single global button) ──────────────────────────────────────
 async function claimAllReferral(){
   if(!initData){
     const raw=(_q('refEarnAmt').textContent||'0').replace(/[^0-9]/g,'');
@@ -881,14 +833,10 @@ async function claimAllReferral(){
     updateUI();
     toast(`+${r.claimed.toLocaleString()} TR!`,'ok');
     _q('refEarnCard').style.display='none';
-    // Refresh friends page stats so total_earned and unclaimed are updated
     setTimeout(loadFriends,600);
   }catch(e){toast(e.message,'err');}
 }
 
-// ─── Friends list (display only) ─────────────────────────────────────────────
-// FIX: Defined once — was previously declared twice (inline + standalone),
-//      causing the inline version to be shadowed / overwritten.
 function renderFriendsList(friends){
   const fl=_q('friendsList');
   if(!friends||!friends.length){fl.innerHTML=`<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noFriendsYet}</div>`;return;}
@@ -905,11 +853,9 @@ function renderFriendsList(friends){
     </div>`).join('');
 }
 
-// ─── Referral link copy / share ───────────────────────────────────────────────
 function copyRef(){const lk=_q('refLink').textContent;navigator.clipboard?.writeText(lk).then(()=>toast(lang==='ru'?'Скопировано!':'Copied!','ok'));}
 function shareRef(){const lk=userData?.referral_link||`${MINI_APP_URL}?startapp=ref_1`;const tx=lang==='ru'?'🏆 Зарабатывай TR!':'🏆 Join TRewards and earn TR coins!';if(tg?.openTelegramLink)tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`);else window.open(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`,'_blank');}
 
-// ─── Leaderboard renderer ─────────────────────────────────────────────────────
 function renderLeaderboard(items,cid){
   const el=_q(cid);if(!el)return;
   if(!items||!items.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:16px 0;font-size:12px">${T[lang].noData}</div>`;return;}
@@ -960,7 +906,7 @@ async function payCustomStars(){const amt=parseInt(_q('customStarsAmt')?.value)|
 async function loadTransactions(){if(!initData){_q('txList').innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px">${T[lang].noTransactions}</div>`;return;}try{const txs=await api('GET','/api/transactions?init_data='+encodeURIComponent(initData));const el=_q('txList');if(!txs||!txs.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px;font-size:13px">${T[lang].noTransactions}</div>`;return;}const ico={streak:'🔥',spin:'🎰',task:'⚡',daily_task:'✅',promo:'🎁',referral:'👥',withdrawal:'💸',topup:'➕',topup_stars:'⭐',topup_ton_wallet:'💎',watch_ad:'📺',convert:'⇄',check_create:'🧾',check_claim:'💎'};el.innerHTML=txs.map(t=>{const isTon=t.ton_amount&&parseFloat(t.ton_amount)!==0;const val=isTon?parseFloat(t.ton_amount):(t.amount||0);const cr=val>0;const am=isTon?`${cr?'+':''}${parseFloat(t.ton_amount).toFixed(4)} TON`:`${cr?'+':''}${(t.amount||0).toLocaleString()} TR`;return`<div class="tx-item"><div class="tx-icon">${ico[t.type]||'💫'}</div><div class="tx-info"><div class="tx-desc">${t.description||t.type}</div><div class="tx-date">${new Date(t.created_at).toLocaleDateString()}</div></div><div class="tx-amt ${cr?'tx-credit':'tx-debit'}">${am}</div></div>`;}).join('');}catch(e){}}
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TON CHECKS
+// TON CHECKS — Create & Claim only (My Checks / Received Checks removed)
 // ═══════════════════════════════════════════════════════════════════════════
 function selectCheckType(type){selectedCheckType=type;_q('ct-personal').classList.toggle('selected',type==='personal');_q('ct-multi').classList.toggle('selected',type==='multi');_q('checkMultiWrap').style.display=type==='multi'?'':'none';updateCheckPreview();}
 function updateCheckPreview(){if(selectedCheckType==='multi'){const amt=parseFloat(_q('checkAmt').value)||0;const ppl=parseInt(_q('checkPeople').value)||0;_q('checkPerPerson').textContent=ppl>0?(amt/ppl).toFixed(4):'—';}}
@@ -972,19 +918,17 @@ async function createCheck(){
   if(selectedCheckType==='multi'){people=parseInt(_q('checkPeople').value)||0;if(people<2){toast(lang==='ru'?'Минимум 2 получателя':'Enter at least 2 recipients','err');return;}}
   const createBtn=document.querySelector('#tab-check .btn-ok');
   if(createBtn){createBtn.disabled=true;createBtn.textContent='⏳ Creating...';}
-  if(!initData){const cid='CHECK'+Date.now();const link=`${MINI_APP_URL}?startapp=chk_${cid}`;newCheckLinkVal=link;userData.ton_balance=(parseFloat(userData.ton_balance)||0)-amt;updateUI();_q('newCheckLink').textContent=link;_q('checkCreatedOverlay').style.display='flex';_q('checkAmt').value='';if(createBtn){createBtn.disabled=false;createBtn.textContent=T[lang].createCheckBtn||'🧾 Create Check';}await loadChecks();return;}
-  try{const r=await api('POST','/api/create-check',{init_data:initData,amount:amt,check_type:selectedCheckType,recipients:people});userData.ton_balance=r.new_ton_balance;updateUI();newCheckLinkVal=r.link;_q('newCheckLink').textContent=r.link;_q('checkCreatedOverlay').style.display='flex';_q('checkAmt').value='';if(selectedCheckType==='multi')_q('checkPeople').value='';await loadChecks();}catch(e){toast(e.message,'err');}finally{if(createBtn){createBtn.disabled=false;createBtn.textContent=T[lang].createCheckBtn||'🧾 Create Check';}}
+  if(!initData){const cid='CHECK'+Date.now();const link=`${MINI_APP_URL}?startapp=chk_${cid}`;newCheckLinkVal=link;userData.ton_balance=(parseFloat(userData.ton_balance)||0)-amt;updateUI();_q('newCheckLink').textContent=link;_q('checkCreatedOverlay').style.display='flex';_q('checkAmt').value='';if(createBtn){createBtn.disabled=false;createBtn.textContent=T[lang].createCheckBtn||'🧾 Create Check';}return;}
+  try{const r=await api('POST','/api/create-check',{init_data:initData,amount:amt,check_type:selectedCheckType,recipients:people});userData.ton_balance=r.new_ton_balance;updateUI();newCheckLinkVal=r.link;_q('newCheckLink').textContent=r.link;_q('checkCreatedOverlay').style.display='flex';_q('checkAmt').value='';if(selectedCheckType==='multi')_q('checkPeople').value='';}catch(e){toast(e.message,'err');}finally{if(createBtn){createBtn.disabled=false;createBtn.textContent=T[lang].createCheckBtn||'🧾 Create Check';}}
 }
 function closeCheckCreated(){_q('checkCreatedOverlay').style.display='none';}
 function copyCheckLink(){copyText(newCheckLinkVal,lang==='ru'?'Скопировано!':'Link copied!');}
 function shareCheckLink(){const tx=lang==='ru'?'💎 Получи свой TON чек!':'💎 Claim your TON check!';if(tg?.openTelegramLink)tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(newCheckLinkVal)}&text=${encodeURIComponent(tx)}`);else window.open(`https://t.me/share/url?url=${encodeURIComponent(newCheckLinkVal)}&text=${encodeURIComponent(tx)}`,'_blank');}
-async function loadChecks(){if(!initData){renderMyChecks([{id:'C001',amount:0.5,check_type:'personal',recipients:1,status:'active',link:`${MINI_APP_URL}?startapp=chk_C001`,claimed_count:0}]);renderReceivedChecks([]);return;}try{const r=await api('GET','/api/checks?init_data='+encodeURIComponent(initData));renderMyChecks(r.my_checks||[]);renderReceivedChecks(r.received_checks||[]);}catch(e){console.error('loadChecks',e);}}
-function renderMyChecks(checks){const el=_q('myChecksList');if(!checks.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px">${T[lang].noChecksYet}</div>`;return;}el.innerHTML=checks.map(c=>`<div class="chk-item"><div class="chk-hdr"><div class="chk-amt">${parseFloat(c.amount).toFixed(4)} TON</div><div class="chk-type ${c.check_type}">${c.check_type==='personal'?'👤 '+T[lang].personal:'👥 Multi ('+c.recipients+')'}</div></div><div class="chk-link">${c.link||'—'}</div><div class="chk-foot"><div class="chk-st ${c.status==='active'?'active':'claimed'}">${c.status==='active'?'● Active':'✓ Claimed'}</div><div style="display:flex;gap:6px;align-items:center">${c.status==='active'&&c.link?`<button class="btn btn-outline btn-sm" onclick="copyText('${c.link}','${lang==='ru'?'Скопировано!':'Copied!'}')">${T[lang].copyBtn}</button>`:''} ${c.check_type==='multi'?`<span style="font-size:11px;color:var(--t2)">${c.claimed_count||0}/${c.recipients}</span>`:''}</div></div></div>`).join('');}
-function renderReceivedChecks(checks){const el=_q('receivedChecksList');if(!checks.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px 0;font-size:12px">${T[lang].noChecksClaim}</div>`;return;}el.innerHTML=checks.map(c=>`<div class="chk-item"><div class="chk-hdr"><div class="chk-amt">${parseFloat(c.amount_per_person||c.amount).toFixed(4)} TON</div><div class="chk-type ${c.check_type}">${c.check_type==='personal'?'👤 '+T[lang].personal:'👥 Multi'}</div></div><div class="chk-foot"><div style="font-size:11px;color:var(--t2)">${lang==='ru'?'От:':'From:'} ${c.creator_name||'Unknown'}</div><button class="btn btn-ton btn-sm" onclick="openClaimCheck('${c.id}','${parseFloat(c.amount_per_person||c.amount).toFixed(4)}','${c.check_type}','${c.recipients||1}','${(c.creator_name||'Unknown').replace(/'/g,'')}')">💰 ${T[lang].claim}</button></div></div>`).join('');}
-function openClaimCheck(id,amt,type,recs,creatorName){pendingClaimCheckId=id;_q('claimCheckAmt').textContent=amt+' TON';_q('claimCheckInfo').textContent=type==='personal'?(lang==='ru'?'Личный чек':'Personal check'):`Multi check — ${recs} ${lang==='ru'?'получателей':'recipients'}`;_q('claimCheckCreator').textContent=(lang==='ru'?'От: ':'From: ')+(creatorName||'Unknown');const btn=_q('claimCheckBtn');if(btn){btn.disabled=false;btn.textContent='💰 '+(T[lang].claimNow||'Claim Now');}  _q('claimCheckOverlay').style.display='flex';}
+
+// Claim check via deep link (chk_ start param) — still needed for incoming links
 async function openClaimCheckById(checkId){pendingClaimCheckId=checkId;goTab('check');_q('claimCheckAmt').textContent=lang==='ru'?'Загрузка...':'Loading...';_q('claimCheckInfo').textContent=lang==='ru'?'Получение деталей...':'Fetching check details...';_q('claimCheckCreator').textContent='';const btn=_q('claimCheckBtn');if(btn){btn.disabled=true;btn.textContent='⏳';}_q('claimCheckOverlay').style.display='flex';if(!initData){_q('claimCheckAmt').textContent='0.5 TON';_q('claimCheckInfo').textContent='Personal check';_q('claimCheckCreator').textContent='From: TestUser';if(btn){btn.disabled=false;btn.textContent='💰 Claim Now';}return;}try{const r=await api('GET','/api/check/'+checkId+'?init_data='+encodeURIComponent(initData));_q('claimCheckAmt').textContent=parseFloat(r.amount_per_person||r.amount).toFixed(4)+' TON';_q('claimCheckInfo').textContent=r.check_type==='personal'?(lang==='ru'?'Личный чек':'Personal check'):`Multi check — ${r.recipients} ${lang==='ru'?'получателей':'recipients'} (${r.claimed_count}/${r.recipients} claimed)`;_q('claimCheckCreator').textContent=(lang==='ru'?'От: ':'From: ')+(r.creator_name||'Unknown');if(btn){btn.disabled=false;btn.textContent='💰 '+(T[lang].claimNow||'Claim Now');}}catch(e){_q('claimCheckAmt').textContent='—';_q('claimCheckInfo').textContent='';_q('claimCheckCreator').textContent=e.message;if(btn){btn.disabled=true;btn.textContent='❌ '+(lang==='ru'?'Недоступно':'Unavailable');}}}
 function closeClaimCheck(){_q('claimCheckOverlay').style.display='none';pendingClaimCheckId=null;}
-async function confirmClaimCheck(){if(!pendingClaimCheckId)return;const btn=_q('claimCheckBtn');if(btn){btn.disabled=true;btn.textContent='⏳ Processing...';}if(!initData){const amt=parseFloat(_q('claimCheckAmt').textContent)||0.5;closeClaimCheck();userData.ton_balance=(parseFloat(userData.ton_balance)||0)+amt;updateUI();showCelebration(amt);return;}try{const r=await api('POST','/api/claim-check',{init_data:initData,check_id:pendingClaimCheckId});const receivedAmt=parseFloat(r.amount_received);userData.ton_balance=r.new_ton_balance;updateUI();closeClaimCheck();showCelebration(receivedAmt);loadChecks();if(r.referral_set){setTimeout(loadFriends,1000);}}catch(e){toast(e.message,'err');if(btn){btn.disabled=false;btn.textContent='💰 '+(T[lang].claimNow||'Claim Now');}}}
+async function confirmClaimCheck(){if(!pendingClaimCheckId)return;const btn=_q('claimCheckBtn');if(btn){btn.disabled=true;btn.textContent='⏳ Processing...';}if(!initData){const amt=parseFloat(_q('claimCheckAmt').textContent)||0.5;closeClaimCheck();userData.ton_balance=(parseFloat(userData.ton_balance)||0)+amt;updateUI();showCelebration(amt);return;}try{const r=await api('POST','/api/claim-check',{init_data:initData,check_id:pendingClaimCheckId});const receivedAmt=parseFloat(r.amount_received);userData.ton_balance=r.new_ton_balance;updateUI();closeClaimCheck();showCelebration(receivedAmt);if(r.referral_set){setTimeout(loadFriends,1000);}}catch(e){toast(e.message,'err');if(btn){btn.disabled=false;btn.textContent='💰 '+(T[lang].claimNow||'Claim Now');}}}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CELEBRATION

@@ -437,7 +437,66 @@ async def claim_task(req: ClaimTaskRequest):
         }
 
 
+# ─── Telegram API helper ──────────────────────────────────────────────────────
+
+async def _check_bot_is_admin(chat_id: str) -> bool:
+    """
+    Returns True if the bot is an admin (or creator) in the given chat.
+    chat_id should be like '@username' or a numeric chat ID.
+    Returns False on any error (including bot not in chat, private groups, etc.)
+    """
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            # First get the bot's own user ID
+            me_resp = await client.get(
+                f"https://api.telegram.org/bot{config.BOT_TOKEN}/getMe"
+            )
+            me_data = me_resp.json()
+            if not me_data.get("ok"):
+                return False
+            bot_id = me_data["result"]["id"]
+
+            # Now check bot's member status in the chat
+            resp = await client.get(
+                f"https://api.telegram.org/bot{config.BOT_TOKEN}/getChatMember",
+                params={"chat_id": chat_id, "user_id": bot_id}
+            )
+            data = resp.json()
+            if not data.get("ok"):
+                return False
+            status = data["result"]["status"]
+            return status in ("administrator", "creator")
+    except Exception as e:
+        logger.warning(f"_check_bot_is_admin({chat_id}) error: {e}")
+        return False
+
+
+async def _check_user_is_member(chat_id: str, user_id: int) -> bool:
+    """
+    Returns True if user_id is a member/admin/creator of the chat.
+    Returns False if not a member or on any API error.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get(
+                f"https://api.telegram.org/bot{config.BOT_TOKEN}/getChatMember",
+                params={"chat_id": chat_id, "user_id": user_id}
+            )
+            data = resp.json()
+            if not data.get("ok"):
+                return False
+            return data["result"]["status"] in ("member", "administrator", "creator")
+    except Exception as e:
+        logger.warning(f"_check_user_is_member({chat_id}, {user_id}) error: {e}")
+        return False
+
+
 # ─── POST /api/verify-join ────────────────────────────────────────────────────
+#
+# Smart verification logic:
+#   1. If task URL uses a private invite link (+XXXX) → skip API check, award coins.
+#   2. If bot is NOT admin in the channel/group → award coins automatically (trust user).
+#   3. If bot IS admin → verify user membership via getChatMember, reject if not joined.
 
 @app.post("/api/verify-join")
 async def verify_join(req: VerifyJoinRequest):
@@ -445,6 +504,7 @@ async def verify_join(req: VerifyJoinRequest):
     user_id = tg_user["id"]
     cache_del(f"user:{user_id}")
     cache_del(f"tasks:{user_id}")
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         task = await conn.fetchrow(
@@ -456,6 +516,7 @@ async def verify_join(req: VerifyJoinRequest):
             raise HTTPException(status_code=400, detail="Not a channel/group task")
         if task["completion_limit"] and task["completed_count"] >= task["completion_limit"]:
             raise HTTPException(status_code=400, detail="Task limit reached")
+
         existing = await conn.fetchrow(
             "SELECT id FROM task_completions WHERE task_id = $1 AND user_id = $2",
             req.task_id, user_id
@@ -463,45 +524,72 @@ async def verify_join(req: VerifyJoinRequest):
         if existing:
             raise HTTPException(status_code=400, detail="Task already completed")
 
-        chat_id_raw = task["url"].split("t.me/")[-1].strip("/")
-        if chat_id_raw.startswith("+"):
+        # ── Parse the chat identifier from the task URL ────────────────────────
+        url = task["url"]
+        chat_id_raw = url.split("t.me/")[-1].strip("/")
+
+        # ── Private invite link (+XXXXX) → can't check membership, trust user ──
+        is_private_link = chat_id_raw.startswith("+")
+
+        if is_private_link:
+            # Private invite links — bot cannot verify membership, award coins
+            logger.info(f"Task {task['id']}: private invite link, auto-awarding coins to user {user_id}")
             is_member = True
+            verification_method = "private_link_auto"
         else:
-            try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    resp = await client.get(
-                        f"https://api.telegram.org/bot{config.BOT_TOKEN}/getChatMember",
-                        params={"chat_id": f"@{chat_id_raw}", "user_id": user_id}
-                    )
-                    data = resp.json()
-                    is_member = data.get("ok") and data["result"]["status"] in (
-                        "member", "administrator", "creator"
-                    )
-            except Exception as e:
-                logger.error(f"getChatMember error: {e}")
-                is_member = False
+            # Public @username — check if bot is admin first
+            chat_identifier = f"@{chat_id_raw}"
+            bot_is_admin = await _check_bot_is_admin(chat_identifier)
+
+            if bot_is_admin:
+                # Bot is admin → verify user's actual membership
+                is_member = await _check_user_is_member(chat_identifier, user_id)
+                verification_method = "bot_admin_verified"
+                logger.info(
+                    f"Task {task['id']}: bot is admin in {chat_identifier}, "
+                    f"user {user_id} membership={is_member}"
+                )
+            else:
+                # Bot is NOT admin (or not in chat) → trust user, award coins
+                is_member = True
+                verification_method = "bot_not_admin_auto"
+                logger.info(
+                    f"Task {task['id']}: bot is NOT admin in {chat_identifier}, "
+                    f"auto-awarding coins to user {user_id}"
+                )
 
         if not is_member:
-            raise HTTPException(status_code=400, detail="Not a member of the channel/group")
+            raise HTTPException(
+                status_code=400,
+                detail="You haven't joined the channel/group yet. Please join and try again."
+            )
 
+        # ── Award coins ────────────────────────────────────────────────────────
         async with conn.transaction():
             await conn.execute(
-                "INSERT INTO task_completions (task_id, user_id) VALUES ($1, $2)", req.task_id, user_id
+                "INSERT INTO task_completions (task_id, user_id) VALUES ($1, $2)",
+                req.task_id, user_id
             )
             await conn.execute(
-                "UPDATE tasks SET completed_count = completed_count + 1 WHERE id = $1", req.task_id
+                "UPDATE tasks SET completed_count = completed_count + 1 WHERE id = $1",
+                req.task_id
             )
             await add_coins(conn, user_id, task["reward_coins"], "task", f"Task: {task['name']}")
             await add_spins(conn, user_id, config.TASK_SPIN_BONUS)
             if task["completion_limit"]:
                 await conn.execute(
-                    "UPDATE tasks SET status = 'completed' WHERE id = $1 AND completed_count >= completion_limit",
+                    "UPDATE tasks SET status = 'completed' "
+                    "WHERE id = $1 AND completed_count >= completion_limit",
                     req.task_id
                 )
+
         updated = await get_user(conn, user_id)
         return {
-            "success": True, "coins_earned": task["reward_coins"],
-            "spins_earned": config.TASK_SPIN_BONUS, "new_balance": updated["coins"]
+            "success": True,
+            "coins_earned": task["reward_coins"],
+            "spins_earned": config.TASK_SPIN_BONUS,
+            "new_balance": updated["coins"],
+            "verification_method": verification_method,
         }
 
 
@@ -583,18 +671,9 @@ async def watch_ad(req: WatchAdRequest):
 
 # ─── GET /api/friends ─────────────────────────────────────────────────────────
 #
-# FIX: Uses get_friends_page_data() which joins referral_commissions to get
-# accurate per-friend commission amounts instead of estimating coins * 0.30.
-#
-# Response shape:
-#   total_friends    → "Total Friends" stat box
-#   weekly_friends   → "This Week" stat box
-#   total_earned     → "TR Earned" stat box  (tr_earned_from_refs column)
-#   unclaimed        → amount for "Claim All" button (unclaimed_referral column)
-#   referral_link    → stored on user row
-#   leaderboard      → current week top-20 + user's own row if absent
-#   prev_leaderboard → previous week top-20
-#   friends          → last 10 referrals with REAL per-friend commission
+# Friends = users who registered via this user's referral link (referrer_id = user_id).
+# This is enforced at the DB level via the referrer_id foreign key.
+# The API response clearly surfaces per-friend commission from referral_commissions table.
 
 @app.get("/api/friends")
 async def get_friends(init_data: str):
@@ -611,18 +690,18 @@ async def get_friends(init_data: str):
         curr_week = _current_week_id()
         prev_week = _prev_week_id()
 
-        # Use the merged helper from friends.patch.js (now in database.py)
+        # Fetch friends page data — friends are strictly referrer_id-linked users
         friends_rows, lb_rows, prev_rows = await get_friends_page_data(
             conn, user_id, curr_week, prev_week
         )
 
-        # ── Build friends list with REAL per-friend commission ─────────────────
+        # ── Friends list: only users where referrer_id = this user ────────────
         friend_list = [
             {
                 "id": f["id"],
                 "name": f["first_name"] or f["username"] or "Unknown",
                 "coins": f["coins"],
-                # your_share comes from referral_commissions table — accurate!
+                # Accurate per-friend commission from referral_commissions table
                 "your_share": f["your_share"],
             }
             for f in friends_rows
@@ -658,23 +737,22 @@ async def get_friends(init_data: str):
                 "is_me": True,
             })
 
-        # ── Stats from user row columns (set atomically, never stale) ──────────
         ref_link = user["referral_link"] or (
             f"https://t.me/{config.BOT_USERNAME}/{config.MINI_APP_SHORT_NAME}"
             f"?startapp=ref_{user_id}"
         )
 
         return {
-            "total_friends":  user["total_friends"]  or 0,
-            "weekly_friends": user["weekly_friends"] or 0,
-            "total_earned":   user["tr_earned_from_refs"] or 0,
-            "unclaimed":      user["unclaimed_referral"] or 0,
-            "referral_link":  ref_link,
+            "total_friends":    user["total_friends"]  or 0,
+            "weekly_friends":   user["weekly_friends"] or 0,
+            "total_earned":     user["tr_earned_from_refs"] or 0,
+            "unclaimed":        user["unclaimed_referral"] or 0,
+            "referral_link":    ref_link,
             "leaderboard":      lb,
             "prev_leaderboard": prev_lb,
             "current_week":     curr_week,
             "prev_week":        prev_week,
-            "friends": friend_list,
+            "friends":          friend_list,
         }
 
 
@@ -697,8 +775,6 @@ async def claim_referral(req: ClaimReferralRequest):
             raise HTTPException(status_code=400, detail="No referral earnings to claim")
 
         async with conn.transaction():
-            # Move unclaimed → coins; zero out the claimable pool only.
-            # tr_earned_from_refs is NOT touched — it is a cumulative total.
             await conn.execute("""
                 UPDATE users
                 SET
@@ -963,7 +1039,6 @@ async def claim_check(req: ClaimCheckRequest):
                 )
                 if result == "UPDATE 1":
                     referral_set = True
-                    # Credit the referrer's friend counters
                     await _credit_new_referral(conn, check["creator_id"])
 
         updated = await get_user(conn, user_id)
