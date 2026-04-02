@@ -160,8 +160,8 @@ class CreateTaskRequest(BaseModel):
 class ExtendTaskRequest(BaseModel):
     init_data: str
     task_id: int
-    extra_days: Optional[int] = None
-    extra_completions: Optional[int] = None
+    ton_amount: float
+    extra_completions: int
 
 class WatchAdRequest(BaseModel):
     init_data: str
@@ -1310,86 +1310,94 @@ async def create_task(req: CreateTaskRequest):
 
 
 # ─── POST /api/extend-task ────────────────────────────────────────────────────
+#
+# Allows an advertiser to add more completions to an existing task by paying
+# extra TON. Rate: 0.10 TON = 100 completions (same as AD_COST_PER_COMPLETION).
+# Also reactivates a completed task if it had run out of completions.
 
 @app.post("/api/extend-task")
 async def extend_task(req: ExtendTaskRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
 
-    if req.extra_days is None and req.extra_completions is None:
-        raise HTTPException(status_code=400, detail="Provide extra_days or extra_completions")
+    # Validate inputs
+    if req.ton_amount < 0.10:
+        raise HTTPException(status_code=400, detail="Minimum extension is 0.10 TON")
+    if req.extra_completions < 1:
+        raise HTTPException(status_code=400, detail="extra_completions must be at least 1")
+
+    # Verify the rate matches: 0.10 TON per 100 completions
+    expected_completions = int(round(req.ton_amount / 0.10)) * 100
+    if req.extra_completions > expected_completions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"extra_completions ({req.extra_completions}) exceeds what {req.ton_amount} TON covers ({expected_completions})"
+        )
+
+    cache_del(f"user:{user_id}")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
+        # Verify the task belongs to this advertiser
         task = await conn.fetchrow(
             "SELECT * FROM tasks WHERE id = $1 AND advertiser_id = $2",
             req.task_id, user_id
         )
         if not task:
-            raise HTTPException(status_code=404, detail="Task not found or not yours")
+            raise HTTPException(status_code=404, detail="Task not found or you are not the advertiser")
 
-        is_daily = task["type"] == "daily"
+        # Only non-daily tasks can be extended by completions
+        if task["type"] == "daily":
+            raise HTTPException(status_code=400, detail="Daily tasks cannot be extended this way. Create a new daily task.")
 
-        if is_daily:
-            if not req.extra_days or req.extra_days < 1:
-                raise HTTPException(status_code=400, detail="extra_days must be ≥ 1")
-            cost = req.extra_days * config.DAILY_TASK_COST_PER_DAY
-        else:
-            if not req.extra_completions or req.extra_completions < 500:
-                raise HTTPException(status_code=400, detail="extra_completions must be ≥ 500")
-            cost = req.extra_completions * config.AD_COST_PER_COMPLETION
-
-        if cost < 0.10:
-            raise HTTPException(status_code=400, detail="Minimum extension cost is 0.10 TON")
-
-        user = await conn.fetchrow("SELECT ton_balance FROM users WHERE id = $1", user_id)
-        if float(user["ton_balance"]) < cost:
+        # Check advertiser has sufficient TON balance
+        user = await get_user(conn, user_id)
+        if float(user["ton_balance"]) < req.ton_amount:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient TON balance. Need {cost:.3f} TON"
+                detail=f"Insufficient TON balance. Need {req.ton_amount:.2f} TON, have {float(user['ton_balance']):.4f} TON"
             )
 
         async with conn.transaction():
+            # Deduct TON from advertiser balance
             await conn.execute(
                 "UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2",
-                cost, user_id
+                req.ton_amount, user_id
             )
 
-            if is_daily:
-                await conn.execute("""
-                    UPDATE tasks
-                    SET days_limit = COALESCE(days_limit, 0) + $1,
-                        status     = 'active'
-                    WHERE id = $2
-                """, req.extra_days, req.task_id)
-            else:
-                await conn.execute("""
-                    UPDATE tasks
-                    SET completion_limit = COALESCE(completion_limit, 0) + $1,
-                        status           = 'active'
-                    WHERE id = $2
-                """, req.extra_completions, req.task_id)
+            # Increase completion_limit and reactivate if completed
+            await conn.execute("""
+                UPDATE tasks
+                SET
+                    completion_limit = COALESCE(completion_limit, 0) + $1,
+                    status = CASE
+                        WHEN status = 'completed' THEN 'active'
+                        ELSE status
+                    END,
+                    cost_ton = cost_ton + $2
+                WHERE id = $3
+            """, req.extra_completions, req.ton_amount, req.task_id)
 
+            # Record the transaction
             await conn.execute("""
                 INSERT INTO transactions (user_id, type, description, ton_amount)
                 VALUES ($1, 'task_extend', $2, $3)
             """, user_id,
-                f"Extended task #{req.task_id}: "
-                + (f"+{req.extra_days}d" if is_daily else f"+{req.extra_completions} completions"),
-                -cost
+                f"Extended task #{req.task_id} by {req.extra_completions} completions",
+                -req.ton_amount
             )
 
-        cache_del(f"user:{user_id}")
-        cache_del_prefix("tasks:")
-
+        updated_user = await get_user(conn, user_id)
         updated_task = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1", req.task_id)
+
         return {
-            "success":          True,
-            "task_id":          req.task_id,
-            "cost":             cost,
-            "new_status":       updated_task["status"],
-            "days_limit":       updated_task["days_limit"],
-            "completion_limit": updated_task["completion_limit"],
+            "success": True,
+            "task_id": req.task_id,
+            "extra_completions": req.extra_completions,
+            "ton_spent": req.ton_amount,
+            "new_completion_limit": updated_task["completion_limit"],
+            "task_status": updated_task["status"],
+            "new_ton_balance": float(updated_user["ton_balance"]),
         }
 
 
