@@ -1304,8 +1304,7 @@ async function confirmClaimCheck(){
     const r=await api('POST','/api/claim-check',{init_data:initData,check_id:pendingClaimCheckId});
     const receivedAmt=parseFloat(r.amount_received);userData.ton_balance=r.new_ton_balance;updateUI();
     closeClaimCheck();
-    // Show ad THEN celebration
-    showRewardedAdCore().catch(()=>{}).finally(()=>showCelebration(receivedAmt));
+    showCelebration(receivedAmt);
     if(r.referral_set){setTimeout(loadFriends,1000);}
   }catch(e){toast(e.message,'err');if(btn){btn.disabled=false;btn.textContent='💰 '+(T[lang].claimNow||'Claim Now');}}
 }
