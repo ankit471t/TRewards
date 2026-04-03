@@ -160,8 +160,7 @@ class CreateTaskRequest(BaseModel):
 class ExtendTaskRequest(BaseModel):
     init_data: str
     task_id: int
-    ton_amount: float
-    extra_completions: int
+    additional_limit: int  # must be multiple of 100, min 100
 
 class WatchAdRequest(BaseModel):
     init_data: str
@@ -455,6 +454,7 @@ async def _check_bot_is_admin(chat_id: str) -> bool:
             if not me_data.get("ok"):
                 return False
             bot_id = me_data["result"]["id"]
+
             resp = await client.get(
                 f"https://api.telegram.org/bot{config.BOT_TOKEN}/getChatMember",
                 params={"chat_id": chat_id, "user_id": bot_id}
@@ -518,7 +518,6 @@ async def verify_join(req: VerifyJoinRequest):
         is_private_link = chat_id_raw.startswith("+")
 
         if is_private_link:
-            logger.info(f"Task {task['id']}: private invite link, auto-awarding coins to user {user_id}")
             is_member = True
             verification_method = "private_link_auto"
         else:
@@ -528,17 +527,9 @@ async def verify_join(req: VerifyJoinRequest):
             if bot_is_admin:
                 is_member = await _check_user_is_member(chat_identifier, user_id)
                 verification_method = "bot_admin_verified"
-                logger.info(
-                    f"Task {task['id']}: bot is admin in {chat_identifier}, "
-                    f"user {user_id} membership={is_member}"
-                )
             else:
                 is_member = True
                 verification_method = "bot_not_admin_auto"
-                logger.info(
-                    f"Task {task['id']}: bot is NOT admin in {chat_identifier}, "
-                    f"auto-awarding coins to user {user_id}"
-                )
 
         if not is_member:
             raise HTTPException(
@@ -1310,93 +1301,93 @@ async def create_task(req: CreateTaskRequest):
 
 
 # ─── POST /api/extend-task ────────────────────────────────────────────────────
-#
-# Allows an advertiser to add more completions to an existing task by paying
-# extra TON. Rate: 0.10 TON = 100 completions (same as AD_COST_PER_COMPLETION).
-# Also reactivates a completed task if it had run out of completions.
+# Extend an existing task's completion_limit by additional_limit slots.
+# Cost: 0.001 TON per completion (same as creation), minimum 100 completions = 0.10 TON
+# For daily tasks: extend by additional days (days_limit), cost 5 TON/day
 
 @app.post("/api/extend-task")
 async def extend_task(req: ExtendTaskRequest):
     tg_user = verify_telegram_init_data(req.init_data)
     user_id = tg_user["id"]
 
-    # Validate inputs
-    if req.ton_amount < 0.10:
-        raise HTTPException(status_code=400, detail="Minimum extension is 0.10 TON")
-    if req.extra_completions < 1:
-        raise HTTPException(status_code=400, detail="extra_completions must be at least 1")
-
-    # Verify the rate matches: 0.10 TON per 100 completions
-    expected_completions = int(round(req.ton_amount / 0.10)) * 100
-    if req.extra_completions > expected_completions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"extra_completions ({req.extra_completions}) exceeds what {req.ton_amount} TON covers ({expected_completions})"
-        )
+    if req.additional_limit < 100:
+        raise HTTPException(status_code=400, detail="Minimum extension is 100 completions")
+    if req.additional_limit % 100 != 0:
+        raise HTTPException(status_code=400, detail="Extension must be a multiple of 100")
 
     cache_del(f"user:{user_id}")
+    cache_del_prefix("tasks:")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Verify the task belongs to this advertiser
         task = await conn.fetchrow(
             "SELECT * FROM tasks WHERE id = $1 AND advertiser_id = $2",
             req.task_id, user_id
         )
         if not task:
-            raise HTTPException(status_code=404, detail="Task not found or you are not the advertiser")
+            raise HTTPException(status_code=404, detail="Task not found or not yours")
 
-        # Only non-daily tasks can be extended by completions
+        # Determine cost based on task type
         if task["type"] == "daily":
-            raise HTTPException(status_code=400, detail="Daily tasks cannot be extended this way. Create a new daily task.")
+            # For daily tasks, treat additional_limit as additional days
+            additional_days = req.additional_limit // 100  # 100 units = 1 day
+            cost = additional_days * config.DAILY_TASK_COST_PER_DAY
+        else:
+            cost = req.additional_limit * config.AD_COST_PER_COMPLETION  # 0.001 per completion
 
-        # Check advertiser has sufficient TON balance
         user = await get_user(conn, user_id)
-        if float(user["ton_balance"]) < req.ton_amount:
+        if float(user["ton_balance"]) < cost:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient TON balance. Need {req.ton_amount:.2f} TON, have {float(user['ton_balance']):.4f} TON"
+                detail=f"Insufficient TON balance. Need {cost:.3f} TON"
             )
 
         async with conn.transaction():
-            # Deduct TON from advertiser balance
             await conn.execute(
-                "UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2",
-                req.ton_amount, user_id
+                "UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2", cost, user_id
             )
 
-            # Increase completion_limit and reactivate if completed
-            await conn.execute("""
-                UPDATE tasks
-                SET
-                    completion_limit = COALESCE(completion_limit, 0) + $1,
-                    status = CASE
-                        WHEN status = 'completed' THEN 'active'
-                        ELSE status
-                    END,
-                    cost_ton = cost_ton + $2
-                WHERE id = $3
-            """, req.extra_completions, req.ton_amount, req.task_id)
+            if task["type"] == "daily":
+                additional_days = req.additional_limit // 100
+                await conn.execute("""
+                    UPDATE tasks
+                    SET
+                        days_limit     = COALESCE(days_limit, 0) + $1,
+                        extended_count = COALESCE(extended_count, 0) + $1,
+                        status         = CASE WHEN status = 'completed' THEN 'active' ELSE status END
+                    WHERE id = $2
+                """, additional_days, req.task_id)
+            else:
+                await conn.execute("""
+                    UPDATE tasks
+                    SET
+                        completion_limit = COALESCE(completion_limit, 0) + $1,
+                        extended_count   = COALESCE(extended_count, 0) + $1,
+                        status           = CASE WHEN status = 'completed' THEN 'active' ELSE status END
+                    WHERE id = $2
+                """, req.additional_limit, req.task_id)
 
-            # Record the transaction
+            # Record extension event
+            await conn.execute("""
+                INSERT INTO task_extensions (task_id, advertiser_id, additional_limit, cost_ton)
+                VALUES ($1, $2, $3, $4)
+            """, req.task_id, user_id, req.additional_limit, cost)
+
+            # Record transaction
             await conn.execute("""
                 INSERT INTO transactions (user_id, type, description, ton_amount)
                 VALUES ($1, 'task_extend', $2, $3)
-            """, user_id,
-                f"Extended task #{req.task_id} by {req.extra_completions} completions",
-                -req.ton_amount
-            )
+            """, user_id, f"Extended task #{req.task_id} by {req.additional_limit} slots", -cost)
 
-        updated_user = await get_user(conn, user_id)
         updated_task = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1", req.task_id)
+        updated_user = await get_user(conn, user_id)
 
         return {
             "success": True,
             "task_id": req.task_id,
-            "extra_completions": req.extra_completions,
-            "ton_spent": req.ton_amount,
+            "additional_limit": req.additional_limit,
+            "cost": cost,
             "new_completion_limit": updated_task["completion_limit"],
-            "task_status": updated_task["status"],
             "new_ton_balance": float(updated_user["ton_balance"]),
         }
 
