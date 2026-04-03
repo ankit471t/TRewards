@@ -157,11 +157,6 @@ class CreateTaskRequest(BaseModel):
     completion_limit: Optional[int] = None
     days_limit: Optional[int] = None
 
-class ExtendTaskRequest(BaseModel):
-    init_data: str
-    task_id: int
-    additional_limit: int  # must be multiple of 100, min 100
-
 class WatchAdRequest(BaseModel):
     init_data: str
     ad_id: str
@@ -445,8 +440,14 @@ async def claim_task(req: ClaimTaskRequest):
 # ─── Telegram API helper ──────────────────────────────────────────────────────
 
 async def _check_bot_is_admin(chat_id: str) -> bool:
+    """
+    Returns True if the bot is an admin (or creator) in the given chat.
+    chat_id should be like '@username' or a numeric chat ID.
+    Returns False on any error (including bot not in chat, private groups, etc.)
+    """
     try:
         async with httpx.AsyncClient(timeout=8) as client:
+            # First get the bot's own user ID
             me_resp = await client.get(
                 f"https://api.telegram.org/bot{config.BOT_TOKEN}/getMe"
             )
@@ -455,6 +456,7 @@ async def _check_bot_is_admin(chat_id: str) -> bool:
                 return False
             bot_id = me_data["result"]["id"]
 
+            # Now check bot's member status in the chat
             resp = await client.get(
                 f"https://api.telegram.org/bot{config.BOT_TOKEN}/getChatMember",
                 params={"chat_id": chat_id, "user_id": bot_id}
@@ -470,6 +472,10 @@ async def _check_bot_is_admin(chat_id: str) -> bool:
 
 
 async def _check_user_is_member(chat_id: str, user_id: int) -> bool:
+    """
+    Returns True if user_id is a member/admin/creator of the chat.
+    Returns False if not a member or on any API error.
+    """
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             resp = await client.get(
@@ -486,6 +492,11 @@ async def _check_user_is_member(chat_id: str, user_id: int) -> bool:
 
 
 # ─── POST /api/verify-join ────────────────────────────────────────────────────
+#
+# Smart verification logic:
+#   1. If task URL uses a private invite link (+XXXX) → skip API check, award coins.
+#   2. If bot is NOT admin in the channel/group → award coins automatically (trust user).
+#   3. If bot IS admin → verify user membership via getChatMember, reject if not joined.
 
 @app.post("/api/verify-join")
 async def verify_join(req: VerifyJoinRequest):
@@ -513,23 +524,39 @@ async def verify_join(req: VerifyJoinRequest):
         if existing:
             raise HTTPException(status_code=400, detail="Task already completed")
 
+        # ── Parse the chat identifier from the task URL ────────────────────────
         url = task["url"]
         chat_id_raw = url.split("t.me/")[-1].strip("/")
+
+        # ── Private invite link (+XXXXX) → can't check membership, trust user ──
         is_private_link = chat_id_raw.startswith("+")
 
         if is_private_link:
+            # Private invite links — bot cannot verify membership, award coins
+            logger.info(f"Task {task['id']}: private invite link, auto-awarding coins to user {user_id}")
             is_member = True
             verification_method = "private_link_auto"
         else:
+            # Public @username — check if bot is admin first
             chat_identifier = f"@{chat_id_raw}"
             bot_is_admin = await _check_bot_is_admin(chat_identifier)
 
             if bot_is_admin:
+                # Bot is admin → verify user's actual membership
                 is_member = await _check_user_is_member(chat_identifier, user_id)
                 verification_method = "bot_admin_verified"
+                logger.info(
+                    f"Task {task['id']}: bot is admin in {chat_identifier}, "
+                    f"user {user_id} membership={is_member}"
+                )
             else:
+                # Bot is NOT admin (or not in chat) → trust user, award coins
                 is_member = True
                 verification_method = "bot_not_admin_auto"
+                logger.info(
+                    f"Task {task['id']}: bot is NOT admin in {chat_identifier}, "
+                    f"auto-awarding coins to user {user_id}"
+                )
 
         if not is_member:
             raise HTTPException(
@@ -537,6 +564,7 @@ async def verify_join(req: VerifyJoinRequest):
                 detail="You haven't joined the channel/group yet. Please join and try again."
             )
 
+        # ── Award coins ────────────────────────────────────────────────────────
         async with conn.transaction():
             await conn.execute(
                 "INSERT INTO task_completions (task_id, user_id) VALUES ($1, $2)",
@@ -642,6 +670,10 @@ async def watch_ad(req: WatchAdRequest):
 
 
 # ─── GET /api/friends ─────────────────────────────────────────────────────────
+#
+# Friends = users who registered via this user's referral link (referrer_id = user_id).
+# This is enforced at the DB level via the referrer_id foreign key.
+# The API response clearly surfaces per-friend commission from referral_commissions table.
 
 @app.get("/api/friends")
 async def get_friends(init_data: str):
@@ -650,6 +682,7 @@ async def get_friends(init_data: str):
 
     pool = await get_pool()
     async with pool.acquire() as conn:
+        # Ensure weekly counter is reset if we crossed a Sunday boundary
         user = await ensure_weekly_friends_reset(conn, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -657,20 +690,24 @@ async def get_friends(init_data: str):
         curr_week = _current_week_id()
         prev_week = _prev_week_id()
 
+        # Fetch friends page data — friends are strictly referrer_id-linked users
         friends_rows, lb_rows, prev_rows = await get_friends_page_data(
             conn, user_id, curr_week, prev_week
         )
 
+        # ── Friends list: only users where referrer_id = this user ────────────
         friend_list = [
             {
                 "id": f["id"],
                 "name": f["first_name"] or f["username"] or "Unknown",
                 "coins": f["coins"],
+                # Accurate per-friend commission from referral_commissions table
                 "your_share": f["your_share"],
             }
             for f in friends_rows
         ]
 
+        # ── Build leaderboards ─────────────────────────────────────────────────
         def build_lb(rows):
             result = []
             for i, r in enumerate(rows):
@@ -685,6 +722,7 @@ async def get_friends(init_data: str):
         lb      = build_lb(lb_rows)
         prev_lb = build_lb(prev_rows)
 
+        # Append current user to leaderboard if not already in top 20
         user_in_lb = any(x["is_me"] for x in lb)
         if not user_in_lb and (user["weekly_friends"] or 0) > 0:
             user_rank = await conn.fetchval("""
@@ -989,6 +1027,7 @@ async def claim_check(req: ClaimCheckRequest):
                 VALUES ($1, 'check_claim', $2, $3)
             """, user_id, f"Claimed TON check from user {check['creator_id']}", amount_per_person)
 
+            # Auto-referral: claimer with no referrer → check creator becomes referrer
             claimer = await conn.fetchrow(
                 "SELECT referrer_id FROM users WHERE id = $1", user_id
             )
@@ -1298,98 +1337,6 @@ async def create_task(req: CreateTaskRequest):
             """, user_id, req.name, req.task_type, req.url,
                 reward_map[req.task_type], completion_limit, days, cost)
         return {"success": True, "task_id": task_id, "cost": cost}
-
-
-# ─── POST /api/extend-task ────────────────────────────────────────────────────
-# Extend an existing task's completion_limit by additional_limit slots.
-# Cost: 0.001 TON per completion (same as creation), minimum 100 completions = 0.10 TON
-# For daily tasks: extend by additional days (days_limit), cost 5 TON/day
-
-@app.post("/api/extend-task")
-async def extend_task(req: ExtendTaskRequest):
-    tg_user = verify_telegram_init_data(req.init_data)
-    user_id = tg_user["id"]
-
-    if req.additional_limit < 100:
-        raise HTTPException(status_code=400, detail="Minimum extension is 100 completions")
-    if req.additional_limit % 100 != 0:
-        raise HTTPException(status_code=400, detail="Extension must be a multiple of 100")
-
-    cache_del(f"user:{user_id}")
-    cache_del_prefix("tasks:")
-
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        task = await conn.fetchrow(
-            "SELECT * FROM tasks WHERE id = $1 AND advertiser_id = $2",
-            req.task_id, user_id
-        )
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found or not yours")
-
-        # Determine cost based on task type
-        if task["type"] == "daily":
-            # For daily tasks, treat additional_limit as additional days
-            additional_days = req.additional_limit // 100  # 100 units = 1 day
-            cost = additional_days * config.DAILY_TASK_COST_PER_DAY
-        else:
-            cost = req.additional_limit * config.AD_COST_PER_COMPLETION  # 0.001 per completion
-
-        user = await get_user(conn, user_id)
-        if float(user["ton_balance"]) < cost:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient TON balance. Need {cost:.3f} TON"
-            )
-
-        async with conn.transaction():
-            await conn.execute(
-                "UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2", cost, user_id
-            )
-
-            if task["type"] == "daily":
-                additional_days = req.additional_limit // 100
-                await conn.execute("""
-                    UPDATE tasks
-                    SET
-                        days_limit     = COALESCE(days_limit, 0) + $1,
-                        extended_count = COALESCE(extended_count, 0) + $1,
-                        status         = CASE WHEN status = 'completed' THEN 'active' ELSE status END
-                    WHERE id = $2
-                """, additional_days, req.task_id)
-            else:
-                await conn.execute("""
-                    UPDATE tasks
-                    SET
-                        completion_limit = COALESCE(completion_limit, 0) + $1,
-                        extended_count   = COALESCE(extended_count, 0) + $1,
-                        status           = CASE WHEN status = 'completed' THEN 'active' ELSE status END
-                    WHERE id = $2
-                """, req.additional_limit, req.task_id)
-
-            # Record extension event
-            await conn.execute("""
-                INSERT INTO task_extensions (task_id, advertiser_id, additional_limit, cost_ton)
-                VALUES ($1, $2, $3, $4)
-            """, req.task_id, user_id, req.additional_limit, cost)
-
-            # Record transaction
-            await conn.execute("""
-                INSERT INTO transactions (user_id, type, description, ton_amount)
-                VALUES ($1, 'task_extend', $2, $3)
-            """, user_id, f"Extended task #{req.task_id} by {req.additional_limit} slots", -cost)
-
-        updated_task = await conn.fetchrow("SELECT * FROM tasks WHERE id = $1", req.task_id)
-        updated_user = await get_user(conn, user_id)
-
-        return {
-            "success": True,
-            "task_id": req.task_id,
-            "additional_limit": req.additional_limit,
-            "cost": cost,
-            "new_completion_limit": updated_task["completion_limit"],
-            "new_ton_balance": float(updated_user["ton_balance"]),
-        }
 
 
 # ─── POST /api/set-language ───────────────────────────────────────────────────
