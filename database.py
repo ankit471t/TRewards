@@ -12,6 +12,26 @@ _pool = None
 async def get_pool():
     global _pool
     if _pool is None:
+        import asyncio
+        from urllib.parse import urlparse
+
+        parsed = urlparse(DATABASE_URL)
+        host = parsed.hostname
+        port = parsed.port or 6543
+
+        logger.info(f"Testing TCP connectivity to {host}:{port} ...")
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port),
+                timeout=20
+            )
+            writer.close()
+            await writer.wait_closed()
+            logger.info("TCP connection OK — proceeding to create pool")
+        except Exception as e:
+            logger.error(f"TCP connection FAILED: {e}")
+            raise RuntimeError(f"Cannot reach database host {host}:{port} — {e}") from e
+
         _pool = await asyncpg.create_pool(
             DATABASE_URL,
             min_size=1,
@@ -135,7 +155,6 @@ async def init_db():
             )
         """)
 
-        # ── Migration: add extended_count to existing tasks table ──────────────
         try:
             await conn.execute(
                 "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS extended_count INTEGER DEFAULT 0"
@@ -309,7 +328,6 @@ async def init_db():
         """)
 
         # ── task_extensions ───────────────────────────────────────────────────
-        # Tracks each extension event for a task (audit trail)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS task_extensions (
                 id                 SERIAL PRIMARY KEY,
