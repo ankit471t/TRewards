@@ -1,4 +1,5 @@
 import asyncpg
+import asyncio
 import logging
 import random
 from datetime import date, timedelta
@@ -12,14 +13,27 @@ _pool = None
 async def get_pool():
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(
-            DATABASE_URL,
-            min_size=3,
-            max_size=20,
-            command_timeout=30,
-            max_inactive_connection_lifetime=300,
-            statement_cache_size=0,
-        )
+        for attempt in range(5):
+            try:
+                _pool = await asyncpg.create_pool(
+                    DATABASE_URL,
+                    min_size=3,
+                    max_size=20,
+                    command_timeout=30,
+                    max_inactive_connection_lifetime=300,
+                    statement_cache_size=0,
+                )
+                logger.info("Database pool created successfully")
+                break
+            except Exception as e:
+                logger.warning(f"DB connect attempt {attempt + 1}/5 failed: {e}")
+                if attempt < 4:
+                    wait = 3 * (attempt + 1)
+                    logger.info(f"Retrying in {wait}s...")
+                    await asyncio.sleep(wait)
+                else:
+                    logger.error("All DB connection attempts failed")
+                    raise
     return _pool
 
 
@@ -129,9 +143,17 @@ async def init_db():
                 completed_count  INTEGER DEFAULT 0,
                 cost_ton         NUMERIC(18,8) NOT NULL,
                 status           TEXT DEFAULT 'active',
-                created_at       TIMESTAMPTZ DEFAULT NOW()
+                created_at       TIMESTAMPTZ DEFAULT NOW(),
+                extended_count   INTEGER DEFAULT 0
             )
         """)
+
+        try:
+            await conn.execute(
+                "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS extended_count INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass
 
         # ── task_completions ──────────────────────────────────────────────────
         await conn.execute("""
@@ -275,7 +297,6 @@ async def init_db():
         """)
 
         # ── weekly_referral_stats ─────────────────────────────────────────────
-        # Stores per-referrer friend counts per Sunday-week for the leaderboard.
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS weekly_referral_stats (
                 id           SERIAL PRIMARY KEY,
@@ -287,10 +308,7 @@ async def init_db():
             )
         """)
 
-        # ── referral_commissions — per-friend commission tracking ─────────────
-        # This table tracks how many TR coins each specific friend has generated
-        # for the referrer, enabling accurate per-friend share display on the
-        # friends page.  Populated by add_coins() when distributing commissions.
+        # ── referral_commissions ──────────────────────────────────────────────
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS referral_commissions (
                 id           SERIAL PRIMARY KEY,
@@ -299,6 +317,18 @@ async def init_db():
                 coins_earned BIGINT DEFAULT 0,
                 updated_at   TIMESTAMPTZ DEFAULT NOW(),
                 UNIQUE(referrer_id, friend_id)
+            )
+        """)
+
+        # ── task_extensions ───────────────────────────────────────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS task_extensions (
+                id                 SERIAL PRIMARY KEY,
+                task_id            INTEGER REFERENCES tasks(id),
+                advertiser_id      BIGINT REFERENCES users(id),
+                additional_limit   INTEGER NOT NULL,
+                cost_ton           NUMERIC(18,8) NOT NULL,
+                extended_at        TIMESTAMPTZ DEFAULT NOW()
             )
         """)
 
@@ -322,6 +352,8 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_stars_charge            ON stars_payments(telegram_charge_id)",
             "CREATE INDEX IF NOT EXISTS idx_ref_commissions_ref     ON referral_commissions(referrer_id)",
             "CREATE INDEX IF NOT EXISTS idx_ref_commissions_friend  ON referral_commissions(friend_id)",
+            "CREATE INDEX IF NOT EXISTS idx_task_extensions_task    ON task_extensions(task_id)",
+            "CREATE INDEX IF NOT EXISTS idx_task_extensions_adv     ON task_extensions(advertiser_id)",
         ]
         for idx in indexes:
             try:
@@ -340,22 +372,6 @@ async def get_user(conn, user_id: int):
 
 async def create_user(conn, user_id: int, username: str, first_name: str,
                       last_name: str, referrer_id: int = None):
-    """
-    Upsert user.  On genuine first insert:
-      - Stores referral_link on the user row.
-      - Sets referrer_id so the referral chain is tracked.
-      - Increments referrer's total_friends and weekly_friends atomically.
-      - Resets weekly_friends if referrer crossed a new Sun–Sat week boundary.
-      - Updates weekly_referral_stats for the leaderboard.
-
-    On return visits (ON CONFLICT) only name fields are refreshed;
-    referrer_id is intentionally NOT overwritten on existing rows.
-
-    FIX (vs original): the upsert now returns the *inserted* referrer_id via
-    RETURNING so we can detect whether this was a genuine new-user insert
-    (referrer_id = the one we passed) vs an existing user whose referrer_id
-    might already be set to something else.
-    """
     if referrer_id == user_id:
         referrer_id = None
     if referrer_id:
@@ -363,7 +379,6 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         if not ref:
             referrer_id = None
 
-    # Unique 6-digit comment ID for TON wallet top-ups
     comment_id = str(random.randint(100000, 999999))
     while True:
         existing = await conn.fetchrow(
@@ -378,9 +393,6 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         f"?startapp=ref_{user_id}"
     )
 
-    # xmax = 0 means a new row was inserted; xmax > 0 means an existing row was updated.
-    # We use this to detect whether this is a brand-new user so we only increment
-    # the referrer's counters once.
     user = await conn.fetchrow("""
         INSERT INTO users (
             id, username, first_name, last_name,
@@ -395,9 +407,6 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
         RETURNING *, (xmax = 0) AS is_new_insert
     """, user_id, username, first_name, last_name, referrer_id, comment_id, ref_link)
 
-    # Only credit the referrer when:
-    #   1. This is a brand-new user row (is_new_insert = true)
-    #   2. The row actually has the referrer_id we provided (i.e. not NULL)
     is_new = user["is_new_insert"]
     actual_referrer = user["referrer_id"]
 
@@ -408,11 +417,6 @@ async def create_user(conn, user_id: int, username: str, first_name: str,
 
 
 async def _credit_new_referral(conn, referrer_id: int):
-    """
-    Called exactly once per new referred user.
-    Increments total_friends and weekly_friends on the referrer row,
-    and upserts weekly_referral_stats for the leaderboard.
-    """
     week_id    = _current_week_id()
     week_start = _current_week_start()
 
@@ -441,17 +445,6 @@ async def _credit_new_referral(conn, referrer_id: int):
 
 
 async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: str):
-    """
-    Credit coins to user and record the transaction.
-
-    Distributes REFERRAL_COMMISSION of amount to the referrer across:
-      unclaimed_referral  — claimable pool (decremented on claim)
-      tr_earned_from_refs — all-time stat shown on friends page (never decremented)
-      referral_earnings   — legacy alias kept for backward compat
-
-    FIX (vs original): also upserts referral_commissions so the friends page
-    can show accurate per-friend contribution instead of a rough estimate.
-    """
     await conn.execute(
         "UPDATE users SET coins = coins + $1 WHERE id = $2", amount, user_id
     )
@@ -467,7 +460,6 @@ async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: 
             if commission > 0:
                 referrer_id = user["referrer_id"]
 
-                # Credit the referrer's claimable + all-time pools
                 await conn.execute("""
                     UPDATE users
                     SET
@@ -477,7 +469,6 @@ async def add_coins(conn, user_id: int, amount: int, tx_type: str, description: 
                     WHERE id = $2
                 """, commission, referrer_id)
 
-                # Track per-friend commission for the friends page
                 await conn.execute("""
                     INSERT INTO referral_commissions (referrer_id, friend_id, coins_earned)
                     VALUES ($1, $2, $3)
@@ -495,7 +486,6 @@ async def add_spins(conn, user_id: int, amount: int):
 
 
 async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: str):
-    """Add TON balance and record transaction."""
     await conn.execute(
         "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2", amount, user_id
     )
@@ -506,12 +496,6 @@ async def add_ton(conn, user_id: int, amount: float, tx_type: str, description: 
 
 
 async def ensure_weekly_friends_reset(conn, user_id: int):
-    """
-    If the stored weekly_friends_reset_at is before this week's Sunday,
-    reset weekly_friends to 0 and update the reset date.
-    Call this at the start of /api/friends to keep the counter current.
-    Returns the (possibly updated) user row.
-    """
     week_start = _current_week_start()
     await conn.execute("""
         UPDATE users
@@ -530,15 +514,6 @@ async def ensure_weekly_friends_reset(conn, user_id: int):
 # ─── Friends page helpers ─────────────────────────────────────────────────────
 
 async def get_friends_page_data(conn, user_id: int, curr_week: str, prev_week: str):
-    """
-    Merged from friends.patch.js — returns all data needed for the friends page
-    in one coordinated DB fetch.
-
-    Returns:
-        friends      — last 10 referrals with per-friend commission earned
-        leaderboard  — current week top-20 + user's own row if not in top 20
-        prev_lb      — previous week top-20
-    """
     friends_rows, lb_rows, prev_rows = await conn.fetch("""
         SELECT
             u.id,
@@ -574,7 +549,6 @@ async def get_friends_page_data(conn, user_id: int, curr_week: str, prev_week: s
 # ─── Week helpers (Sunday → Saturday) ────────────────────────────────────────
 
 def _sunday_week_id(d: date) -> str:
-    """Sunday-based week ID for an arbitrary date, e.g. '2025-W22'."""
     days_since_sunday = (d.weekday() + 1) % 7
     week_start = d - timedelta(days=days_since_sunday)
     year = week_start.year
@@ -584,7 +558,6 @@ def _sunday_week_id(d: date) -> str:
 
 
 def _current_week_start() -> date:
-    """The Sunday that opened the current week."""
     d = date.today()
     return d - timedelta(days=(d.weekday() + 1) % 7)
 
