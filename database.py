@@ -12,26 +12,6 @@ _pool = None
 async def get_pool():
     global _pool
     if _pool is None:
-        import asyncio
-        from urllib.parse import urlparse
-
-        parsed = urlparse(DATABASE_URL)
-        host = parsed.hostname
-        port = parsed.port or 6543
-
-        logger.info(f"Testing TCP connectivity to {host}:{port} ...")
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port),
-                timeout=20
-            )
-            writer.close()
-            await writer.wait_closed()
-            logger.info("TCP connection OK — proceeding to create pool")
-        except Exception as e:
-            logger.error(f"TCP connection FAILED: {e}")
-            raise RuntimeError(f"Cannot reach database host {host}:{port} — {e}") from e
-
         _pool = await asyncpg.create_pool(
             DATABASE_URL,
             min_size=2,
@@ -41,6 +21,7 @@ async def get_pool():
             statement_cache_size=0,
             timeout=15,
         )
+        logger.info("Database pool created successfully")
     return _pool
 
 
