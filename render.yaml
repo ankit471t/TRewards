@@ -6,7 +6,7 @@ services:
   - type: web
     name: trewards-api
     runtime: python
-    region: oregon
+    region: singapore   # closest to ap-south-1
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT

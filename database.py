@@ -14,11 +14,12 @@ async def get_pool():
     if _pool is None:
         _pool = await asyncpg.create_pool(
             DATABASE_URL,
-            min_size=3,
-            max_size=20,
-            command_timeout=30,
+            min_size=1,
+            max_size=10,
+            command_timeout=60,
             max_inactive_connection_lifetime=300,
             statement_cache_size=0,
+            timeout=30,
         )
     return _pool
 
