@@ -1,17 +1,13 @@
 // TRewards Bot — AWS Lambda (ES Module)
-// Responds ONLY to: /start, /amiadminyes, /stars (callback), Stars payments
-// Admin broadcast via /amiadminyes in Telegram bot
+// Responds ONLY to: /start, /amiadminyes (admin broadcast)
 
-const BOT_TOKEN     = process.env.BOT_TOKEN;
-const FRONTEND_URL  = process.env.FRONTEND_URL || 'https://trewards.onrender.com';
-const ADMIN_IDS     = (process.env.ADMIN_IDS || '').split(',').map(Number).filter(Boolean);
-const SUPABASE_URL  = process.env.SUPABASE_URL;
-const SUPABASE_KEY  = process.env.SUPABASE_KEY;
-const BOT_USERNAME  = process.env.BOT_USERNAME || 'treward_ton_bot';
-const STARS_PER_TON = 65;
-const MIN_STARS     = 50;
+const BOT_TOKEN    = process.env.BOT_TOKEN;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://trewards.onrender.com';
+const ADMIN_IDS    = (process.env.ADMIN_IDS || '').split(',').map(Number).filter(Boolean);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-// In-memory admin wizard sessions (broadcast only, lives per Lambda warm instance)
+// In-memory admin wizard sessions (lives per Lambda warm instance)
 const adminSessions = {};
 
 function isAdmin(uid) { return ADMIN_IDS.includes(uid); }
@@ -42,7 +38,7 @@ async function sb(path, options = {}) {
   return res.json();
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Week ID helper ───────────────────────────────────────────────────────────
 function getCurrentWeekId() {
   const d = new Date();
   const jan1 = new Date(d.getFullYear(), 0, 1);
@@ -70,7 +66,7 @@ async function getOrCreateUser(tgUser, referrerId = null) {
     commentId = String(Math.floor(100000 + Math.random() * 900000));
   }
 
-  // Check if user already exists (to detect new vs returning)
+  // Check if user already exists
   const existingUser = await sb(`users?id=eq.${id}&select=id,referrer_id`);
   const isNewUser = !Array.isArray(existingUser) || existingUser.length === 0;
 
@@ -89,7 +85,7 @@ async function getOrCreateUser(tgUser, referrerId = null) {
 
   const user = Array.isArray(rows) ? rows[0] : rows;
 
-  // Update weekly referral stats only for truly new users with a valid referrer
+  // Track weekly referral stats for new users with a valid referrer
   if (isNewUser && validRef) {
     const weekId = getCurrentWeekId();
     await sb('weekly_referral_stats', {
@@ -108,12 +104,9 @@ async function handleStart(msg, param) {
   const tgUser    = msg.from;
   const firstName = tgUser.first_name || tgUser.username || 'User';
 
-  // Deep-link: c_<checkId> — open app to claim check
+  // Deep-link: c_<checkId> — open app to claim a TON check
   if (param && param.startsWith('c_')) {
-    // Register/upsert user WITHOUT referrer (referrer set by check claim in backend)
     await getOrCreateUser(tgUser, null).catch(e => console.error('upsert error:', e));
-
-    // Send message with Mini App button — the frontend handles the check via start_param
     await tgApi('sendMessage', {
       chat_id: chatId,
       text:
@@ -154,100 +147,7 @@ async function handleStart(msg, param) {
   });
 }
 
-// ─── Stars invoice sender ─────────────────────────────────────────────────────
-async function sendStarsInvoice(chatId, starsAmount) {
-  const tonAmount = (starsAmount / STARS_PER_TON).toFixed(4);
-  await tgApi('sendInvoice', {
-    chat_id: chatId,
-    title: 'TRewards TON Top-Up',
-    description: `Top up ${tonAmount} TON to your TRewards balance. Rate: 65 Stars = 1 TON.`,
-    payload: JSON.stringify({ type: 'ton_topup', stars: starsAmount }),
-    currency: 'XTR',
-    prices: [{ label: `${tonAmount} TON (${starsAmount} Stars)`, amount: starsAmount }],
-  });
-}
-
-// ─── Stars pre-checkout ───────────────────────────────────────────────────────
-async function handlePreCheckout(query) {
-  await tgApi('answerPreCheckoutQuery', { pre_checkout_query_id: query.id, ok: true });
-}
-
-// ─── Stars successful_payment ─────────────────────────────────────────────────
-async function handleSuccessfulPayment(msg) {
-  const userId  = msg.from.id;
-  const payment = msg.successful_payment;
-  if (!payment || payment.currency !== 'XTR') return;
-
-  const chargeId    = payment.telegram_payment_charge_id;
-  const starsAmount = payment.total_amount;
-  const tonAmount   = parseFloat((starsAmount / STARS_PER_TON).toFixed(4));
-
-  try {
-    // Idempotency check
-    const existing = await sb(`stars_payments?telegram_charge_id=eq.${chargeId}&select=id`);
-    if (Array.isArray(existing) && existing.length > 0) {
-      await tgApi('sendMessage', {
-        chat_id: msg.chat.id,
-        text: `✅ Payment already credited: ${tonAmount} TON to your account.`,
-      });
-      return;
-    }
-
-    const userRows = await sb(`users?id=eq.${userId}&select=ton_balance`);
-    if (Array.isArray(userRows) && userRows.length > 0) {
-      const newBal = parseFloat(userRows[0].ton_balance || 0) + tonAmount;
-      await Promise.all([
-        sb(`users?id=eq.${userId}`, {
-          method: 'PATCH',
-          prefer: 'return=minimal',
-          body: JSON.stringify({ ton_balance: newBal }),
-        }),
-        sb('stars_payments', {
-          method: 'POST',
-          prefer: 'return=minimal',
-          body: JSON.stringify({
-            user_id: userId,
-            telegram_charge_id: chargeId,
-            stars_amount: starsAmount,
-            ton_credited: tonAmount,
-          }),
-        }),
-        sb('transactions', {
-          method: 'POST',
-          prefer: 'return=minimal',
-          body: JSON.stringify({
-            user_id: userId,
-            type: 'topup_stars',
-            description: `Stars top-up: ${starsAmount} ⭐`,
-            ton_amount: tonAmount,
-          }),
-        }),
-      ]);
-    }
-
-    await tgApi('sendMessage', {
-      chat_id: msg.chat.id,
-      text:
-        `✅ <b>Payment successful!</b>\n\n` +
-        `⭐ ${starsAmount} Stars → <b>${tonAmount} TON</b> credited to your account.\n\n` +
-        `Open TRewards to use your balance:`,
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '🚀 Open TRewards', web_app: { url: FRONTEND_URL } }
-        ]]
-      }
-    });
-  } catch (e) {
-    console.error('Stars payment error:', e);
-    await tgApi('sendMessage', {
-      chat_id: msg.chat.id,
-      text: '⚠️ Payment received but crediting failed. Please contact support with your receipt.',
-    });
-  }
-}
-
-// ─── Admin broadcast panel ────────────────────────────────────────────────────
+// ─── Admin panel ──────────────────────────────────────────────────────────────
 async function sendAdminPanel(chatId) {
   const users = await sb('users?select=id').catch(() => []);
   const total = Array.isArray(users) ? users.length : 0;
@@ -266,7 +166,7 @@ async function sendAdminPanel(chatId) {
   });
 }
 
-// ─── Admin wizard handler ─────────────────────────────────────────────────────
+// ─── Admin broadcast wizard ───────────────────────────────────────────────────
 async function handleAdminWizard(msg) {
   const chatId  = msg.chat.id;
   const userId  = msg.from.id;
@@ -280,19 +180,6 @@ async function handleAdminWizard(msg) {
     return true;
   }
 
-  // Stars custom amount input (non-admin users too)
-  if (session.step === 'stars_custom_amount') {
-    const stars = parseInt(text);
-    if (isNaN(stars) || stars < MIN_STARS) {
-      await tgApi('sendMessage', { chat_id: chatId, text: `❌ Minimum ${MIN_STARS} Stars. Enter a valid amount:` });
-      return true;
-    }
-    delete adminSessions[userId];
-    await sendStarsInvoice(chatId, stars);
-    return true;
-  }
-
-  // Broadcast wizard steps (admin only)
   if (session.step === 'broadcast_message') {
     session.data.message = text;
     session.step = 'broadcast_button';
@@ -346,8 +233,8 @@ async function askBroadcastConfirm(chatId, userId, session) {
     parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [[
-        { text: '✅ Send Now',  callback_data: 'broadcast_confirm' },
-        { text: '❌ Cancel',   callback_data: 'broadcast_cancel' },
+        { text: '✅ Send Now', callback_data: 'broadcast_confirm' },
+        { text: '❌ Cancel',  callback_data: 'broadcast_cancel' },
       ]]
     }
   });
@@ -371,7 +258,7 @@ async function executeBroadcast(userIds, message, buttonText, buttonUrl) {
     }
     if (i + 30 < userIds.length) await new Promise(r => setTimeout(r, 1000));
   }
-  console.log(`Broadcast complete: sent=${sent}, failed=${failed}`);
+  console.log(`Broadcast done: sent=${sent}, failed=${failed}`);
 }
 
 // ─── Callback query handler ───────────────────────────────────────────────────
@@ -382,23 +269,6 @@ async function handleCallback(query) {
 
   await tgApi('answerCallbackQuery', { callback_query_id: query.id });
 
-  // Stars purchase callbacks — available to all users
-  const starsMap = { stars_65: 65, stars_130: 130, stars_325: 325, stars_650: 650 };
-  if (data in starsMap) {
-    await sendStarsInvoice(chatId, starsMap[data]);
-    return;
-  }
-
-  if (data === 'stars_custom') {
-    adminSessions[userId] = { step: 'stars_custom_amount', data: {} };
-    await tgApi('sendMessage', {
-      chat_id: chatId,
-      text: `⭐ Enter the number of Stars you want to pay (minimum ${MIN_STARS}):`,
-    });
-    return;
-  }
-
-  // Admin-only callbacks
   if (data === 'admin_start_broadcast') {
     if (!isAdmin(userId)) return;
     adminSessions[userId] = { step: 'broadcast_message', data: {} };
@@ -407,7 +277,7 @@ async function handleCallback(query) {
       parse_mode: 'HTML',
       text:
         '<b>📣 Create Broadcast</b>\n\n' +
-        'Type your message (HTML formatting supported: <b>bold</b>, <i>italic</i>, links).\n\n' +
+        'Type your message (HTML supported: <b>bold</b>, <i>italic</i>, links).\n\n' +
         '<i>Send /cancel to abort.</i>',
     });
     return;
@@ -420,13 +290,12 @@ async function handleCallback(query) {
     const { message, button_text, button_url } = session.data;
     delete adminSessions[userId];
 
-    const users = await sb('users?select=id');
+    const users   = await sb('users?select=id');
     const userIds = Array.isArray(users) ? users.map(u => u.id) : [];
     await tgApi('sendMessage', {
       chat_id: chatId,
-      text: `📤 Sending broadcast to ${userIds.length} users... This may take a few minutes.`,
+      text: `📤 Sending to ${userIds.length} users… This may take a few minutes.`,
     });
-    // Execute broadcast (fire and don't await to avoid Lambda timeout)
     executeBroadcast(userIds, message, button_text, button_url).catch(console.error);
     return;
   }
@@ -436,6 +305,8 @@ async function handleCallback(query) {
     await tgApi('sendMessage', { chat_id: chatId, text: '❌ Broadcast cancelled.' });
     return;
   }
+
+  // All other callbacks silently ignored
 }
 
 // ─── Main Lambda handler ──────────────────────────────────────────────────────
@@ -451,12 +322,6 @@ export const handler = async (event) => {
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     if (!body) return { statusCode: 200, body: 'ok' };
 
-    // ── pre_checkout_query ────────────────────────────────────────────────────
-    if (body.pre_checkout_query) {
-      await handlePreCheckout(body.pre_checkout_query);
-      return { statusCode: 200, body: 'ok' };
-    }
-
     // ── Callback queries ──────────────────────────────────────────────────────
     if (body.callback_query) {
       await handleCallback(body.callback_query);
@@ -469,41 +334,31 @@ export const handler = async (event) => {
       const text = (msg.text || '').trim();
       const uid  = msg.from?.id;
 
-      // Stars successful payment — handle before any text check
-      if (msg.successful_payment) {
-        await handleSuccessfulPayment(msg);
-        return { statusCode: 200, body: 'ok' };
-      }
-
-      // /start — with optional deep-link param
+      // /start with optional deep-link param
       const startMatch = text.match(/^\/start(?:\s+(.+))?$/);
       if (startMatch) {
         await handleStart(msg, startMatch[1]?.trim() || null);
         return { statusCode: 200, body: 'ok' };
       }
 
-      // /amiadminyes — admin panel (admin only)
+      // /amiadminyes — admin panel (admins only, silently ignored otherwise)
       if (text === '/amiadminyes') {
-        if (isAdmin(uid)) {
-          await sendAdminPanel(msg.chat.id);
-        }
-        // Silently ignore for non-admins (no response)
+        if (isAdmin(uid)) await sendAdminPanel(msg.chat.id);
         return { statusCode: 200, body: 'ok' };
       }
 
-      // Active wizard session (broadcast steps or stars custom amount)
+      // Active broadcast wizard session
       if (adminSessions[uid]) {
         await handleAdminWizard(msg);
         return { statusCode: 200, body: 'ok' };
       }
 
-      // ── IMPORTANT: All other messages are IGNORED silently ────────────────
-      // Bot only responds to /start and /amiadminyes + wizard flows + payments
+      // ── Everything else is silently ignored ───────────────────────────────
     }
 
     return { statusCode: 200, body: 'ok' };
   } catch (err) {
     console.error('Lambda handler error:', err);
-    return { statusCode: 200, body: 'ok' }; // Always return 200 to Telegram
+    return { statusCode: 200, body: 'ok' }; // Always 200 to Telegram
   }
 };

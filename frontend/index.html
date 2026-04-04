@@ -67,7 +67,7 @@ html,body{height:100%;background:var(--bg);color:var(--t1);font-family:'Exo 2',s
 .btn-err{background:linear-gradient(135deg,#7a1a1a,#ff4444);color:#fff}
 .sec-title{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.8px;margin-bottom:10px}
 .task-item{background:var(--bg2);border:1px solid rgba(255,184,0,.1);border-radius:var(--r);padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
-.task-item.completed{opacity:.5}
+.task-item.completed{opacity:.55}
 .task-icon{width:40px;height:40px;border-radius:10px;background:rgba(255,184,0,.1);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .task-info{flex:1;min-width:0}
 .task-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -190,7 +190,6 @@ option{background:var(--bg2)}
 .stars-option:active{transform:scale(.98)}
 .stars-opt-label{font-size:14px;font-weight:700;color:var(--t1)}
 .stars-opt-ton{font-size:12px;color:var(--gold);margin-top:2px}
-/* Ad overlay (full screen modal) */
 .ad-overlay-full{position:absolute;inset:0;background:rgba(0,0,0,.95);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fadeIn .25s}
 .ad-overlay-box{background:linear-gradient(135deg,#0D0900,#1A1200);border:2px solid rgba(255,184,0,.35);border-radius:24px;padding:28px 24px;width:90%;max-width:360px;text-align:center;position:relative}
 .ad-spinner{width:60px;height:60px;border:4px solid rgba(255,184,0,.15);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
@@ -199,7 +198,6 @@ option{background:var(--bg2)}
 .ad-skip-btn{background:rgba(255,184,0,.12);border:1px solid rgba(255,184,0,.3);color:var(--gold);padding:10px 28px;border-radius:20px;font-family:'Exo 2',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-top:12px;transition:all .2s}
 .ad-skip-btn:disabled{opacity:.4;cursor:not-allowed}
 .ad-skip-btn:not(:disabled):hover{background:rgba(255,184,0,.22)}
-/* My tasks in advertiser panel — extended task row */
 .my-task-row{background:rgba(0,0,0,.3);border:1px solid rgba(255,184,0,.12);border-radius:var(--r);padding:12px;margin-bottom:8px}
 .my-task-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .my-task-name{font-size:13px;font-weight:600;flex:1}
@@ -213,7 +211,6 @@ option{background:var(--bg2)}
 .extend-btn{background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:'Exo 2',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
 .extend-btn:disabled{opacity:.5;cursor:not-allowed}
 .extend-cost{font-size:10px;color:var(--t3);margin-top:3px}
-/* Channel/Group verify flow */
 #celebrationOverlay{position:absolute;inset:0;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.92);animation:fadeIn .3s}
 .celeb-box{text-align:center;padding:32px 24px;animation:celebPop .5s cubic-bezier(.34,1.56,.64,1)}
 @keyframes celebPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
@@ -296,7 +293,6 @@ option{background:var(--bg2)}
       <div class="sec-title" style="color:var(--ton)" data-i="dailyTasks">📅 DAILY TASKS</div>
       <p style="font-size:11px;color:var(--t2);margin-bottom:10px" data-i="dailyTaskDesc">+5,000 TR + 1 spin each (resets daily)</p>
       <div id="dailyTaskList"></div>
-      <!-- Advertiser daily tasks section -->
       <div id="advDailySection" style="margin-top:14px"></div>
     </div>
   </div>
@@ -450,7 +446,6 @@ option{background:var(--bg2)}
 
 <!-- ═══ OVERLAYS ═══════════════════════════════════════════════════════ -->
 
-<!-- AD OVERLAY (full screen) -->
 <div id="adShowOverlay" style="display:none" class="ad-overlay-full">
   <div class="ad-overlay-box">
     <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:16px;letter-spacing:.5px" id="adOverlayTitle">📺 WATCH AD</div>
@@ -461,7 +456,6 @@ option{background:var(--bg2)}
   </div>
 </div>
 
-<!-- ADVERTISER -->
 <div class="overlay" id="adOverlay" style="display:none">
   <div class="ov-box">
     <button class="ov-close" onclick="closeAd()">✕</button>
@@ -548,7 +542,6 @@ option{background:var(--bg2)}
   </div>
 </div>
 
-<!-- Verify join (channel/group) — step 1: open link, step 2: verify -->
 <div class="overlay" id="verifyOverlay" style="display:none">
   <div class="ov-box">
     <button class="ov-close" onclick="closeVerify()">✕</button>
@@ -607,7 +600,6 @@ option{background:var(--bg2)}
   </div>
 </div>
 
-<!-- Extend Task Overlay -->
 <div class="overlay" id="extendTaskOverlay" style="display:none">
   <div class="ov-box">
     <button class="ov-close" onclick="closeExtendTask()">✕</button>
@@ -647,34 +639,22 @@ const MINI_APP_URL = `https://t.me/${BOT_USERNAME}/${MINI_APP}`;
 const tg = window.Telegram?.WebApp;
 const ADSGRAM_ID  = '26241';
 const MONETAG_FN  = 'show_10801469';
-
-// Max ad watches per button per day
 const MAX_ADS_PER_BUTTON_PER_DAY = 100;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AD SYSTEM — Alternating platforms, daily limit, full-screen modal
+// AD SYSTEM
 // ═══════════════════════════════════════════════════════════════════════════
 let AdsgramController = null;
-let _adPlatformIdx = 0; // global alternating counter for ALL ad shows
+let _adPlatformIdx = 0;
 
 function initAdsgram(){
   try{if(window.Adsgram)AdsgramController=window.Adsgram.init({blockId:ADSGRAM_ID});}catch(e){}
 }
 
-// Returns today key for localStorage
 function todayKey(){return new Date().toISOString().slice(0,10);}
+function getAdWatchCount(adId){const k=`adwatches_${adId}_${todayKey()}`;return parseInt(localStorage.getItem(k)||'0');}
+function incAdWatchCount(adId){const k=`adwatches_${adId}_${todayKey()}`;localStorage.setItem(k,getAdWatchCount(adId)+1);}
 
-// Get watches count for a given ad slot today
-function getAdWatchCount(adId){
-  const k=`adwatches_${adId}_${todayKey()}`;
-  return parseInt(localStorage.getItem(k)||'0');
-}
-function incAdWatchCount(adId){
-  const k=`adwatches_${adId}_${todayKey()}`;
-  localStorage.setItem(k,getAdWatchCount(adId)+1);
-}
-
-// Show full-screen ad countdown overlay
 let _adOverlayCancelFn=null;
 let _adOverlayTimer=null;
 
@@ -685,18 +665,15 @@ function showAdCountdownOverlay(title,desc,durationSec,callback){
   const descEl=document.getElementById('adOverlayDesc');
   const skipBtn=document.getElementById('adSkipBtn');
   const spinner=document.getElementById('adSpinner');
-
   if(titleEl)titleEl.textContent=title;
   if(descEl)descEl.textContent=desc;
   if(countEl)countEl.textContent='';
   if(skipBtn){skipBtn.disabled=true;skipBtn.textContent='Skip';}
   if(spinner)spinner.style.display='block';
   if(ov)ov.style.display='flex';
-
   let rem=durationSec;
   if(countEl)countEl.textContent=rem;
   if(spinner)spinner.style.display='none';
-
   _adOverlayTimer=setInterval(()=>{
     rem--;
     if(countEl)countEl.textContent=rem;
@@ -707,8 +684,6 @@ function showAdCountdownOverlay(title,desc,durationSec,callback){
       skipBtn.onclick=()=>{closeAdOverlay();callback(true);};
     }
   },1000);
-
-  // store cancel
   _adOverlayCancelFn=()=>{closeAdOverlay();callback(false);};
 }
 
@@ -720,18 +695,12 @@ function closeAdOverlay(){
   if(skipBtn){skipBtn.disabled=true;skipBtn.textContent='Skip';skipBtn.onclick=closeAdOverlay;}
 }
 
-// Core ad show — picks next platform alternately (Monetag odd, Adsgram even)
 async function showRewardedAdCore(){
   return new Promise(resolve=>{
     const useMon=(_adPlatformIdx%2===0);
     _adPlatformIdx++;
-    const fallback=()=>{
-      // fallback: just resolve true after overlay
-      resolve(true);
-    };
     if(useMon && typeof window[MONETAG_FN]==='function'){
       window[MONETAG_FN]().then(()=>resolve(true)).catch(()=>{
-        // try Adsgram as fallback
         if(AdsgramController)AdsgramController.show().then(()=>resolve(true)).catch(()=>resolve(false));
         else resolve(false);
       });
@@ -742,34 +711,23 @@ async function showRewardedAdCore(){
         else resolve(false);
       });
     } else {
-      // Neither available — show overlay only
       resolve(false);
     }
   });
 }
 
-// Show ad with countdown overlay AND actual platform ad
 async function showRewardedAd(options={}){
-  const {adId='generic',title='📺 WATCH AD',desc='Watch to earn your reward',duration=10}=options;
-  return new Promise(resolve=>{
-    // Show overlay countdown
-    showAdCountdownOverlay(title,desc,duration,(countdownDone)=>{
-      resolve(countdownDone);
-    });
-    // Also fire real ad (parallel)
-    showRewardedAdCore().catch(()=>{});
-  });
+  try{ await showRewardedAdCore(); }catch(e){}
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// WATCH ADS — 2 buttons, max 100/day each, alternating platforms
+// WATCH ADS
 // ═══════════════════════════════════════════════════════════════════════════
 const AD_DEF=[
   {id:'watchAd1',name:'Watch & Earn',reward:2500,dur:10},
   {id:'watchAd2',name:'Bonus Ad',reward:2500,dur:10}
 ];
-
-// adState tracks per-session UI state
 const adState={};
 
 function adBtnHTML(ad){
@@ -790,31 +748,22 @@ function adLimitHTML(ad){
 }
 
 function refreshAdBtn(id){
-  const ad=AD_DEF.find(a=>a.id===id);
-  if(!ad)return;
-  const w=document.getElementById('adwrap-'+id);
-  if(w)w.innerHTML=adBtnHTML(ad);
-  const lw=document.getElementById('adlimit-'+id);
-  if(lw)lw.innerHTML=adLimitHTML(ad);
+  const ad=AD_DEF.find(a=>a.id===id);if(!ad)return;
+  const w=document.getElementById('adwrap-'+id);if(w)w.innerHTML=adBtnHTML(ad);
+  const lw=document.getElementById('adlimit-'+id);if(lw)lw.innerHTML=adLimitHTML(ad);
 }
 
 async function startWatchAd(id){
-  const ad=AD_DEF.find(a=>a.id===id);
-  if(!ad)return;
+  const ad=AD_DEF.find(a=>a.id===id);if(!ad)return;
   const count=getAdWatchCount(id);
   if(count>=MAX_ADS_PER_BUTTON_PER_DAY){toast(lang==='ru'?`Достигнут дневной лимит (${MAX_ADS_PER_BUTTON_PER_DAY})`:`Daily limit reached (${MAX_ADS_PER_BUTTON_PER_DAY})`,'err');return;}
   if((adState[id]||{}).s==='counting')return;
-
   adState[id]={s:'counting',rem:ad.dur};
   refreshAdBtn(id);
-
-  // Show the ad overlay + real ad
   const won=await showRewardedAd({adId:id,title:'📺 WATCH AD',desc:ad.name+' — earn '+ad.reward.toLocaleString()+' TR',duration:ad.dur});
-
   if(won){
     adState[id]={s:'ready'};
   } else {
-    // still count down locally even if ad failed
     let r=ad.dur;
     adState[id]={s:'counting',rem:r};
     refreshAdBtn(id);
@@ -833,10 +782,7 @@ async function claimWatchAd(id){
   adState[id]={s:'idle'};
   incAdWatchCount(id);
   refreshAdBtn(id);
-  if(!initData){
-    userData.coins=(userData.coins||0)+ad.reward;
-    updateUI();toast('+'+ad.reward.toLocaleString()+' TR!','ok');return;
-  }
+  if(!initData){userData.coins=(userData.coins||0)+ad.reward;updateUI();toast('+'+ad.reward.toLocaleString()+' TR!','ok');return;}
   try{
     const r=await api('POST','/api/watch-ad',{init_data:initData,ad_id:id});
     userData.coins=r.new_balance;updateUI();toast('+'+r.coins_earned.toLocaleString()+' TR!','ok');
@@ -845,15 +791,12 @@ async function claimWatchAd(id){
   }
 }
 
-// Global tap counter — show ad every 15 taps
 let _globalTapCount=0;
 document.addEventListener('click',e=>{
-  // Don't count taps on ad overlay itself
   const adOv=document.getElementById('adShowOverlay');
   if(adOv&&adOv.style.display!=='none')return;
   _globalTapCount++;
   if(_globalTapCount>0&&_globalTapCount%15===0){
-    // Show a quick rewarded ad (no reward for background taps)
     showRewardedAdCore().catch(()=>{});
     toast(lang==='ru'?'🎰 Бонусная реклама!':'🎰 Bonus ad!','ok');
   }
@@ -863,8 +806,8 @@ document.addEventListener('click',e=>{
 // i18n
 // ═══════════════════════════════════════════════════════════════════════════
 const T={
-  en:{balance:'TR BALANCE',days:'days',spins:'spins',dailyStreak:'DAILY STREAK',streakDesc:'Claim daily for +1,000 TR + 1 spin',claimStreak:'Claim Streak',spinWheel:'SPIN WHEEL',spinsLeft:'Spins available:',spinNow:'SPIN NOW',quickActions:'QUICK ACTIONS',inviteFriend:'Invite Friend',withdraw:'Withdraw',earnMore:'Earn More',tonCheck:'TON Check',promoCode:'PROMO CODE',enterCode:'Enter code...',redeem:'Redeem',dailyTasks:'📅 DAILY TASKS',dailyTaskDesc:'+5,000 TR + 1 spin each (resets daily)',tasksTitle:'ADVERTISER TASKS',loading:'Loading...',filterAll:'All',filterDaily:'📅 Daily',filterChannel:'Channel',filterGroup:'Group',filterGame:'Game',filterVisit:'Website',totalFriends:'Total Friends',thisWeek:'This Week',trEarned:'TR Earned',refEarnings:'🤑 REFERRAL EARNINGS',refPendingDesc:'Pending from friends (30% share)',refDesc:"Earn 30% of your friends' TR rewards",claimAll:'Claim All Earnings',yourLink:'YOUR REFERRAL LINK',copy:'Copy',inviteViaTelegram:'Invite via Telegram',weeklyLB:'🏆 WEEKLY LEADERBOARD',prevWeekLB:'📜 PREVIOUS WEEK',noData:'No data',yourFriends:'YOUR FRIENDS',walletBalance:'WALLET BALANCE',tonCoinNote:'TON coins',tonCoinNoteDesc:'are used for advertising and creating checks. TR coins are your task rewards.',convertTitle:'⇄ CONVERT TR → TON',youReceive:'You receive',minConvert:'Minimum: 1,000,000 TR',convertNow:'Convert Now',topUpTON:'TOP UP TON',tonWalletMethod:'TON Wallet',tonWalletDesc:'Direct TON transfer',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Minimum: 0.50 TON or 50 Stars',withdrawTR:'WITHDRAW TR COINS',walletAddrPH:'TON wallet address (EQ...)',withdrawNow:'Withdraw Now',withdrawNote:'Processed within 24 hours. 0.03 TON fee.',txHistory:'TRANSACTION HISTORY',createCheck:'🧾 CREATE TON CHECK',createCheckDesc:'Create a TON check that others can claim',personal:'Personal',personalDesc:'Only 1 person claims',multiple:'Multiple',multipleDesc:'Split among many',eachReceives:'Each receives:',checkTip:'💡 TON deducted from balance. New claimers become your referrals!',createCheckBtn:'🧾 Create Check',navHome:'Home',navTasks:'Tasks',navCheck:'Check',navFriends:'Friends',navWallet:'Wallet',adTask:'TASK',advertise:'ADVERTISE',addTask:'Add Task',myTasks:'My Tasks',tonBalLabel:'TON Balance:',taskNamePH:'Task name...',dailyCostNote:'Cost: 5 TON per day',costLabel:'Cost:',publishTask:'Publish Task',confirmWithdraw:'CONFIRM WITHDRAWAL',cancel:'Cancel',confirm:'Confirm',verifyTitle:'VERIFY MEMBERSHIP',verifyStep1Desc:'First, open the channel/group and join it',verifyDesc:"After joining, tap the button below to verify",openLink:'🔗 Open Link',iJoined:"✅ I've Joined",confirmConvert:'CONFIRM CONVERT',checkCreated:'✅ CHECK CREATED!',yourCheckLink:'Your check link:',copyBtn:'📋 Copy',shareBtn:'📤 Share',claimCheck:'💎 CLAIM CHECK',aboutToReceive:'You are about to receive',claimNow:'💰 Claim Now',watchAds:'WATCH ADS',watch:'Watch',claim:'Claim',start:'Start',done:'✓',daily_checkin:'Daily Check-In',daily_update:'Check for Updates',daily_share:'Share with Friends',noTransactions:'No transactions yet',noFriendsYet:'No friends yet',noTasksAvail:'No tasks available',visitOpt:'Visit Website (+3000 TR)',channelOpt:'Join Channel (+5000 TR)',groupOpt:'Join Group (+5000 TR)',gameOpt:'Play Game Bot (+5000 TR)',dailyOpt:'Daily Task (shown every day)',congratsTitle:'CONGRATULATIONS!',congratsSub:'TON has been added to your wallet!',extendTask:'Extend Task',extendBtn:'⚡ Extend',extendMin:'Min 100 completions (0.10 TON)',advDailyTasks:'📅 ADVERTISER DAILY TASKS'},
-  ru:{balance:'TR БАЛАНС',days:'дней',spins:'вращений',dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ',streakDesc:'+1,000 TR + 1 вращение каждый день',claimStreak:'Получить бонус',spinWheel:'КОЛЕСО ФОРТУНЫ',spinsLeft:'Вращений:',spinNow:'КРУТИТЬ',quickActions:'БЫСТРЫЕ ДЕЙСТВИЯ',inviteFriend:'Пригласить',withdraw:'Вывести',earnMore:'Заработать',tonCheck:'TON Чек',promoCode:'ПРОМОКОД',enterCode:'Введите код...',redeem:'Применить',dailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ',dailyTaskDesc:'+5,000 TR + 1 вращение (сброс ежедневно)',tasksTitle:'ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ',loading:'Загрузка...',filterAll:'Все',filterDaily:'📅 Ежедн.',filterChannel:'Канал',filterGroup:'Группа',filterGame:'Игра',filterVisit:'Сайт',totalFriends:'Всего друзей',thisWeek:'На этой неделе',trEarned:'TR Заработано',refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ',refPendingDesc:'Ожидается от друзей (30% доля)',refDesc:'Зарабатывайте 30% от наград друзей',claimAll:'Получить всё',yourLink:'ВАША РЕФЕРАЛЬНАЯ ССЫЛКА',copy:'Копировать',inviteViaTelegram:'Пригласить в Telegram',weeklyLB:'🏆 ЕЖЕНЕДЕЛЬНЫЙ РЕЙТИНГ',prevWeekLB:'📜 ПРОШЛАЯ НЕДЕЛЯ',noData:'Нет данных',yourFriends:'ВАШИ ДРУЗЬЯ',walletBalance:'БАЛАНС КОШЕЛЬКА',tonCoinNote:'TON монеты',tonCoinNoteDesc:'используются для рекламы и создания чеков.',convertTitle:'⇄ КОНВЕРТИРОВАТЬ TR → TON',youReceive:'Вы получите',minConvert:'Минимум: 1 000 000 TR',convertNow:'Конвертировать',topUpTON:'ПОПОЛНИТЬ TON',tonWalletMethod:'TON Кошелёк',tonWalletDesc:'Прямой перевод TON',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Минимум: 0.50 TON или 50 Stars',withdrawTR:'ВЫВОД TR МОНЕТ',walletAddrPH:'TON адрес кошелька (EQ...)',withdrawNow:'Вывести',withdrawNote:'Обработка в течение 24 часов. Комиссия 0.03 TON.',txHistory:'ИСТОРИЯ ОПЕРАЦИЙ',createCheck:'🧾 СОЗДАТЬ TON ЧЕК',createCheckDesc:'Создайте TON чек для получения другими',personal:'Личный',personalDesc:'Только 1 человек',multiple:'Групповой',multipleDesc:'Разделить между несколькими',eachReceives:'Каждый получит:',checkTip:'💡 TON спишется с баланса. Новые пользователи станут вашими рефералами!',createCheckBtn:'🧾 Создать чек',navHome:'Главная',navTasks:'Задания',navCheck:'Чек',navFriends:'Друзья',navWallet:'Кошелёк',adTask:'ЗАДАНИЕ',advertise:'РЕКЛАМА',addTask:'Добавить задание',myTasks:'Мои задания',tonBalLabel:'Баланс TON:',taskNamePH:'Название задания...',dailyCostNote:'Стоимость: 5 TON в день',costLabel:'Стоимость:',publishTask:'Опубликовать',confirmWithdraw:'ПОДТВЕРДИТЬ ВЫВОД',cancel:'Отмена',confirm:'Подтвердить',verifyTitle:'ПОДТВЕРДИТЬ УЧАСТИЕ',verifyStep1Desc:'Сначала откройте канал/группу и вступите',verifyDesc:'После вступления нажмите кнопку ниже',openLink:'🔗 Открыть ссылку',iJoined:'✅ Я вступил',confirmConvert:'ПОДТВЕРДИТЬ КОНВЕРТАЦИЮ',checkCreated:'✅ ЧЕК СОЗДАН!',yourCheckLink:'Ваша ссылка на чек:',copyBtn:'📋 Копировать',shareBtn:'📤 Поделиться',claimCheck:'💎 ПОЛУЧИТЬ ЧЕК',aboutToReceive:'Вы получите',claimNow:'💰 Получить',watchAds:'СМОТРЕТЬ РЕКЛАМУ',watch:'Смотреть',claim:'Получить',start:'Начать',done:'✓',daily_checkin:'Ежедневная отметка',daily_update:'Проверить обновления',daily_share:'Поделиться',noTransactions:'Операций пока нет',noFriendsYet:'Друзей пока нет',noTasksAvail:'Нет доступных заданий',visitOpt:'Посетить сайт (+3000 TR)',channelOpt:'Подписаться на канал (+5000 TR)',groupOpt:'Вступить в группу (+5000 TR)',gameOpt:'Сыграть в игру (+5000 TR)',dailyOpt:'Ежедневное задание',congratsTitle:'ПОЗДРАВЛЯЕМ!',congratsSub:'TON зачислен на ваш кошелёк!',extendTask:'Продлить задание',extendBtn:'⚡ Продлить',extendMin:'Мин 100 выполнений (0.10 TON)',advDailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ'}
+  en:{balance:'TR BALANCE',days:'days',spins:'spins',dailyStreak:'DAILY STREAK',streakDesc:'Claim daily for +1,000 TR + 1 spin',claimStreak:'Claim Streak',spinWheel:'SPIN WHEEL',spinsLeft:'Spins available:',spinNow:'SPIN NOW',quickActions:'QUICK ACTIONS',inviteFriend:'Invite Friend',withdraw:'Withdraw',earnMore:'Earn More',tonCheck:'TON Check',promoCode:'PROMO CODE',enterCode:'Enter code...',redeem:'Redeem',dailyTasks:'📅 DAILY TASKS',dailyTaskDesc:'+5,000 TR + 1 spin each (resets daily)',tasksTitle:'ADVERTISER TASKS',loading:'Loading...',filterAll:'All',filterDaily:'📅 Daily',filterChannel:'Channel',filterGroup:'Group',filterGame:'Game',filterVisit:'Website',totalFriends:'Total Friends',thisWeek:'This Week',trEarned:'TR Earned',refEarnings:'🤑 REFERRAL EARNINGS',refPendingDesc:'Pending from friends (30% share)',refDesc:"Earn 30% of your friends' TR rewards",claimAll:'Claim All Earnings',yourLink:'YOUR REFERRAL LINK',copy:'Copy',inviteViaTelegram:'Invite via Telegram',weeklyLB:'🏆 WEEKLY LEADERBOARD',prevWeekLB:'📜 PREVIOUS WEEK',noData:'No data',yourFriends:'YOUR FRIENDS',walletBalance:'WALLET BALANCE',tonCoinNote:'TON coins',tonCoinNoteDesc:'are used for advertising and creating checks. TR coins are your task rewards.',convertTitle:'⇄ CONVERT TR → TON',youReceive:'You receive',minConvert:'Minimum: 1,000,000 TR',convertNow:'Convert Now',topUpTON:'TOP UP TON',tonWalletMethod:'TON Wallet',tonWalletDesc:'Direct TON transfer',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Minimum: 0.50 TON or 50 Stars',withdrawTR:'WITHDRAW TR COINS',walletAddrPH:'TON wallet address (EQ...)',withdrawNow:'Withdraw Now',withdrawNote:'Processed within 24 hours. 0.03 TON fee.',txHistory:'TRANSACTION HISTORY',createCheck:'🧾 CREATE TON CHECK',createCheckDesc:'Create a TON check that others can claim',personal:'Personal',personalDesc:'Only 1 person claims',multiple:'Multiple',multipleDesc:'Split among many',eachReceives:'Each receives:',checkTip:'💡 TON deducted from balance. New claimers become your referrals!',createCheckBtn:'🧾 Create Check',navHome:'Home',navTasks:'Tasks',navCheck:'Check',navFriends:'Friends',navWallet:'Wallet',adTask:'TASK',advertise:'ADVERTISE',addTask:'Add Task',myTasks:'My Tasks',tonBalLabel:'TON Balance:',taskNamePH:'Task name...',dailyCostNote:'Cost: 5 TON per day',costLabel:'Cost:',publishTask:'Publish Task',confirmWithdraw:'CONFIRM WITHDRAWAL',cancel:'Cancel',confirm:'Confirm',verifyTitle:'VERIFY MEMBERSHIP',verifyStep1Desc:'First, open the channel/group and join it',verifyDesc:"After joining, tap the button below to verify",openLink:'🔗 Open Link',iJoined:"✅ I've Joined",confirmConvert:'CONFIRM CONVERT',checkCreated:'✅ CHECK CREATED!',yourCheckLink:'Your check link:',copyBtn:'📋 Copy',shareBtn:'📤 Share',claimCheck:'💎 CLAIM CHECK',aboutToReceive:'You are about to receive',claimNow:'💰 Claim Now',watchAds:'WATCH ADS',watch:'Watch',claim:'Claim',start:'Start',done:'✓',daily_checkin:'Daily Check-In',daily_update:'Check for Updates',daily_share:'Share with Friends',noTransactions:'No transactions yet',noFriendsYet:'No friends yet',noTasksAvail:'No tasks available',visitOpt:'Visit Website (+3000 TR)',channelOpt:'Join Channel (+5000 TR)',groupOpt:'Join Group (+5000 TR)',gameOpt:'Play Game Bot (+5000 TR)',dailyOpt:'Daily Task (shown every day)',congratsTitle:'CONGRATULATIONS!',congratsSub:'TON has been added to your wallet!',extendTask:'Extend Task',extendBtn:'⚡ Extend',extendMin:'Min 100 completions (0.10 TON)',advDailyTasks:'📅 ADVERTISER DAILY TASKS',days_label:'days',completions_label:'completions'},
+  ru:{balance:'TR БАЛАНС',days:'дней',spins:'вращений',dailyStreak:'ЕЖЕДНЕВНАЯ СЕРИЯ',streakDesc:'+1,000 TR + 1 вращение каждый день',claimStreak:'Получить бонус',spinWheel:'КОЛЕСО ФОРТУНЫ',spinsLeft:'Вращений:',spinNow:'КРУТИТЬ',quickActions:'БЫСТРЫЕ ДЕЙСТВИЯ',inviteFriend:'Пригласить',withdraw:'Вывести',earnMore:'Заработать',tonCheck:'TON Чек',promoCode:'ПРОМОКОД',enterCode:'Введите код...',redeem:'Применить',dailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ',dailyTaskDesc:'+5,000 TR + 1 вращение (сброс ежедневно)',tasksTitle:'ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ',loading:'Загрузка...',filterAll:'Все',filterDaily:'📅 Ежедн.',filterChannel:'Канал',filterGroup:'Группа',filterGame:'Игра',filterVisit:'Сайт',totalFriends:'Всего друзей',thisWeek:'На этой неделе',trEarned:'TR Заработано',refEarnings:'🤑 РЕФЕРАЛЬНЫЕ ДОХОДЫ',refPendingDesc:'Ожидается от друзей (30% доля)',refDesc:'Зарабатывайте 30% от наград друзей',claimAll:'Получить всё',yourLink:'ВАША РЕФЕРАЛЬНАЯ ССЫЛКА',copy:'Копировать',inviteViaTelegram:'Пригласить в Telegram',weeklyLB:'🏆 ЕЖЕНЕДЕЛЬНЫЙ РЕЙТИНГ',prevWeekLB:'📜 ПРОШЛАЯ НЕДЕЛЯ',noData:'Нет данных',yourFriends:'ВАШИ ДРУЗЬЯ',walletBalance:'БАЛАНС КОШЕЛЬКА',tonCoinNote:'TON монеты',tonCoinNoteDesc:'используются для рекламы и создания чеков.',convertTitle:'⇄ КОНВЕРТИРОВАТЬ TR → TON',youReceive:'Вы получите',minConvert:'Минимум: 1 000 000 TR',convertNow:'Конвертировать',topUpTON:'ПОПОЛНИТЬ TON',tonWalletMethod:'TON Кошелёк',tonWalletDesc:'Прямой перевод TON',starsMethod:'Telegram Stars',starsDesc:'65 Stars = 1 TON',topupMinNote:'Минимум: 0.50 TON или 50 Stars',withdrawTR:'ВЫВОД TR МОНЕТ',walletAddrPH:'TON адрес кошелька (EQ...)',withdrawNow:'Вывести',withdrawNote:'Обработка в течение 24 часов. Комиссия 0.03 TON.',txHistory:'ИСТОРИЯ ОПЕРАЦИЙ',createCheck:'🧾 СОЗДАТЬ TON ЧЕК',createCheckDesc:'Создайте TON чек для получения другими',personal:'Личный',personalDesc:'Только 1 человек',multiple:'Групповой',multipleDesc:'Разделить между несколькими',eachReceives:'Каждый получит:',checkTip:'💡 TON спишется с баланса. Новые пользователи станут вашими рефералами!',createCheckBtn:'🧾 Создать чек',navHome:'Главная',navTasks:'Задания',navCheck:'Чек',navFriends:'Друзья',navWallet:'Кошелёк',adTask:'ЗАДАНИЕ',advertise:'РЕКЛАМА',addTask:'Добавить задание',myTasks:'Мои задания',tonBalLabel:'Баланс TON:',taskNamePH:'Название задания...',dailyCostNote:'Стоимость: 5 TON в день',costLabel:'Стоимость:',publishTask:'Опубликовать',confirmWithdraw:'ПОДТВЕРДИТЬ ВЫВОД',cancel:'Отмена',confirm:'Подтвердить',verifyTitle:'ПОДТВЕРДИТЬ УЧАСТИЕ',verifyStep1Desc:'Сначала откройте канал/группу и вступите',verifyDesc:'После вступления нажмите кнопку ниже',openLink:'🔗 Открыть ссылку',iJoined:'✅ Я вступил',confirmConvert:'ПОДТВЕРДИТЬ КОНВЕРТАЦИЮ',checkCreated:'✅ ЧЕК СОЗДАН!',yourCheckLink:'Ваша ссылка на чек:',copyBtn:'📋 Копировать',shareBtn:'📤 Поделиться',claimCheck:'💎 ПОЛУЧИТЬ ЧЕК',aboutToReceive:'Вы получите',claimNow:'💰 Получить',watchAds:'СМОТРЕТЬ РЕКЛАМУ',watch:'Смотреть',claim:'Получить',start:'Начать',done:'✓',daily_checkin:'Ежедневная отметка',daily_update:'Проверить обновления',daily_share:'Поделиться',noTransactions:'Операций пока нет',noFriendsYet:'Друзей пока нет',noTasksAvail:'Нет доступных заданий',visitOpt:'Посетить сайт (+3000 TR)',channelOpt:'Подписаться на канал (+5000 TR)',groupOpt:'Вступить в группу (+5000 TR)',gameOpt:'Сыграть в игру (+5000 TR)',dailyOpt:'Ежедневное задание',congratsTitle:'ПОЗДРАВЛЯЕМ!',congratsSub:'TON зачислен на ваш кошелёк!',extendTask:'Продлить задание',extendBtn:'⚡ Продлить',extendMin:'Мин 100 выполнений (0.10 TON)',advDailyTasks:'📅 ЕЖЕДНЕВНЫЕ ЗАДАНИЯ РЕКЛАМОДАТЕЛЕЙ',days_label:'дней',completions_label:'выполнений'}
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -877,7 +820,6 @@ let isSpinning=false,activeFilter='all';
 let selectedCheckType='personal',newCheckLinkVal='',pendingClaimCheckId=null;
 let pendingExtendTaskId=null;
 
-// ─── Week helpers ──────────────────────────────────────────────────────────
 function getSundayWeekId(d=new Date()){const daysSinceSun=d.getDay();const weekStart=new Date(d);weekStart.setDate(d.getDate()-daysSinceSun);const year=weekStart.getFullYear();const jan1=new Date(year,0,1);const weekNum=Math.floor((weekStart-jan1)/(7*86400000))+1;return`${year}-W${String(weekNum).padStart(2,'0')}`;}
 function getPrevSundayWeekId(){const d=new Date();d.setDate(d.getDate()-7);return getSundayWeekId(d);}
 function weekLabel(w){if(!w)return'';const[y,n]=w.split('-W');return`Week ${n}, ${y}`;}
@@ -966,7 +908,6 @@ function goTab(t){
 
 function buildStreakDots(s){const c=_q('streakDots');c.innerHTML='';for(let i=1;i<=7;i++){const d=document.createElement('div');d.className='s-dot'+(i<s?' done':i===s?' today':'');d.textContent=i;c.appendChild(d);}}
 
-// Streak with ad (overlay)
 async function claimStreakWithAd(){
   const won=await showRewardedAd({adId:'streak',title:'🔥 DAILY STREAK',desc:'Watch ad to claim your streak bonus',duration:10});
   if(!won){toast(lang==='ru'?'Реклама не завершена':'Ad not completed','err');return;}
@@ -990,6 +931,7 @@ async function doSpin(){if(isSpinning)return;if((userData?.spins||0)<1){toast(la
 const DT=[{type:'checkin',icon:'✅',url:null},{type:'update',icon:'📢',url:'https://t.me/treward_ton'},{type:'share',icon:'📤',url:null}];
 const _dtState={};
 async function loadDailyTaskStatus(){if(!initData){buildDailyTasks([]);return;}try{const r=await api('GET','/api/daily-task-status?init_data='+encodeURIComponent(initData));window._doneDaily=r.completed||[];buildDailyTasks(r.completed||[]);}catch(e){buildDailyTasks([]);}}
+
 function buildDailyTasks(done){
   window._doneDaily=done;
   const l=_q('dailyTaskList');if(!l)return;
@@ -1001,29 +943,31 @@ function buildDailyTasks(done){
     const el=document.createElement('div');
     el.className='task-item'+(d?' completed':'');
     el.id='dt-'+dt.type;
-    el.innerHTML=`<div class="task-icon">${dt.icon}</div><div class="task-info"><div class="task-name">${n}</div><div class="task-reward">+5,000 TR +1 spin</div></div><div class="task-btn">${d?`<span style="color:var(--ok);font-weight:700">✓</span>`:`<button class="btn btn-gold btn-sm" onclick="handleDT('${dt.type}')" id="dbt-${dt.type}">${T[lang].start}</button>`}</div>`;
+    el.innerHTML=`<div class="task-icon">${dt.icon}</div><div class="task-info"><div class="task-name">${n}</div><div class="task-reward">+5,000 TR +1 spin</div></div><div class="task-btn">${d?`<span style="color:var(--ok);font-size:18px;font-weight:700">✓</span>`:`<button class="btn btn-gold btn-sm" onclick="handleDT('${dt.type}')" id="dbt-${dt.type}">${T[lang].start}</button>`}</div>`;
     l.appendChild(el);
   });
-  // Also render advertiser daily tasks in daily panel
   renderAdvDailyTasks();
 }
 
-// Render advertiser daily tasks in the daily panel
+// ── FIX 1: Advertiser daily tasks shown in daily panel ─────────────────────
 function renderAdvDailyTasks(){
   const sec=_q('advDailySection');if(!sec)return;
   const allTasks=window._tasks||[];
   const dailyTasks=allTasks.filter(t=>t.type==='daily');
   if(!dailyTasks.length){sec.innerHTML='';return;}
-  const ico='📅';
   sec.innerHTML=`<div class="sec-title" style="color:var(--ton);font-size:12px;margin-bottom:8px">${T[lang].advDailyTasks||'📅 ADVERTISER DAILY TASKS'}</div>`+
     dailyTasks.map(t=>`
       <div class="task-item ${t.completed?'completed':''}" id="advdt-${t.id}">
-        <div class="task-icon">${ico}</div>
+        <div class="task-icon">📅</div>
         <div class="task-info">
           <div class="task-name">${t.name}</div>
           <div class="task-reward">+${t.reward_coins?t.reward_coins.toLocaleString():3000} TR +1 Spin</div>
+          <div class="prog-wrap"><div class="prog-bar" style="width:${t.completed?100:0}%"></div></div>
         </div>
-        <div class="task-btn">${t.completed?`<span style="color:var(--ok);font-weight:700">✓</span>`:`<button class="btn btn-ton btn-sm" onclick="startTask(${t.id},'${t.type}','${encodeURIComponent(t.url)}')" id="advdbt-${t.id}">${T[lang].start}</button>`}</div>
+        <div class="task-btn">${t.completed
+          ?`<span style="color:var(--ok);font-size:18px;font-weight:700">✓</span>`
+          :`<button class="btn btn-ton btn-sm" onclick="startTask(${t.id},'${t.type}','${encodeURIComponent(t.url)}')" id="advdbt-${t.id}">${T[lang].start}</button>`
+        }</div>
       </div>`).join('');
 }
 
@@ -1044,7 +988,7 @@ async function claimDT(type){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TASKS
+// TASKS — FIX 1: completed tasks remain visible with ✓
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadTasks(){
   if(!initData){window._tasks=[];renderFiltered();renderAdvDailyTasks();return;}
@@ -1054,6 +998,7 @@ async function loadTasks(){
     renderAdvDailyTasks();
   }catch(e){_q('taskList').innerHTML=`<div style="text-align:center;color:var(--err);padding:20px">${e.message}</div>`;}
 }
+
 function setFilter(f){
   activeFilter=f;
   document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c.getAttribute('data-f')===f));
@@ -1062,25 +1007,44 @@ function setFilter(f){
   if(dp)dp.style.display=isD?'':'none';
   if(tw)tw.style.display=isD?'none':'';
   if(!isD)renderFiltered();
-  else{buildDailyTasks(window._doneDaily||[]);}
+  else buildDailyTasks(window._doneDaily||[]);
 }
+
+// ── FIX 1 CORE: Show ALL tasks including completed ones ────────────────────
 function renderFiltered(){
   const all=window._tasks||[];
-  // Exclude daily from main list — they appear in daily panel
-  const list=(activeFilter==='all'?all.filter(t=>t.type!=='daily'):all.filter(t=>t.type===activeFilter&&t.type!=='daily'));
+  // Exclude daily from main list (they appear in daily panel)
+  const list=(activeFilter==='all'
+    ? all.filter(t=>t.type!=='daily')
+    : all.filter(t=>t.type===activeFilter&&t.type!=='daily'));
   const el=_q('taskList');if(!el)return;
-  if(!list.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noTasksAvail}</div>`;return;}
+  if(!list.length){
+    el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noTasksAvail}</div>`;
+    return;
+  }
   const ico={visit:'🌐',channel:'📢',group:'👥',game:'🎮',daily:'📅'};
-  el.innerHTML=list.map(t=>`<div class="task-item ${t.completed?'completed':''}" id="task-${t.id}"><div class="task-icon">${ico[t.type]||'⚡'}</div><div class="task-info"><div class="task-name">${t.name}</div><div class="task-reward">${t.type==='visit'?'+3,000 TR +1 Spin':'+5,000 TR +1 Spin'}</div><div class="prog-wrap"><div class="prog-bar" id="pg-${t.id}" style="width:0%"></div></div></div><div class="task-btn">${t.completed?`<span style="color:var(--ok);font-weight:700">✓</span>`:`<button class="btn btn-gold btn-sm" onclick="startTask(${t.id},'${t.type}','${encodeURIComponent(t.url)}')" id="tbt-${t.id}">${T[lang].start}</button>`}</div></div>`).join('');
+  el.innerHTML=list.map(t=>`
+    <div class="task-item ${t.completed?'completed':''}" id="task-${t.id}">
+      <div class="task-icon">${ico[t.type]||'⚡'}</div>
+      <div class="task-info">
+        <div class="task-name">${t.name}</div>
+        <div class="task-reward">${t.type==='visit'?'+3,000 TR +1 Spin':'+5,000 TR +1 Spin'}</div>
+        <div class="prog-wrap"><div class="prog-bar" id="pg-${t.id}" style="width:${t.completed?100:0}%"></div></div>
+      </div>
+      <div class="task-btn">
+        ${t.completed
+          ? `<span style="color:var(--ok);font-size:18px;font-weight:700">✓</span>`
+          : `<button class="btn btn-gold btn-sm" onclick="startTask(${t.id},'${t.type}','${encodeURIComponent(t.url)}')" id="tbt-${t.id}">${T[lang].start}</button>`
+        }
+      </div>
+    </div>`).join('');
 }
 
 async function startTask(id,type,ue){
   const url=decodeURIComponent(ue),btn=_q('tbt-'+id)||_q('advdbt-'+id);
   if(!btn)return;
-  // Channel/group: show verify overlay — step 1
   if(type==='channel'||type==='group'){
     pendingVerifyId=id;pendingVerifyUrl=url;
-    // reset to step 1
     _q('verifyStep1').style.display='';
     _q('verifyStep2').style.display='none';
     _q('verifyOverlay').style.display='flex';
@@ -1102,23 +1066,52 @@ async function startTask(id,type,ue){
   },1000);
 }
 
+// ── FIX 1: claimTask updates row in-place, keeps it visible ───────────────
 async function claimTask(id){
-  if(!initData){toast('+3000 TR!','ok');return;}
+  if(!initData){
+    // Dev mode
+    userData.coins=(userData.coins||0)+3000;updateUI();
+    toast('+3000 TR!','ok');
+    _markTaskDone(id);
+    return;
+  }
   try{
     const r=await api('POST','/api/claim-task',{init_data:initData,task_id:id});
     userData.coins=r.new_balance;userData.spins=(userData.spins||0)+r.spins_earned;updateUI();
     toast(`+${r.coins_earned} TR!`,'ok');
-    const it=_q('task-'+id)||_q('advdt-'+id);
-    if(it){it.classList.add('completed');const b=_q('tbt-'+id)||_q('advdbt-'+id);if(b)b.parentElement.innerHTML=`<span style="color:var(--ok);font-weight:700">✓</span>`;}
+    _markTaskDone(id);
   }catch(e){toast(e.message,'err');}
 }
 
+// Helper: mark a task row as completed in-place (no reload)
+function _markTaskDone(id){
+  // Main task list
+  const it=_q('task-'+id);
+  if(it){
+    it.classList.add('completed');
+    const btnArea=it.querySelector('.task-btn');
+    if(btnArea)btnArea.innerHTML=`<span style="color:var(--ok);font-size:18px;font-weight:700">✓</span>`;
+    const pg=_q('pg-'+id);if(pg)pg.style.width='100%';
+  }
+  // Advertiser daily section
+  const advIt=_q('advdt-'+id);
+  if(advIt){
+    advIt.classList.add('completed');
+    const btnArea=advIt.querySelector('.task-btn');
+    if(btnArea)btnArea.innerHTML=`<span style="color:var(--ok);font-size:18px;font-weight:700">✓</span>`;
+  }
+  // Also update in-memory tasks array so filter re-renders correctly
+  if(window._tasks){
+    const t=window._tasks.find(x=>x.id===id);
+    if(t)t.completed=true;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-// CHANNEL/GROUP VERIFY — 2-step flow
+// CHANNEL/GROUP VERIFY — FIX 3: backend decides (admin=verify, not admin=auto)
 // ═══════════════════════════════════════════════════════════════════════════
 function openVerifyLinkAndNext(){
   if(pendingVerifyUrl)window.open(pendingVerifyUrl,'_blank');
-  // Advance to step 2
   _q('verifyStep1').style.display='none';
   _q('verifyStep2').style.display='';
 }
@@ -1127,18 +1120,36 @@ function backVerifyStep1(){
   _q('verifyStep2').style.display='none';
 }
 function closeVerify(){_q('verifyOverlay').style.display='none';pendingVerifyId=null;pendingVerifyUrl=null;}
+
+// ── FIX 3: verifyJoin sends to backend which handles the logic ────────────
+// Backend: if bot is admin → real membership check; if not admin → auto-award
+// Frontend just calls the API and trusts the result
 async function verifyJoin(){
   if(!pendingVerifyId)return;
-  if(!initData){toast('+5000 TR!','ok');closeVerify();return;}
+  const verifyBtn=_q('verifyOverlay').querySelector('.btn-gold');
+  if(verifyBtn){verifyBtn.disabled=true;verifyBtn.textContent='⏳ Verifying...';}
+
+  if(!initData){
+    toast('+5000 TR!','ok');
+    _markTaskDone(pendingVerifyId);
+    closeVerify();
+    if(verifyBtn){verifyBtn.disabled=false;verifyBtn.textContent=T[lang].iJoined||"✅ I've Joined";}
+    return;
+  }
   try{
     const r=await api('POST','/api/verify-join',{init_data:initData,task_id:pendingVerifyId});
     userData.coins=r.new_balance;userData.spins=(userData.spins||0)+r.spins_earned;updateUI();
-    toast(`+${r.coins_earned} TR!`,'ok');closeVerify();loadTasks();
-  }catch(e){toast(e.message,'err');}
+    toast(`+${r.coins_earned} TR!`,'ok');
+    _markTaskDone(pendingVerifyId);
+    closeVerify();
+  }catch(e){
+    toast(e.message,'err');
+    if(verifyBtn){verifyBtn.disabled=false;verifyBtn.textContent=T[lang].iJoined||"✅ I've Joined";}
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// WATCH ADS WIDGET MOUNT
+// WATCH ADS WIDGET
 // ═══════════════════════════════════════════════════════════════════════════
 function mountWatchAds(cid){
   const c=document.getElementById(cid);if(!c)return;
@@ -1156,12 +1167,11 @@ function mountWatchAds(cid){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PROMO WITH AD
+// PROMO
 // ═══════════════════════════════════════════════════════════════════════════
 async function redeemPromoWithAd(){
   const code=_q('promoInput').value.trim();
   if(!code){toast(lang==='ru'?'Введите промокод':'Enter a promo code','err');return;}
-  // Show ad first
   const won=await showRewardedAd({adId:'promo',title:'🎁 PROMO CODE',desc:'Watch ad to redeem your promo code',duration:8});
   if(!won){toast(lang==='ru'?'Реклама не завершена':'Ad not completed','err');return;}
   await redeemPromo();
@@ -1212,7 +1222,6 @@ function buildRefEarnCard(friends,unclaimed){
   const contributing=(friends||[]).filter(f=>(f.your_share||0)>0).slice(0,5);
   _q('refFriendRows').innerHTML=contributing.map(f=>`<div class="rf-row"><div class="rf-av">${(f.name||'?')[0].toUpperCase()}</div><div class="rf-info"><div class="rf-name">${f.name}</div><div class="rf-sub">${(f.coins||0).toLocaleString()} TR total</div></div><div class="rf-share">+${(f.your_share||0).toLocaleString()}</div></div>`).join('');
 }
-
 async function claimAllReferral(){
   if(!initData){
     const raw=(_q('refEarnAmt').textContent||'0').replace(/[^0-9]/g,'');const pending=parseInt(raw)||0;
@@ -1220,7 +1229,6 @@ async function claimAllReferral(){
   }
   try{const r=await api('POST','/api/claim-referral',{init_data:initData});userData.coins=(userData.coins||0)+r.claimed;updateUI();toast(`+${r.claimed.toLocaleString()} TR!`,'ok');_q('refEarnCard').style.display='none';setTimeout(loadFriends,600);}catch(e){toast(e.message,'err');}
 }
-
 function renderFriendsList(friends){
   const fl=_q('friendsList');
   if(!friends||!friends.length){fl.innerHTML=`<div style="text-align:center;color:var(--t3);padding:30px 0;font-size:13px">${T[lang].noFriendsYet}</div>`;return;}
@@ -1228,7 +1236,6 @@ function renderFriendsList(friends){
 }
 function copyRef(){const lk=_q('refLink').textContent;navigator.clipboard?.writeText(lk).then(()=>toast(lang==='ru'?'Скопировано!':'Copied!','ok'));}
 function shareRef(){const lk=userData?.referral_link||`${MINI_APP_URL}?startapp=ref_1`;const tx=lang==='ru'?'🏆 Зарабатывай TR!':'🏆 Join TRewards and earn TR coins!';if(tg?.openTelegramLink)tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`);else window.open(`https://t.me/share/url?url=${encodeURIComponent(lk)}&text=${encodeURIComponent(tx)}`,'_blank');}
-
 function renderLeaderboard(items,cid){
   const el=_q(cid);if(!el)return;
   if(!items||!items.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:16px 0;font-size:12px">${T[lang].noData}</div>`;return;}
@@ -1303,15 +1310,13 @@ async function confirmClaimCheck(){
   try{
     const r=await api('POST','/api/claim-check',{init_data:initData,check_id:pendingClaimCheckId});
     const receivedAmt=parseFloat(r.amount_received);userData.ton_balance=r.new_ton_balance;updateUI();
-    closeClaimCheck();
-    // Show ad THEN celebration
-    showRewardedAdCore().catch(()=>{}).finally(()=>showCelebration(receivedAmt));
+    closeClaimCheck();showCelebration(receivedAmt);
     if(r.referral_set){setTimeout(loadFriends,1000);}
   }catch(e){toast(e.message,'err');if(btn){btn.disabled=false;btn.textContent='💰 '+(T[lang].claimNow||'Claim Now');}}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CELEBRATION — ad shows AFTER awesome tap
+// CELEBRATION
 // ═══════════════════════════════════════════════════════════════════════════
 function showCelebration(amountTon){
   _q('celebAmt').textContent=parseFloat(amountTon).toFixed(4)+' TON';
@@ -1321,16 +1326,14 @@ function showCelebration(amountTon){
   for(let i=0;i<60;i++){const p=document.createElement('div');p.className='conf-piece';p.style.cssText=`left:${Math.random()*100}%;background:${colors[Math.floor(Math.random()*colors.length)]};width:${6+Math.random()*8}px;height:${6+Math.random()*8}px;animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()}s;border-radius:${Math.random()>.5?'50%':'2px'};`;container.appendChild(p);}
   _q('celebrationOverlay').style.display='flex';
 }
-
 function closeCelebration(){
   _q('celebrationOverlay').style.display='none';
-  // Show ad after tapping Awesome!
   showRewardedAdCore().catch(()=>{});
   goTab('wallet');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ADVERTISER — My Tasks with Extend button
+// ADVERTISER — FIX 2: daily task extension = days, 1 day = 5 TON
 // ═══════════════════════════════════════════════════════════════════════════
 function updateAdCostDisplay(){
   const type=_q('adType').value;const isD=type==='daily';
@@ -1338,6 +1341,7 @@ function updateAdCostDisplay(){
   if(isD){const days=parseInt(_q('adDays')?.value)||1;_q('adCost').textContent=(days*5).toFixed(3)+' TON';}
   else{const lim=parseInt(_q('adLimit').value)||1000;_q('adCost').textContent=(lim*0.001).toFixed(3)+' TON';}
 }
+
 async function openAd(){
   _q('adOverlay').style.display='flex';
   if(!initData)return;
@@ -1350,77 +1354,135 @@ function switchAdTab(t){
   if(t==='my'&&initData){api('GET','/api/advertiser?init_data='+encodeURIComponent(initData)).then(r=>renderMyTasks(r.tasks||[])).catch(()=>{});}
 }
 
+// ── FIX 2 CORE: daily tasks show days input, 1 day = 5 TON ────────────────
 function renderMyTasks(tasks){
   const el=_q('myTasksList');
   if(!tasks.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);padding:20px;font-size:12px">${lang==='ru'?'Нет заданий':'No tasks yet'}</div>`;return;}
   const sc={active:'status-active',paused:'status-paused',completed:'status-completed'};
   el.innerHTML=tasks.map(t=>{
-    const prog=t.completion_limit?Math.min(100,((t.completed_count||0)/(t.completion_limit))*100):50;
-    const extCost=(100*0.001).toFixed(3); // min 100 completions = 0.10 TON
-    return`<div class="my-task-row">
+    const isDaily=t.type==='daily';
+    const completedVal=t.completed_count||0;
+    const limitVal=isDaily?(t.days_limit||0):(t.completion_limit||0);
+    const prog=limitVal?Math.min(100,(completedVal/limitVal)*100):0;
+    // Daily: input in days, min=1, step=1, cost=5 TON/day
+    // Regular: input in completions, min=100, step=100, cost=0.001 TON/completion
+    const minVal=isDaily?1:100;
+    const stepVal=isDaily?1:100;
+    const placeholder=isDaily?(lang==='ru'?'1, 2, 3... дней':'1, 2, 3... days'):'100, 200, 300...';
+    const costHint=isDaily?`1 ${lang==='ru'?'день':'day'} = 5 TON`:`100 ${lang==='ru'?'выполнений':'completions'} = 0.1 TON`;
+    const statsLabel=isDaily
+      ? `${lang==='ru'?'Дней':'Days'}: ${limitVal} · ${t.type} · ${parseFloat(t.cost_ton||0).toFixed(3)} TON`
+      : `${completedVal}/${limitVal||'∞'} · ${t.type} · ${parseFloat(t.cost_ton||0).toFixed(3)} TON`;
+    return`<div class="my-task-row" data-type="${t.type}">
       <div class="my-task-header">
         <div class="my-task-name">${t.name}</div>
         <span class="my-task-status ${sc[t.status]||'status-active'}">${t.status}</span>
       </div>
-      <div class="my-task-stats">${t.completed_count||0}/${t.completion_limit||t.days_limit||'∞'} · ${t.type} · ${parseFloat(t.cost_ton||0).toFixed(3)} TON spent</div>
+      <div class="my-task-stats">${statsLabel}</div>
       <div class="prog-wrap" style="margin-bottom:8px"><div class="prog-bar" style="width:${prog}%"></div></div>
       <div class="extend-row">
-        <input type="number" id="ext-inp-${t.id}" placeholder="100, 200, 300..." min="100" step="100" value="100" style="font-size:12px">
-        <button class="extend-btn" onclick="openExtendTask(${t.id})" id="ext-btn-${t.id}">🔄 ${T[lang].extendBtn||'Extend'}</button>
+        <input type="number" id="ext-inp-${t.id}" placeholder="${placeholder}" min="${minVal}" step="${stepVal}" value="${minVal}" style="font-size:12px">
+        <button class="extend-btn" onclick="openExtendTask(${t.id},'${t.type}')" id="ext-btn-${t.id}">🔄 ${T[lang].extendBtn||'Extend'}</button>
       </div>
-      <div class="extend-cost" id="ext-cost-${t.id}">${T[lang].extendMin||'Min 100 completions (0.10 TON)'}</div>
+      <div class="extend-cost" id="ext-cost-${t.id}">${costHint}</div>
     </div>`;
   }).join('');
-  // Add oninput handlers for cost preview
+
+  // Live cost preview per input
   tasks.forEach(t=>{
     const inp=_q('ext-inp-'+t.id);
-    if(inp)inp.addEventListener('input',()=>{
-      const v=parseInt(inp.value)||0;const cost=(v*0.001).toFixed(3);
+    if(!inp)return;
+    const isDaily=t.type==='daily';
+    inp.addEventListener('input',()=>{
+      const v=parseInt(inp.value)||0;
+      const cost=isDaily?(v*5).toFixed(3):(v*0.001).toFixed(3);
+      const unitLabel=isDaily?(lang==='ru'?'дней':'days'):(lang==='ru'?'выполнений':'completions');
       const cd=_q('ext-cost-'+t.id);
-      if(cd)cd.textContent=`${v} completions = ${cost} TON`;
+      if(cd)cd.textContent=`${v} ${unitLabel} = ${cost} TON`;
     });
   });
 }
 
-// Extend task overlay
-async function openExtendTask(taskId){
+// ── FIX 2: openExtendTask handles daily (days) vs regular (completions) ───
+async function openExtendTask(taskId, taskType){
+  const isDaily = taskType==='daily';
   const inp=_q('ext-inp-'+taskId);
-  const addLimit=parseInt(inp?.value)||100;
-  if(addLimit<100){toast(lang==='ru'?'Минимум 100 выполнений':'Minimum 100 completions','err');return;}
-  if(addLimit%100!==0){toast(lang==='ru'?'Кратно 100':'Must be multiple of 100','err');return;}
-  const cost=(addLimit*0.001).toFixed(3);
+  const val=parseInt(inp?.value)||(isDaily?1:100);
+
+  if(isDaily){
+    if(val<1){toast(lang==='ru'?'Минимум 1 день':'Minimum 1 day','err');return;}
+  } else {
+    if(val<100){toast(lang==='ru'?'Минимум 100 выполнений':'Minimum 100 completions','err');return;}
+    if(val%100!==0){toast(lang==='ru'?'Кратно 100':'Must be multiple of 100','err');return;}
+  }
+
+  // Cost: daily = val * 5 TON, regular = val * 0.001 TON
+  const cost=isDaily?(val*5):(val*0.001);
+  const costStr=cost.toFixed(3);
   const tonBal=parseFloat(userData?.ton_balance||0);
-  pendingExtendTaskId={id:taskId,limit:addLimit,cost:parseFloat(cost)};
+  const unitLabel=isDaily?(lang==='ru'?'дней':'days'):(lang==='ru'?'выполнений':'completions');
+
+  // Store: for API, daily passes val*100 (backend divides /100 to get days)
+  // regular passes val directly
+  pendingExtendTaskId={id:taskId,limit:val,cost,isDaily};
+
   _q('extendTaskBody').innerHTML=`
     <div style="text-align:center;font-size:36px;margin-bottom:12px">🔄</div>
-    <div class="sr"><span class="sr-l">${lang==='ru'?'Дополнительных выполнений':'Additional completions'}</span><span class="sr-v" style="color:var(--gold)">+${addLimit.toLocaleString()}</span></div>
-    <div class="sr"><span class="sr-l">${lang==='ru'?'Стоимость':'Cost'}</span><span class="sr-v" style="color:var(--err)">-${cost} TON</span></div>
-    <div class="sr"><span class="sr-l">${lang==='ru'?'Ваш баланс TON':'Your TON balance'}</span><span class="sr-v">${tonBal.toFixed(4)} TON</span></div>
-    ${tonBal<parseFloat(cost)?`<div style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);border-radius:var(--r);padding:10px;margin-top:10px;font-size:12px;color:var(--err);text-align:center">${lang==='ru'?'Недостаточно TON. Пополните баланс.':'Insufficient TON. Please top up.'}</div>`:''}`;
+    <div class="sr">
+      <span class="sr-l">${isDaily?(lang==='ru'?'Дополнительных дней':'Additional days'):(lang==='ru'?'Дополнительных выполнений':'Additional completions')}</span>
+      <span class="sr-v" style="color:var(--gold)">+${val} ${unitLabel}</span>
+    </div>
+    <div class="sr">
+      <span class="sr-l">${lang==='ru'?'Стоимость':'Cost'}</span>
+      <span class="sr-v" style="color:var(--err)">-${costStr} TON</span>
+    </div>
+    <div class="sr">
+      <span class="sr-l">${lang==='ru'?'Ваш баланс TON':'Your TON balance'}</span>
+      <span class="sr-v">${tonBal.toFixed(4)} TON</span>
+    </div>
+    ${tonBal<cost?`<div style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);border-radius:var(--r);padding:10px;margin-top:10px;font-size:12px;color:var(--err);text-align:center">${lang==='ru'?'Недостаточно TON. Пополните баланс.':'Insufficient TON. Please top up.'}</div>`:''}`;
+
   const confirmBtn=_q('extendConfirmBtn');
-  if(confirmBtn)confirmBtn.disabled=tonBal<parseFloat(cost);
+  if(confirmBtn)confirmBtn.disabled=tonBal<cost;
   _q('extendTaskOverlay').style.display='flex';
 }
+
 function closeExtendTask(){_q('extendTaskOverlay').style.display='none';pendingExtendTaskId=null;}
+
+// ── FIX 2: confirmExtendTask sends correct value to API ───────────────────
 async function confirmExtendTask(){
   if(!pendingExtendTaskId)return;
-  const {id,limit,cost}=pendingExtendTaskId;
+  const {id,limit,cost,isDaily}=pendingExtendTaskId;
   const btn=_q('extendConfirmBtn');if(btn){btn.disabled=true;btn.textContent='⏳';}
+  const unitLabel=isDaily?(lang==='ru'?'дней':'days'):(lang==='ru'?'выполнений':'completions');
+
+  // API expects additional_limit:
+  // daily: days * 100  (backend formula: additional_days = additional_limit // 100)
+  // regular: completions directly (e.g. 100, 200, 500)
+  const apiLimit=isDaily?limit*100:limit;
+
   if(!initData){
     userData.ton_balance=(parseFloat(userData.ton_balance)||0)-cost;updateUI();
-    toast(`✅ Extended by ${limit} completions!`,'ok');closeExtendTask();
-    if(btn){btn.disabled=false;btn.textContent=T[lang].extendBtn||'⚡ Extend';}return;
+    toast(`✅ Extended by ${limit} ${unitLabel}!`,'ok');
+    closeExtendTask();
+    if(btn){btn.disabled=false;btn.textContent=T[lang].extendBtn||'⚡ Extend';}
+    return;
   }
   try{
-    const r=await api('POST','/api/extend-task',{init_data:initData,task_id:id,additional_limit:limit});
+    const r=await api('POST','/api/extend-task',{init_data:initData,task_id:id,additional_limit:apiLimit});
     userData.ton_balance=r.new_ton_balance;updateUI();
-    toast(`✅ Extended! New limit: ${r.new_completion_limit}. Cost: -${cost} TON`,'ok');
+    const newLimit=isDaily?r.new_completion_limit:(r.new_completion_limit);
+    toast(`✅ +${limit} ${unitLabel}! Cost: -${cost.toFixed(3)} TON`,'ok');
     closeExtendTask();
-    // Refresh my tasks
+    // Refresh my tasks list
     const adv=await api('GET','/api/advertiser?init_data='+encodeURIComponent(initData));
     renderMyTasks(adv.tasks||[]);
     if(_q('adBal'))_q('adBal').textContent=parseFloat(r.new_ton_balance).toFixed(4);
-  }catch(e){toast(e.message,'err');}finally{if(btn){btn.disabled=false;btn.textContent=T[lang].extendBtn||'⚡ Extend';}}
+  }catch(e){
+    toast(e.message,'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=T[lang].extendBtn||'⚡ Extend';}
+  }
 }
 
 async function publishTask(){
